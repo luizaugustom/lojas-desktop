@@ -1,11 +1,11 @@
 {
-  "name": "montshop-desktop",
+  "name": "montshop",
   "version": "1.0.0",
-  "description": "MontShop Desktop - Sistema de gerenciamento de lojas",
+  "description": "MontShop - Sistema de gerenciamento de lojas",
   "main": "dist-electron/main.js",
   "author": {
-    "name": "MontShop",
-    "email": "contato@montshop.com"
+    "name": "Mont Tecnologia da Informação",
+    "email": "montsoftwares@gmail.com"
   },
   "license": "UNLICENSED",
   "private": true,
@@ -94,7 +94,7 @@
   },
   "build": {
     "appId": "com.montshop.desktop",
-    "productName": "MontShop Desktop",
+    "productName": "MontShop",
     "directories": {
       "output": "release"
     },
@@ -149,7 +149,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "seu-usuario",
+      "owner": "luizaugustom",
       "repo": "montshop-desktop",
       "releaseType": "release",
       "private": false
