@@ -1,10 +1,16 @@
 ; Script NSIS customizado para o instalador do MontShop Desktop
 ; Personalização da interface do instalador com branding do sistema
 
-; Variáveis para personalização
-!define PRODUCT_NAME "MontShop Desktop"
-!define PRODUCT_PUBLISHER "MontShop"
-!define PRODUCT_WEB_SITE "https://montshop.com"
+; Variáveis para personalização (apenas se não estiverem definidas pelo electron-builder)
+!ifndef PRODUCT_NAME
+  !define PRODUCT_NAME "MontShop Desktop"
+!endif
+!ifndef PRODUCT_PUBLISHER
+  !define PRODUCT_PUBLISHER "MontShop"
+!endif
+!ifndef PRODUCT_WEB_SITE
+  !define PRODUCT_WEB_SITE "https://montshop.com"
+!endif
 
 ; Macro para cabeçalho customizado (executado antes da instalação)
 !macro customHeader
