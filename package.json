@@ -153,11 +153,6 @@
       "repo": "montshop-desktop",
       "releaseType": "release",
       "private": false
-    },
-    "updater": {
-      "provider": "github",
-      "owner": "luizaugustom",
-      "repo": "montshop-desktop"
     }
   }
 }
