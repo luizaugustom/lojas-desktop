@@ -154,10 +154,6 @@
       "repo": "montshop-desktop",
       "releaseType": "release",
       "private": false
-    },
-    "appUpdater": {
-      "autoDownload": true,
-      "autoInstallOnAppQuit": true
     }
   }
 }
