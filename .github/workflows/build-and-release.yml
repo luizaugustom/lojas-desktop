@@ -1,0 +1,204 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main  # Altere para 'master' se essa for sua branch principal
+    tags:
+      - 'v*'  # Dispara quando uma tag com formato v* é criada
+  workflow_dispatch:  # Permite executar manualmente pela interface do GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Obter versão do package.json
+        id: package-version
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "Versão detectada: $version"
+
+      - name: Build da aplicação (sem publicar)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Build sem publicar (--publish=never para gerar arquivos mas não criar release)
+          npm run build:win -- --publish=never
+
+      - name: Criar ou obter Release
+        id: release
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ steps.package-version.outputs.version }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const version = process.env.VERSION;
+            const tagName = `v${version}`;
+            
+            // Verificar se já existe release
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            
+            let existingRelease = releases.find(
+              release => release.tag_name === tagName
+            );
+            
+            let releaseId;
+            let uploadUrl;
+            
+            if (existingRelease) {
+              console.log(`Release ${tagName} já existe. Usando release existente.`);
+              releaseId = existingRelease.id;
+              uploadUrl = existingRelease.upload_url;
+            } else {
+              console.log(`Criando nova release: ${tagName}`);
+              const { data: release } = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tagName,
+                name: `MontShop Desktop v${version}`,
+                body: `## 🚀 MontShop Desktop v${version}\n\n` +
+                      `Atualização automática criada pelo GitHub Actions.\n\n` +
+                      `**Data:** ${new Date().toLocaleString('pt-BR')}\n\n` +
+                      `**Commit:** ${context.sha.substring(0, 7)}\n\n` +
+                      `### 📥 Instalação\n\n` +
+                      `1. Baixe o arquivo \`MontShop-Desktop-Setup-${version}.exe\`\n` +
+                      `2. Execute o instalador\n` +
+                      `3. A aplicação será atualizada automaticamente na próxima vez que abrir\n\n` +
+                      `### ⚡ Atualização Automática\n\n` +
+                      `Se você já tem o MontShop Desktop instalado, a atualização será baixada e instalada automaticamente ao fechar o aplicativo.`,
+                draft: false,
+                prerelease: false
+              });
+              
+              releaseId = release.id;
+              uploadUrl = release.upload_url;
+              console.log(`Release criada: ${release.html_url}`);
+            }
+            
+            core.setOutput('release_id', releaseId);
+            core.setOutput('upload_url', uploadUrl);
+
+      - name: Fazer upload do instalador (.exe)
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          UPLOAD_URL: ${{ steps.release.outputs.upload_url }}
+          VERSION: ${{ steps.package-version.outputs.version }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            const filePath = `./release/MontShop-Desktop-Setup-${process.env.VERSION}.exe`;
+            
+            if (!fs.existsSync(filePath)) {
+              throw new Error(`Arquivo não encontrado: ${filePath}`);
+            }
+            
+            const fileContent = fs.readFileSync(filePath);
+            const fileName = path.basename(filePath);
+            const releaseId = parseInt(process.env.RELEASE_ID);
+            
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              name: fileName,
+              data: fileContent,
+              headers: {
+                'content-type': 'application/octet-stream',
+                'content-length': fileContent.length
+              }
+            });
+            
+            console.log(`✅ Arquivo ${fileName} enviado com sucesso!`);
+
+      - name: Fazer upload do latest.yml (para atualização automática)
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            const filePath = './release/latest.yml';
+            const releaseId = parseInt(process.env.RELEASE_ID);
+            
+            if (!fs.existsSync(filePath)) {
+              console.log('⚠️ Arquivo latest.yml não encontrado. Tentando localizar...');
+              // Tentar encontrar em subdiretórios
+              const releaseDir = './release';
+              if (fs.existsSync(releaseDir)) {
+                const files = fs.readdirSync(releaseDir, { recursive: true });
+                const ymlFile = files.find(f => f.includes('latest.yml') || (f.endsWith('.yml') && f.includes('latest')));
+                
+                if (ymlFile) {
+                  const fullPath = path.join(releaseDir, ymlFile);
+                  console.log(`✅ Encontrado: ${fullPath}`);
+                  const fileContent = fs.readFileSync(fullPath);
+                  
+                  await github.rest.repos.uploadReleaseAsset({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    release_id: releaseId,
+                    name: 'latest.yml',
+                    data: fileContent,
+                    headers: {
+                      'content-type': 'application/x-yaml',
+                      'content-length': fileContent.length
+                    }
+                  });
+                  
+                  console.log('✅ Arquivo latest.yml enviado com sucesso!');
+                } else {
+                  console.log('⚠️ Arquivo latest.yml não encontrado. O electron-builder pode não ter gerado ainda.');
+                  console.log('Isso não é crítico - o electron-updater ainda funcionará sem este arquivo.');
+                }
+              }
+            } else {
+              const fileContent = fs.readFileSync(filePath);
+              
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+                name: 'latest.yml',
+                data: fileContent,
+                headers: {
+                  'content-type': 'application/x-yaml',
+                  'content-length': fileContent.length
+                }
+              });
+              
+              console.log('✅ Arquivo latest.yml enviado com sucesso!');
+            }
+
+      - name: Resumo do build
+        run: |
+          echo "✅ Build concluído com sucesso!"
+          echo "📦 Versão: ${{ steps.package-version.outputs.version }}"
+          echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.package-version.outputs.version }}"
+          echo ""
+          echo "Os usuários receberão a atualização automaticamente quando abrirem o aplicativo."
+

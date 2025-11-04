@@ -12,6 +12,7 @@ import { loginSchema } from '@/lib/validations';
 import { getRandomVerse } from '@/lib/verses';
 import { handleApiError } from '@/lib/handleApiError';
 import { useAuth } from '@/contexts/AuthContext';
+import logoImage from '/logo.png';
 
 export default function LoginPage() {
   const { login, isAuthenticated, user } = useAuth();
@@ -100,7 +101,7 @@ export default function LoginPage() {
           <CardHeader className="space-y-1 text-center">
             <div className="flex justify-center mb-4">
               <img 
-                src="/logo.png" 
+                src={logoImage} 
                 alt="MontShop Logo" 
                 width={128}
                 height={128}

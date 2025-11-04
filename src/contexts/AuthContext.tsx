@@ -1,7 +1,9 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { authLogin, authLogout, getAccessToken, setAccessToken, api } from '../lib/apiClient';
 import toast from 'react-hot-toast';
 import type { User } from '../types';
+import { getComputerId, detectAllDevices } from '../lib/device-detection';
+import { printerApi, scaleApi } from '../lib/api-endpoints';
 
 interface AuthContextValue {
   user: User | null;
@@ -37,6 +39,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     init();
   }, []);
 
+  // Função para detectar e registrar dispositivos do computador
+  const detectAndRegisterDevices = useCallback(async () => {
+    try {
+      const computerId = getComputerId();
+      console.log('[AuthContext] Detectando dispositivos para computador:', computerId);
+
+      // Detecta todos os dispositivos disponíveis
+      const { printers, scales } = await detectAllDevices();
+
+      // Registra impressoras no backend
+      if (printers.length > 0) {
+        try {
+          await printerApi.registerDevices({ computerId, printers });
+          console.log(`[AuthContext] ${printers.length} impressora(s) registrada(s)`);
+        } catch (error) {
+          console.error('[AuthContext] Erro ao registrar impressoras:', error);
+        }
+      }
+
+      // Registra balanças no backend
+      if (scales.length > 0) {
+        try {
+          await scaleApi.registerDevices({ computerId, scales });
+          console.log(`[AuthContext] ${scales.length} balança(s) registrada(s)`);
+        } catch (error) {
+          console.error('[AuthContext] Erro ao registrar balanças:', error);
+        }
+      }
+
+      if (printers.length === 0 && scales.length === 0) {
+        console.log('[AuthContext] Nenhum dispositivo detectado automaticamente. O usuário pode selecionar manualmente.');
+      }
+    } catch (error) {
+      console.error('[AuthContext] Erro ao detectar dispositivos:', error);
+    }
+  }, []);
+
   const login = async (loginStr: string, password: string) => {
     try {
       const data = await authLogin(loginStr, password);
@@ -66,6 +105,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       setUser(normalizedUser);
       toast.success('Login realizado com sucesso!');
+      
+      // Detectar e registrar dispositivos do computador após login bem-sucedido
+      try {
+        console.log('[AuthContext.login] Detectando dispositivos do computador...');
+        await detectAndRegisterDevices();
+      } catch (deviceError) {
+        console.error('[AuthContext.login] Erro ao detectar dispositivos:', deviceError);
+        // Não bloqueia o login se houver erro na detecção de dispositivos
+      }
     } catch (error: any) {
       const message = error.response?.data?.message || 'Erro ao fazer login';
       toast.error(message);

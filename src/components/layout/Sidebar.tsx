@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/ui-store';
 import { useAuth } from '@/contexts/AuthContext';
+import logoImage from '/logo.png';
 
 const navigation = [
   { name: 'Dashboard', route: 'dashboard', icon: LayoutDashboard, roles: ['admin', 'empresa'] },
@@ -121,7 +122,7 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
               className="flex items-center gap-3 hover:opacity-80 transition-opacity"
             >
               {!sidebarCollapsed && (
-                <img src="/logo.png" alt="MontShop Logo" className="h-6 w-6" />
+                <img src={logoImage} alt="MontShop Logo" className="h-6 w-6" />
               )}
               {!sidebarCollapsed && <span className="text-lg font-bold">MontShop</span>}
             </button>
