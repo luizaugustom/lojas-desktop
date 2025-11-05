@@ -251,12 +251,8 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
           preco: formatCurrency(item.product.price)
         }))
       };
-      const result = await import('../../utils/impressao').then(mod => mod.imprimirNota(nota));
-      if (result.success) {
-        toast.success('Impressão enviada com sucesso!');
-      } else {
-        toast.error('Erro ao imprimir: ' + (result.error || 'Erro desconhecido'), { duration: 6000 });
-      }
+      // Funcionalidade de impressão via Electron removida
+      toast.success('Venda realizada com sucesso!');
       handlePrintComplete();
     } catch (error: any) {
       console.error('[Checkout] Erro ao imprimir NFC-e:', error);

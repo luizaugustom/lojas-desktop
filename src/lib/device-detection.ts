@@ -44,17 +44,18 @@ export async function detectClientPrinters(): Promise<any[]> {
 
   try {
     // Verifica se está no Electron
-    if (!window.electronAPI?.printers?.list) {
-      console.warn('[DeviceDetection] Electron API não disponível');
-      return printers;
-    }
+    // Funcionalidades de impressão removidas - não detectar mais impressoras
+    // if (!window.electronAPI?.printers?.list) {
+    //   console.warn('[DeviceDetection] Electron API não disponível');
+    //   return printers;
+    // }
 
-    console.log('[DeviceDetection] Detectando impressoras via Electron...');
+    console.log('[DeviceDetection] Configuração de impressoras removida - não detectando mais');
     
-    // Lista impressoras usando o handler do Electron
-    const systemPrinters = await window.electronAPI.printers.list();
+    // Configuração de impressoras removida - não detectar mais
+    const systemPrinters: any[] = [];
     
-    if (Array.isArray(systemPrinters) && systemPrinters.length > 0) {
+    if (false && Array.isArray(systemPrinters) && systemPrinters.length > 0) {
       // Converte para formato esperado pela API
       printers.push(...systemPrinters.map((printer: any) => {
         // Determina tipo de conexão baseado na porta

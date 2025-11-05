@@ -25,37 +25,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
   },
 
-  // Impressoras
-  printers: {
-    list: () => ipcRenderer.invoke('printers-list'),
-    getDefault: () => ipcRenderer.invoke('printers-get-default'),
-    print: (printerName: string, content: string) =>
-      ipcRenderer.invoke('printers-print', printerName, content),
-    test: (printerName: string) => ipcRenderer.invoke('printers-test', printerName),
-    checkStatus: (printerName: string) => ipcRenderer.invoke('printers-check-status', printerName),
-    checkDrivers: () => ipcRenderer.invoke('printers-check-drivers'),
-    installDrivers: () => ipcRenderer.invoke('printers-install-drivers'),
-    autoRegister: () => ipcRenderer.invoke('printers-auto-register'),
-    onPrinterStatusChanged: (callback: (status: any) => void) => {
-      ipcRenderer.on('printer-status-changed', (_event, status) => callback(status));
-    },
-  },
+  // Impressoras - REMOVIDO completamente (funcionalidades de impressão removidas)
 
-  // Drivers de Impressora
-  printerDrivers: {
-    list: () => ipcRenderer.invoke('printer-drivers-list'),
-    get: (driverId: string) => ipcRenderer.invoke('printer-drivers-get', driverId),
-    check: (driverId: string) => ipcRenderer.invoke('printer-drivers-check', driverId),
-    checkMultiple: (driverIds: string[]) => ipcRenderer.invoke('printer-drivers-check-multiple', driverIds),
-    detectBrand: (printerName: string) => ipcRenderer.invoke('printer-drivers-detect-brand', printerName),
-    download: (driverId: string) => ipcRenderer.invoke('printer-drivers-download', driverId),
-    getDownloadProgress: (driverId: string) => ipcRenderer.invoke('printer-drivers-download-progress', driverId),
-    onDownloadProgress: (callback: (data: { driverId: string; progress: any }) => void) => {
-      ipcRenderer.on('driver-download-progress', (_event, data) => callback(data));
-    },
-    install: (driverId: string, installerPath?: string) => ipcRenderer.invoke('printer-drivers-install', driverId, installerPath),
-    installFromFile: () => ipcRenderer.invoke('printer-drivers-install-from-file'),
-  },
+  // Drivers de Impressora - REMOVIDO (configuração de impressoras removida)
 
   // Balanças
   scales: {

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { printerApi, scaleApi } from '../lib/api-endpoints';
+import { scaleApi } from '../lib/api-endpoints';
 
 // Função para obter computerId
 async function getComputerId(): Promise<string> {
@@ -58,114 +58,13 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     // SEMPRE usar impressoras locais como fonte principal
     let systemPrinters: any[] = [];
     
-    if (window.electronAPI?.printers?.list) {
-      try {
-        const localPrinters = await window.electronAPI.printers.list();
-        if (Array.isArray(localPrinters)) {
-          systemPrinters = localPrinters;
-          console.log(`[DeviceContext] ${systemPrinters.length} impressora(s) encontrada(s) no sistema local`);
-        }
-      } catch (error) {
-        console.error('[DeviceContext] Erro ao buscar impressoras do sistema local:', error);
-      }
-    }
+    // Configuração de impressoras removida - não buscar mais do sistema local
+    // systemPrinters permanece vazio
 
-    // Verificar status detalhado de cada impressora local
-    const formattedPrinters: Printer[] = await Promise.all(
-      systemPrinters.map(async (localPrinter: any) => {
-        const printerName = localPrinter.name || localPrinter.Name || 'Impressora desconhecida';
-        let isConnected: boolean | undefined = undefined;
-        let paperStatus: string | undefined = undefined;
-        
-        // Verificar status detalhado se disponível
-        if (window.electronAPI?.printers?.checkStatus) {
-          try {
-            const status = await window.electronAPI.printers.checkStatus(printerName);
-            isConnected = status.online ?? isConnected;
-            // Mapear status de papel baseado no resultado
-            if (status.error) {
-              paperStatus = 'ERROR';
-            } else if (status.paperOk === false) {
-              paperStatus = 'EMPTY';
-            } else if (status.paperOk === true) {
-              paperStatus = 'OK';
-            }
-          } catch (error) {
-            console.warn(`[DeviceContext] Erro ao verificar status de ${printerName}:`, error);
-          }
-        }
-        
-        // Determinar status baseado no PrinterStatus do Windows ou status já calculado
-        let status = 'offline';
-        if (localPrinter.PrinterStatus !== undefined) {
-          // Windows PrinterStatus:
-          // 0 = Other
-          // 2 = Idle (Online)
-          // 3 = Printing
-          // 4 = WarmUp
-          // 5 = Stopped Printing
-          // 6 = Offline
-          // 8 = Error
-          const printerStatus = localPrinter.PrinterStatus;
-          if (printerStatus === 2 || printerStatus === 3 || printerStatus === 4) {
-            status = 'online';
-          } else if (printerStatus === 6 || printerStatus === 0 || printerStatus === 1) {
-            status = 'offline';
-          } else if (printerStatus === 8 || printerStatus === 5) {
-            status = 'error';
-          }
-        } else if (localPrinter.status) {
-          status = localPrinter.status;
-        }
-        
-        // Atualizar status baseado na verificação detalhada se disponível
-        if (isConnected !== undefined) {
-          status = isConnected ? 'online' : 'offline';
-        } else {
-          // Se não conseguiu verificar, usar status baseado no PrinterStatus
-          isConnected = status === 'online';
-        }
-        
-        return {
-          name: printerName,
-          status,
-          DriverName: localPrinter.driver || localPrinter.DriverName || 'Unknown',
-          id: localPrinter.id,
-          isDefault: localPrinter.isDefault || localPrinter.IsDefault || false,
-          isConnected: isConnected ?? false,
-          connection: localPrinter.connection || (localPrinter.PortName?.toLowerCase().includes('usb') ? 'usb' : 
-                   localPrinter.PortName?.toLowerCase().includes('bluetooth') ? 'bluetooth' : 'network'),
-          port: localPrinter.port || localPrinter.PortName || 'Unknown',
-          driver: localPrinter.driver || localPrinter.DriverName || 'Unknown',
-          paperStatus,
-          lastStatusCheck: new Date(),
-        };
-      })
-    );
-
-    // Sincronizar com backend se autenticado (apenas para persistência, não para status)
-    if (isAuthenticated && systemPrinters.length > 0) {
-      try {
-        const id = computerId || await getComputerId();
-        await printerApi.registerDevices({
-          computerId: id,
-          printers: systemPrinters.map((p: any) => ({
-            name: p.name || p.Name || 'Impressora desconhecida',
-            driver: p.driver || p.DriverName || 'Unknown',
-            port: p.port || p.PortName || 'Unknown',
-            status: p.status || (p.PrinterStatus === 0 ? 'online' : 'offline'),
-            isDefault: p.isDefault || p.IsDefault || false,
-            connection: p.connection || (p.PortName?.toLowerCase().includes('usb') ? 'usb' : 'network'),
-          })),
-        });
-      } catch (error: any) {
-        // Ignora erros de sincronização, não é crítico
-        if (error?.response?.status !== 403) {
-          console.warn('[DeviceContext] Erro ao sincronizar impressoras:', error);
-        }
-      }
-    }
+    // Configuração de impressoras removida - não processar mais
+    const formattedPrinters: Printer[] = [];
     
+    // Não sincronizar mais com backend - configuração removida
     setPrinters(formattedPrinters);
   };
 

@@ -2,8 +2,8 @@ import { useDevices } from '../../contexts/DeviceContext';
 import { Button } from '../ui/button';
 import { Printer, Scale, Settings, RefreshCw, Search, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
-import PrinterDriverSetup from '../printer/PrinterDriverSetup';
-import { printerApi } from '../../lib/api-endpoints';
+// PrinterDriverSetup removido - configuração de impressoras removida
+// printerApi removido - configuração de impressoras removida
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { handleApiError } from '../../lib/handleApiError';
@@ -26,8 +26,7 @@ async function getComputerId(): Promise<string> {
 export default function DevicesPage() {
   const { printers, scales, refreshPrinters, refreshScales, computerId } = useDevices();
   const { api } = useAuth();
-  const [showDriverSetup, setShowDriverSetup] = useState(false);
-  const [selectedPrinter, setSelectedPrinter] = useState<string | undefined>();
+  // Configuração de impressoras removida - estados removidos
   const [discovering, setDiscovering] = useState(false);
 
   const handleDiscover = async () => {
@@ -35,56 +34,26 @@ export default function DevicesPage() {
       setDiscovering(true);
       toast.loading('Descobrindo impressoras no computador...', { id: 'discover-printers' });
       
-      // Sempre descobrir impressoras localmente usando Electron
+      // Configuração de impressoras removida - não descobrir mais
       let discovered: any[] = [];
-      
-      if (window.electronAPI?.printers?.list) {
-        try {
-          const localPrinters = await window.electronAPI.printers.list();
-          if (Array.isArray(localPrinters)) {
-            discovered = localPrinters.map((p: any) => ({
-              name: p.name || p.Name || 'Impressora desconhecida',
-              driver: p.driver || p.DriverName || 'Unknown',
-              port: p.port || p.PortName || 'Unknown',
-              status: p.status || (p.PrinterStatus === 0 ? 'online' : 'offline'),
-              isDefault: p.isDefault || p.IsDefault || false,
-              connection: p.connection || (p.PortName?.toLowerCase().includes('usb') ? 'usb' : 'network'),
-            }));
-          }
-        } catch (localError) {
-          console.error('[DevicesPage] Erro ao descobrir impressoras localmente:', localError);
-          toast.error('Erro ao descobrir impressoras localmente', { id: 'discover-printers' });
-          return;
-        }
-      } else {
-        toast.error('API de impressoras não disponível. Use o aplicativo desktop.', { id: 'discover-printers' });
-        return;
-      }
+      toast.error('Configuração de impressoras foi removida do sistema', { id: 'discover-printers' });
+      return;
       
       // Se há impressoras descobertas, tenta registrá-las no banco (sincronização)
       if (discovered.length > 0) {
         try {
           const id = computerId || await getComputerId();
-          const registerResponse = await printerApi.registerDevices({
-            computerId: id,
-            printers: discovered,
-          });
+          // Configuração de impressoras removida - não registrar mais
+          // const registerResponse = await printerApi.registerDevices({
+          //   computerId: id,
+          //   printers: discovered,
+          // });
           
-          if (registerResponse.data?.success) {
-            toast.success(registerResponse.data.message || `${discovered.length} impressora(s) encontrada(s) no computador!`, { id: 'discover-printers' });
-          } else {
-            toast.success(`${discovered.length} impressora(s) encontrada(s) no computador!`, { id: 'discover-printers' });
-          }
+          // Configuração removida - não processar mais
         } catch (registerError) {
-          console.warn('[DevicesPage] Erro ao sincronizar impressoras com backend:', registerError);
-          toast.success(`${discovered.length} impressora(s) encontrada(s) no computador!`, { id: 'discover-printers' });
+          // Configuração removida - não processar mais
         }
-      } else {
-        toast('Nenhuma impressora encontrada no computador', { id: 'discover-printers', icon: 'ℹ️' });
       }
-      
-      // Recarrega impressoras (vai buscar localmente novamente)
-      await refreshPrinters();
     } catch (error) {
       console.error('[DevicesPage] Erro ao descobrir impressoras:', error);
       handleApiError(error);
@@ -232,17 +201,7 @@ export default function DevicesPage() {
         </div>
       </div>
 
-      <PrinterDriverSetup
-        open={showDriverSetup}
-        onClose={() => {
-          setShowDriverSetup(false);
-          setSelectedPrinter(undefined);
-        }}
-        printerName={selectedPrinter}
-        onDriverInstalled={() => {
-          refreshPrinters();
-        }}
-      />
+      {/* PrinterDriverSetup removido - configuração de impressoras removida */}
     </div>
   );
 }

@@ -153,24 +153,7 @@ export const uploadApi = {
   },
 };
 
-export const printerApi = {
-  discover: () => api.post('/printer/discover'),
-  create: (data: any) => api.post('/printer', data),
-  list: () => api.get('/printer'),
-  available: () => api.get('/printer/available'),
-  registerDevices: (data: { computerId: string; printers: any[] }) => api.post('/printer/register-devices', data),
-  checkDrivers: () => api.get('/printer/check-drivers'),
-  installDrivers: () => api.post('/printer/install-drivers'),
-  checkStatus: () => api.post('/printer/check-status'),
-  status: (id: string) => api.get(`/printer/${id}/status`),
-  test: (id: string) => api.post(`/printer/${id}/test`),
-  openDrawer: (id: string) => api.post(`/printer/${id}/open-drawer`),
-  queue: (id: string) => api.get(`/printer/${id}/queue`),
-  logs: (id: string) => api.get(`/printer/${id}/logs`),
-  updateFooter: (data: { customFooter: string }) => api.post('/printer/custom-footer', data),
-  getFooter: () => api.get('/printer/custom-footer'),
-  delete: (id: string) => api.delete(`/printer/${id}`),
-};
+// printerApi removido - configuração de impressoras removida do sistema
 
 export const scaleApi = {
   available: () => api.get('/scale/available'),

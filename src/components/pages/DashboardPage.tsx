@@ -9,7 +9,7 @@ import { ProductImage } from '../products/ProductImage';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { companyApi, customerApi } from '../../lib/api-endpoints';
 import { useDevices } from '../../contexts/DeviceContext';
-import PrinterDriverSetup from '../printer/PrinterDriverSetup';
+// PrinterDriverSetup removido - funcionalidades de impressão removidas
 import { PlanWarningBanner } from '../plan-limits/plan-warning-banner';
 import { PlanUsageCard } from '../plan-limits/plan-usage-card';
 
@@ -79,9 +79,8 @@ interface Customer {
 
 export default function DashboardPage() {
   const { api, isAuthenticated, user } = useAuth();
-  const { printers, scales, refreshPrinters } = useDevices();
-  const [showDriverSetup, setShowDriverSetup] = useState(false);
-  const [selectedPrinter, setSelectedPrinter] = useState<string | undefined>();
+  const { printers, scales } = useDevices();
+  // Variáveis de impressora removidas - funcionalidades de impressão removidas
 
   // Dates for current month
   const now = new Date();
@@ -602,17 +601,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <PrinterDriverSetup
-        open={showDriverSetup}
-        onClose={() => {
-          setShowDriverSetup(false);
-          setSelectedPrinter(undefined);
-        }}
-        printerName={selectedPrinter}
-        onDriverInstalled={() => {
-          refreshPrinters();
-        }}
-      />
+      {/* PrinterDriverSetup removido - funcionalidades de impressão removidas */}
     </div>
   );
 }
