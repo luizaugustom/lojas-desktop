@@ -9,7 +9,7 @@ import { Skeleton } from '../ui/skeleton';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { handleApiError } from '../../lib/handleApiError';
 import { saleApi } from '../../lib/api-endpoints';
-import { printContent } from '../../lib/print-service';
+import { printContent, getDefaultPrinter } from '../../lib/print-service';
 
 interface SaleDetailsDialogProps {
   open: boolean;
@@ -53,27 +53,46 @@ export function SaleDetailsDialog({ open, onClose, saleId }: SaleDetailsDialogPr
 
   const handleReprint = async () => {
     try {
-      // Verificar se impressão local está disponível (desktop)
-      if (typeof window !== 'undefined' && window.electronAPI?.printers) {
-        // Buscar conteúdo de impressão do backend
-        const response = await saleApi.getPrintContent(saleId);
-        const printContentData = response.data?.content || response.data?.data?.content;
-        
-        if (!printContentData) {
-          throw new Error('Conteúdo de impressão não encontrado');
-        }
-
-        // Imprimir localmente
-        const printResult = await printContent(printContentData);
-        if (printResult.success) {
-          toast.success('Cupom reimpresso com sucesso!');
-        } else {
-          throw new Error(printResult.error || 'Erro ao imprimir');
-        }
-      } else {
-        // Fallback: tentar impressão no servidor (para web)
+      // Buscar conteúdo de impressão do backend
+      const response = await saleApi.getPrintContent(saleId);
+      const responseData = response.data?.data || response.data;
+      const printContentData = responseData?.content || responseData?.printContent;
+      
+      if (!printContentData) {
+        // Fallback: tentar impressão no servidor diretamente
         await api.post(`/sale/${saleId}/reprint`);
-        toast.success('Cupom reenviado para impressão!');
+        toast.success('Cupom reenviado para impressão no servidor!');
+        return;
+      }
+
+      // Obter impressora padrão configurada no computador do usuário
+      let printerName: string | null = null;
+      try {
+        const printerResult = await getDefaultPrinter();
+        if (printerResult.success && printerResult.printerName) {
+          printerName = printerResult.printerName;
+          console.log('[SaleDetails] Impressora padrão encontrada:', printerName);
+        } else {
+          console.warn('[SaleDetails] Nenhuma impressora padrão encontrada, tentando impressão sem especificar impressora');
+        }
+      } catch (printerError) {
+        console.error('[SaleDetails] Erro ao obter impressora padrão:', printerError);
+      }
+
+      // Imprimir localmente usando a impressora padrão
+      const printResult = await printContent(printContentData, printerName);
+      
+      if (printResult.success) {
+        toast.success('Cupom reimpresso com sucesso!');
+      } else {
+        // Se falhar localmente, tentar no servidor como fallback
+        toast.error(`Impressão local falhou: ${printResult.error}. Tentando impressão no servidor...`);
+        try {
+          await api.post(`/sale/${saleId}/reprint`);
+          toast.success('Cupom reenviado para impressão no servidor!');
+        } catch (serverError) {
+          console.error('[SaleDetails] Erro ao imprimir no servidor:', serverError);
+        }
       }
     } catch (error: any) {
       let errorMessage = 'Erro ao reimprimir cupom';

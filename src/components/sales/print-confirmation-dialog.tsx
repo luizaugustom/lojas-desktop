@@ -31,14 +31,14 @@ export function PrintConfirmationDialog({
               <Printer className="h-6 w-6 text-primary" />
             </div>
             <DialogTitle className="text-xl">
-              Imprimir NFC-e?
+              Imprimir Cupom?
             </DialogTitle>
           </div>
           <DialogDescription className="text-base mt-2">
-            Deseja imprimir a Nota Fiscal do Consumidor Eletrônica (NFC-e) desta venda agora?
+            Deseja imprimir o cupom desta venda agora?
             <br />
             <br />
-            A nota será enviada para a impressora térmica cadastrada.
+            O cupom será enviado para a impressora padrão configurada no seu computador.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2">

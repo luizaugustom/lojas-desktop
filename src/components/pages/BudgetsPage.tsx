@@ -28,6 +28,8 @@ import { Textarea } from '../ui/textarea';
 import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency } from '@/lib/utils-clean';
 import { useAuth } from '@/contexts/AuthContext';
+import { printContent, getDefaultPrinter } from '@/lib/print-service';
+import { budgetApi } from '@/lib/api-endpoints';
 
 interface Budget {
   id: string;
@@ -97,8 +99,55 @@ export default function BudgetsPage() {
 
   const handlePrint = async (id: string) => {
     try {
-      await api.post(`/budget/${id}/print`);
-      toast.success('Orçamento enviado para impressão!');
+      // Tentar obter conteúdo de impressão do backend
+      let printContentData: string | null = null;
+      
+      try {
+        const response = await budgetApi.getPrintContent(id);
+        const responseData = response.data?.data || response.data;
+        printContentData = responseData?.content || responseData?.printContent;
+      } catch (printContentError) {
+        // Se não houver endpoint de conteúdo, continuar com print
+        console.log('[Budget] Endpoint de conteúdo não disponível, tentando print direto');
+      }
+
+      // Se conseguiu obter conteúdo, imprimir localmente
+      if (printContentData) {
+        // Obter impressora padrão configurada no computador do usuário
+        let printerName: string | null = null;
+        try {
+          const printerResult = await getDefaultPrinter();
+          if (printerResult.success && printerResult.printerName) {
+            printerName = printerResult.printerName;
+            console.log('[Budget] Impressora padrão encontrada:', printerName);
+          } else {
+            console.warn('[Budget] Nenhuma impressora padrão encontrada, tentando impressão sem especificar impressora');
+          }
+        } catch (printerError) {
+          console.error('[Budget] Erro ao obter impressora padrão:', printerError);
+        }
+
+        // Imprimir localmente usando a impressora padrão
+        const printResult = await printContent(printContentData, printerName);
+        
+        if (printResult.success) {
+          toast.success('Orçamento enviado para impressão!');
+        } else {
+          // Se falhar localmente, tentar no servidor como fallback
+          toast.error(`Impressão local falhou: ${printResult.error}. Tentando impressão no servidor...`);
+          try {
+            await budgetApi.print(id);
+            toast.success('Orçamento enviado para impressão no servidor!');
+          } catch (serverError) {
+            console.error('[Budget] Erro ao imprimir no servidor:', serverError);
+            handleApiError(serverError);
+          }
+        }
+      } else {
+        // Se não conseguiu conteúdo, tentar impressão no servidor diretamente
+        await budgetApi.print(id);
+        toast.success('Orçamento enviado para impressão!');
+      }
     } catch (error) {
       handleApiError(error);
     }

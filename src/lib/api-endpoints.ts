@@ -116,6 +116,7 @@ export const cashClosureApi = {
   get: (id: string) => api.get(`/cash-closure/${id}`),
   close: (data: any) => api.patch('/cash-closure/close', data),
   reprint: (id: string) => api.post(`/cash-closure/${id}/reprint`),
+  getPrintContent: (id: string) => api.get(`/cash-closure/${id}/print-content`),
 };
 
 export const uploadApi = {
@@ -176,6 +177,7 @@ export const budgetApi = {
   delete: (id: string) => api.delete(`/budget/${id}`),
   print: (id: string) => api.post(`/budget/${id}/print`),
   pdf: (id: string) => api.get(`/budget/${id}/pdf`, { responseType: 'blob' }),
+  getPrintContent: (id: string) => api.get(`/budget/${id}/print-content`),
 };
 
 export const installmentApi = {

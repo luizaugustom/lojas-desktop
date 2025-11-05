@@ -23,7 +23,7 @@ import { useCartStore } from '../../store/cart-store';
 import { InstallmentSaleModal } from './installment-sale-modal';
 import { PrintConfirmationDialog } from './print-confirmation-dialog';
 import { useAuth } from '../../contexts/AuthContext';
-import { printContent } from '../../lib/print-service';
+import { printContent, getDefaultPrinter } from '../../lib/print-service';
 import type { CreateSaleDto, PaymentMethod, PaymentMethodDetail, InstallmentData, Seller } from '../../types';
 
 interface CheckoutDialogProps {
@@ -293,17 +293,33 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       // Se conseguiu obter conteúdo, imprimir localmente
       if (printContentText) {
         console.log('[Checkout] Imprimindo localmente...');
-        const printResult = await printContent(printContentText);
+        
+        // Obter impressora padrão configurada no computador do usuário
+        let printerName: string | null = null;
+        try {
+          const printerResult = await getDefaultPrinter();
+          if (printerResult.success && printerResult.printerName) {
+            printerName = printerResult.printerName;
+            console.log('[Checkout] Impressora padrão encontrada:', printerName);
+          } else {
+            console.warn('[Checkout] Nenhuma impressora padrão encontrada, tentando impressão sem especificar impressora');
+          }
+        } catch (printerError) {
+          console.error('[Checkout] Erro ao obter impressora padrão:', printerError);
+        }
+        
+        // Imprimir usando a impressora padrão (ou null para usar fallback automático)
+        const printResult = await printContent(printContentText, printerName);
         
         if (printResult.success) {
-          toast.success('NFC-e enviada para impressão!');
+          toast.success('Cupom enviado para impressão!');
         } else {
           toast.error(`Impressão local falhou: ${printResult.error}. Tentando impressão no servidor...`);
           
           // Se falhar localmente, tentar no servidor como fallback
           try {
             await saleApi.reprint(createdSaleId);
-            toast.success('NFC-e enviada para impressão no servidor!');
+            toast.success('Cupom enviado para impressão no servidor!');
           } catch (serverError) {
             console.error('[Checkout] Erro ao imprimir no servidor:', serverError);
           }
@@ -312,7 +328,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
         // Se não conseguiu conteúdo, tentar impressão no servidor diretamente
         console.log('[Checkout] Sem conteúdo local, tentando impressão no servidor...');
         await saleApi.reprint(createdSaleId);
-        toast.success('NFC-e enviada para impressão!');
+        toast.success('Cupom enviado para impressão!');
       }
 
       handlePrintComplete();

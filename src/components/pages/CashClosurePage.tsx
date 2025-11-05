@@ -30,6 +30,8 @@ import {
   TableRow,
 } from '../ui/table';
 import { useAuth } from '@/contexts/AuthContext';
+import { printContent, getDefaultPrinter } from '@/lib/print-service';
+import { cashClosureApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils';
 
@@ -148,8 +150,55 @@ export default function CashClosurePage() {
 
   const handleReprintReport = async (id: string) => {
     try {
-      await api.post(`/cash-closure/${id}/reprint`);
-      toast.success('Relatório enviado para impressão!');
+      // Tentar obter conteúdo de impressão do backend
+      let printContentData: string | null = null;
+      
+      try {
+        const response = await cashClosureApi.getPrintContent(id);
+        const responseData = response.data?.data || response.data;
+        printContentData = responseData?.content || responseData?.printContent;
+      } catch (printContentError) {
+        // Se não houver endpoint de conteúdo, continuar com reprint
+        console.log('[CashClosure] Endpoint de conteúdo não disponível, tentando reprint direto');
+      }
+
+      // Se conseguiu obter conteúdo, imprimir localmente
+      if (printContentData) {
+        // Obter impressora padrão configurada no computador do usuário
+        let printerName: string | null = null;
+        try {
+          const printerResult = await getDefaultPrinter();
+          if (printerResult.success && printerResult.printerName) {
+            printerName = printerResult.printerName;
+            console.log('[CashClosure] Impressora padrão encontrada:', printerName);
+          } else {
+            console.warn('[CashClosure] Nenhuma impressora padrão encontrada, tentando impressão sem especificar impressora');
+          }
+        } catch (printerError) {
+          console.error('[CashClosure] Erro ao obter impressora padrão:', printerError);
+        }
+
+        // Imprimir localmente usando a impressora padrão
+        const printResult = await printContent(printContentData, printerName);
+        
+        if (printResult.success) {
+          toast.success('Relatório enviado para impressão!');
+        } else {
+          // Se falhar localmente, tentar no servidor como fallback
+          toast.error(`Impressão local falhou: ${printResult.error}. Tentando impressão no servidor...`);
+          try {
+            await cashClosureApi.reprint(id);
+            toast.success('Relatório enviado para impressão no servidor!');
+          } catch (serverError) {
+            console.error('[CashClosure] Erro ao imprimir no servidor:', serverError);
+            handleApiError(serverError);
+          }
+        }
+      } else {
+        // Se não conseguiu conteúdo, tentar impressão no servidor diretamente
+        await cashClosureApi.reprint(id);
+        toast.success('Relatório enviado para impressão!');
+      }
     } catch (error) {
       handleApiError(error);
     }
