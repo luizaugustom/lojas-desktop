@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  DollarSign, 
-  Lock, 
-  Unlock, 
-  ShoppingCart, 
-  CreditCard, 
+import {
+  DollarSign,
+  Lock,
+  Unlock,
+  CreditCard,
   Wallet,
   TrendingUp,
   Calendar,
@@ -13,7 +12,9 @@ import {
   History,
   ChevronDown,
   ChevronUp,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '../ui/button';
@@ -43,17 +44,106 @@ import { cashClosureApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils';
 
-interface CashClosure {
+interface PaymentSummaryEntry {
+  method: string;
+  total: number;
+}
+
+interface SalePaymentDetail {
+  method: string;
+  amount: number;
+}
+
+interface SellerSale {
+  id: string;
+  date: string;
+  total: number;
+  change: number;
+  clientName?: string | null;
+  paymentMethods: SalePaymentDetail[];
+}
+
+interface SellerReport {
+  id: string;
+  name: string;
+  totalSales: number;
+  totalChange: number;
+  sales: SellerSale[];
+}
+
+interface CashClosureReportData {
+  company: {
+    name: string;
+    cnpj: string;
+    address?: string;
+  };
+  closure: {
+    id: string;
+    openingDate: string;
+    closingDate: string;
+    openingAmount: number;
+    closingAmount: number;
+    totalSales: number;
+    totalWithdrawals: number;
+    totalChange: number;
+    totalCashSales: number;
+    expectedClosing: number;
+    difference: number;
+    salesCount: number;
+    seller?: {
+      id: string;
+      name: string;
+    } | null;
+  };
+  paymentSummary: PaymentSummaryEntry[];
+  sellers: SellerReport[];
+}
+
+interface CashClosureSummary {
   id: string;
   openingDate: string;
-  closingDate?: string;
+  closingDate?: string | null;
   openingAmount: number;
   closingAmount: number;
   totalSales: number;
-  totalWithdrawals: number;
+  totalWithdrawals?: number;
+  totalChange?: number;
+  totalCashSales?: number;
+  expectedClosing?: number;
+  difference?: number;
+  salesCount?: number;
+  seller?: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+interface CashClosure extends CashClosureSummary {
   isClosed: boolean;
-  sales?: any[];
-  _count?: { sales: number };
+  reportData?: CashClosureReportData;
+}
+
+interface CashClosureHistoryResponse {
+  closures: CashClosure[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+interface CashClosureDetailsResponse extends CashClosureSummary {
+  closure: CashClosureSummary;
+  reportData: CashClosureReportData;
+  reportContent?: string;
+}
+
+interface CashClosureDetailsDialogData extends CashClosureDetailsResponse {
+  printRequested?: boolean;
+  printResult?: {
+    success?: boolean;
+    error?: string;
+    content?: string | null;
+  } | null;
 }
 
 interface CashStats {
@@ -67,6 +157,16 @@ interface CashStats {
   salesBySeller?: Record<string, number>;
 }
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: 'Dinheiro',
+  credit_card: 'Cartão de Crédito',
+  debit_card: 'Cartão de Débito',
+  pix: 'PIX',
+  installment: 'Parcelado',
+};
+
+const getPaymentMethodLabel = (method: string) => PAYMENT_METHOD_LABELS[method] ?? method;
+
 export default function CashClosurePage() {
   const { api } = useAuth();
   const [openingAmount, setOpeningAmount] = useState<number>(0);
@@ -75,6 +175,8 @@ export default function CashClosurePage() {
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [closeConfirmationOpen, setCloseConfirmationOpen] = useState(false);
+  const [detailsDialog, setDetailsDialog] = useState<{ open: boolean; data?: CashClosureDetailsDialogData | null; title?: string }>({ open: false });
+  const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
 
   // Buscar caixa atual
   const { data: currentClosure, isLoading: isLoadingCurrent, refetch: refetchCurrent } = useQuery<CashClosure | null>({
@@ -101,9 +203,9 @@ export default function CashClosurePage() {
   });
 
   // Buscar histórico
-  const { data: historyData, refetch: refetchHistory } = useQuery({
+  const { data: historyData, refetch: refetchHistory } = useQuery<CashClosureHistoryResponse>({
     queryKey: ['cash-history'],
-    queryFn: async () => (await api.get('/cash-closure/history')).data,
+    queryFn: async () => (await api.get('/cash-closure/history')).data as CashClosureHistoryResponse,
     enabled: showHistory,
   });
 
@@ -115,7 +217,10 @@ export default function CashClosurePage() {
 
     setLoading(true);
     try {
-      await api.post('/cash-closure', { openingAmount });
+      await api.post('/cash-closure', {
+        openingAmount,
+        openingDate: new Date().toISOString(),
+      });
       toast.success('Caixa aberto com sucesso!');
       refetchCurrent();
       setOpeningAmount(0);
@@ -156,18 +261,27 @@ export default function CashClosurePage() {
         closingAmount,
         withdrawals,
         printReport: shouldPrint,
+        closingDate: new Date().toISOString(),
       });
 
-      const result = response.data ?? {};
-      const closureSummary = result?.closure;
+      const result = (response.data ?? {}) as CashClosureDetailsDialogData;
+      const summary = result?.closure ?? result;
       const printResult = result?.printResult;
       const reportContent = result?.reportContent ?? null;
 
-      const differenceValue = closureSummary?.difference ?? difference;
+      const differenceValue = summary?.difference ?? difference;
       toast.success(`Caixa fechado com sucesso! Diferença: ${formatCurrency(differenceValue)}`);
 
+      if (result?.reportData) {
+        setDetailsDialog({
+          open: true,
+          data: result,
+          title: 'Detalhes do fechamento concluído',
+        });
+      }
+
       if (shouldPrint) {
-        await handleReportPrinting(printResult, reportContent, 'Relatório enviado para impressão!');
+        await handleReportPrinting(printResult ?? undefined, reportContent, 'Relatório enviado para impressão!');
       }
 
       await refetchCurrent().catch(() => undefined);
@@ -188,13 +302,21 @@ export default function CashClosurePage() {
   const handleReprintReport = async (id: string) => {
     try {
       const response = await cashClosureApi.reprint(id);
-      const result = response.data ?? {};
+      const result = (response.data ?? {}) as CashClosureDetailsDialogData;
       const printResult = result?.printResult;
       const reportContent = result?.reportContent ?? null;
 
-      const printed = await handleReportPrinting(printResult, reportContent, 'Relatório enviado para impressão!');
+      const printed = await handleReportPrinting(printResult ?? undefined, reportContent, 'Relatório enviado para impressão!');
       if (!printed && !printResult?.error && !reportContent) {
         toast.error('Não foi possível reimprimir o relatório.');
+      }
+
+      if (result?.reportData) {
+        setDetailsDialog({
+          open: true,
+          data: result,
+          title: 'Detalhes do fechamento',
+        });
       }
     } catch (error) {
       handleApiError(error);
@@ -239,6 +361,29 @@ export default function CashClosurePage() {
     return false;
   };
 
+  const handleViewDetails = async (id: string, title?: string) => {
+    setDetailsLoadingId(id);
+    try {
+      const response = await cashClosureApi.getPrintContent(id);
+      const responseData = response.data?.data || response.data;
+      const result = (responseData ?? {}) as CashClosureDetailsDialogData;
+
+      if (result?.reportData) {
+        setDetailsDialog({
+          open: true,
+          data: result,
+          title: title ?? 'Detalhes do fechamento',
+        });
+      } else {
+        toast.error('Não foi possível carregar os detalhes do fechamento.');
+      }
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setDetailsLoadingId(null);
+    }
+  };
+
   if (isLoadingCurrent) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -251,10 +396,10 @@ export default function CashClosurePage() {
   }
 
   // Cálculos - Usar apenas vendas em dinheiro para o caixa
-  const expectedClosing = currentClosure 
+  const expectedClosing = currentClosure
     ? Number(currentClosure.openingAmount || 0) + Number(stats?.totalCashSales || 0) - Number(withdrawals)
     : 0;
-  
+
   const difference = Number(closingAmount) - expectedClosing;
   const differenceColorClass = Math.abs(difference) < 0.01
     ? 'text-green-600'
@@ -334,6 +479,159 @@ export default function CashClosurePage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={detailsDialog.open}
+        onOpenChange={(open) => {
+          setDetailsDialog((prev) => (open ? { ...prev, open } : { open: false }));
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{detailsDialog.title ?? 'Detalhes do fechamento'}</DialogTitle>
+            <DialogDescription>
+              Visualize todas as vendas, formas de pagamento e totais deste período.
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailsDialog.data ? (
+            (() => {
+              const reportData = detailsDialog.data!.reportData;
+              const summary = reportData.closure;
+              const company = reportData.company;
+              const differenceValue = summary.difference;
+              const differenceClass = Math.abs(differenceValue) < 0.01
+                ? 'text-green-600'
+                : differenceValue > 0
+                ? 'text-blue-600'
+                : 'text-red-600';
+
+              return (
+                <div className="space-y-6">
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">{company.name}</p>
+                    <p>CNPJ: {company.cnpj}</p>
+                    {company.address && <p>{company.address}</p>}
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="rounded-lg border p-4">
+                      <p className="text-xs text-muted-foreground">Abertura</p>
+                      <p className="text-sm font-semibold text-foreground">{formatDateTime(summary.openingDate)}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-xs text-muted-foreground">Fechamento</p>
+                      <p className="text-sm font-semibold text-foreground">{formatDateTime(summary.closingDate)}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-xs text-muted-foreground">Vendas registradas</p>
+                      <p className="text-sm font-semibold text-foreground">{summary.salesCount ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-xs text-muted-foreground">Saldo inicial</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(summary.openingAmount)}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-xs text-muted-foreground">Total de vendas</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(summary.totalSales)}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-xs text-muted-foreground">Retiradas</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(summary.totalWithdrawals ?? 0)}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-xs text-muted-foreground">Vendas em dinheiro</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(summary.totalCashSales ?? 0)}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-xs text-muted-foreground">Saldo esperado</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(summary.expectedClosing ?? 0)}</p>
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <p className="text-xs text-muted-foreground">Saldo informado</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(summary.closingAmount)}</p>
+                    </div>
+                    <div className="rounded-lg border p-4 md:col-span-2">
+                      <p className="text-xs text-muted-foreground">Diferença</p>
+                      <p className={`text-sm font-semibold ${differenceClass}`}>
+                        {differenceValue >= 0 ? '+' : ''}{formatCurrency(differenceValue)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-foreground">Resumo por forma de pagamento</h3>
+                    {reportData.paymentSummary.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Nenhuma venda registrada.</p>
+                    ) : (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {reportData.paymentSummary.map((entry) => (
+                          <div key={entry.method} className="flex items-center justify-between rounded border p-3 text-sm">
+                            <span>{getPaymentMethodLabel(entry.method)}</span>
+                            <span className="font-semibold">{formatCurrency(entry.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-foreground">Vendas por vendedor</h3>
+                    {reportData.sellers.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Nenhuma venda registrada.</p>
+                    ) : (
+                      reportData.sellers.map((seller) => (
+                        <div key={seller.id} className="space-y-3 rounded-lg border p-4">
+                          <div className="flex flex-col gap-1 text-sm">
+                            <p className="font-semibold text-foreground">{seller.name}</p>
+                            <div className="flex flex-wrap gap-4 text-muted-foreground">
+                              <span>Total vendido: {formatCurrency(seller.totalSales)}</span>
+                              <span>Troco concedido: {formatCurrency(seller.totalChange)}</span>
+                              <span>Vendas: {seller.sales.length}</span>
+                            </div>
+                          </div>
+
+                          <div className="overflow-x-auto rounded border">
+                            <table className="w-full text-left text-sm">
+                              <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                                <tr>
+                                  <th className="px-3 py-2">Data/Hora</th>
+                                  <th className="px-3 py-2">Cliente</th>
+                                  <th className="px-3 py-2">Total</th>
+                                  <th className="px-3 py-2">Pagamentos</th>
+                                  <th className="px-3 py-2">Troco</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {seller.sales.map((sale) => {
+                                  const payments = sale.paymentMethods
+                                    .map((payment) => `${getPaymentMethodLabel(payment.method)} (${formatCurrency(payment.amount)})`)
+                                    .join(', ');
+                                  return (
+                                    <tr key={sale.id} className="border-t">
+                                      <td className="px-3 py-2 align-top text-foreground">{formatDateTime(sale.date)}</td>
+                                      <td className="px-3 py-2 align-top text-muted-foreground">{sale.clientName || '-'}</td>
+                                      <td className="px-3 py-2 align-top text-foreground font-semibold">{formatCurrency(sale.total)}</td>
+                                      <td className="px-3 py-2 align-top text-muted-foreground">{payments || '-'}</td>
+                                      <td className="px-3 py-2 align-top text-muted-foreground">{sale.change > 0 ? formatCurrency(sale.change) : '-'}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            <p className="py-6 text-sm text-muted-foreground">Selecione um fechamento para visualizar os detalhes.</p>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-6">
       <div className="flex items-center justify-between">
       <div>
@@ -395,9 +693,9 @@ export default function CashClosurePage() {
                 </p>
               </div>
 
-              <Button 
-                onClick={handleOpenCashClosure} 
-                disabled={loading} 
+              <Button
+                onClick={handleOpenCashClosure}
+                disabled={loading}
                 className="w-full"
                 size="lg"
               >
@@ -426,7 +724,7 @@ export default function CashClosurePage() {
                     Importante
                   </h3>
                   <p className="text-sm text-blue-800 dark:text-blue-400">
-                    Abra o caixa no início do expediente. Todas as vendas realizadas serão 
+                    Abra o caixa no início do expediente. Todas as vendas realizadas serão
                     vinculadas a este fechamento até que você feche o caixa novamente.
                   </p>
                 </div>
@@ -491,13 +789,13 @@ export default function CashClosurePage() {
               </CardHeader>
               <CardContent>
                 <div className={`text-2xl font-bold ${
-                  Math.abs(difference) < 0.01 ? 'text-green-600' : 
+                  Math.abs(difference) < 0.01 ? 'text-green-600' :
                   difference > 0 ? 'text-blue-600' : 'text-red-600'
                 }`}>
                   {difference >= 0 ? '+' : ''}{formatCurrency(difference)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {Math.abs(difference) < 0.01 ? 'Caixa correto ✓' : 
+                  {Math.abs(difference) < 0.01 ? 'Caixa correto ✓' :
                    difference > 0 ? 'Sobra' : 'Falta'}
                 </p>
               </CardContent>
@@ -513,7 +811,7 @@ export default function CashClosurePage() {
                 debit_card: stats.salesByPaymentMethod['debit_card'] || 0,
               };
               const totalDigital = digitalPayments.pix + digitalPayments.credit_card + digitalPayments.debit_card;
-              
+
               if (totalDigital > 0) {
                 return (
                   <Card className="border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20">
@@ -769,9 +1067,9 @@ export default function CashClosurePage() {
                 </div>
               </div>
 
-              <Button 
-                onClick={handleCloseCashClosure} 
-                disabled={loading || closingAmount === 0} 
+              <Button
+                onClick={handleCloseCashClosure}
+                disabled={loading || closingAmount === 0}
                 className="w-full"
                 size="lg"
                 variant="destructive"
@@ -851,10 +1149,17 @@ export default function CashClosurePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {historyData.closures.map((closure: CashClosure) => {
-                      const diff = Number(closure.closingAmount || 0) - 
-                                   (Number(closure.openingAmount || 0) + Number(closure.totalSales || 0) - Number(closure.totalWithdrawals || 0));
-                      
+                    {historyData?.closures?.map((closure: CashClosure) => {
+                      const diff = closure.difference ?? (
+                        Number(closure.closingAmount || 0) -
+                        (Number(closure.openingAmount || 0) + Number(closure.totalSales || 0) - Number(closure.totalWithdrawals || 0))
+                      );
+                      const diffBadgeClass = Math.abs(diff) < 0.01
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        : diff > 0
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+
                       return (
                         <TableRow key={closure.id}>
                           <TableCell className="font-medium">
@@ -871,31 +1176,42 @@ export default function CashClosurePage() {
                             {formatCurrency(closure.closingAmount || 0)}
                           </TableCell>
                           <TableCell>
-                            <Badge 
+                            <Badge
                               variant={Math.abs(diff) < 0.01 ? 'default' : 'secondary'}
-                              className={
-                                Math.abs(diff) < 0.01 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                diff > 0 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                              }
+                              className={diffBadgeClass}
                             >
                               {diff >= 0 ? '+' : ''}{formatCurrency(diff)}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
-                              {closure._count?.sales || 0} vendas
+                              {closure.salesCount ?? 0} vendas
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleReprintReport(closure.id)}
-                              title="Reimprimir relatório"
-                            >
-                              <Printer className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewDetails(closure.id, `Detalhes do fechamento (${formatDate(closure.openingDate)})`)}
+                                disabled={detailsLoadingId === closure.id}
+                                title="Ver detalhes"
+                              >
+                                {detailsLoadingId === closure.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleReprintReport(closure.id)}
+                                title="Reimprimir relatório"
+                              >
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
