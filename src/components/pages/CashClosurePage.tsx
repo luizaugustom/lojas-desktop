@@ -29,8 +29,16 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
-import { printContent, getDefaultPrinter } from '@/lib/print-service';
+import { printContent } from '@/lib/print-service';
 import { cashClosureApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency, formatDateTime, formatDate } from '@/lib/utils';
@@ -66,6 +74,7 @@ export default function CashClosurePage() {
   const [withdrawals, setWithdrawals] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [closeConfirmationOpen, setCloseConfirmationOpen] = useState(false);
 
   // Buscar caixa atual
   const { data: currentClosure, isLoading: isLoadingCurrent, refetch: refetchCurrent } = useQuery<CashClosure | null>({
@@ -117,7 +126,7 @@ export default function CashClosurePage() {
     }
   };
 
-  const handleCloseCashClosure = async () => {
+  const handleCloseCashClosure = () => {
     if (!currentClosure) return;
 
     if (closingAmount < 0) {
@@ -130,17 +139,45 @@ export default function CashClosurePage() {
       return;
     }
 
+    if (closingAmount === 0) {
+      toast.error('Informe o valor contado no caixa antes de fechar.');
+      return;
+    }
+
+    setCloseConfirmationOpen(true);
+  };
+
+  const executeCloseCashClosure = async (shouldPrint: boolean) => {
+    if (!currentClosure) return;
+
     setLoading(true);
     try {
-      await api.patch('/cash-closure/close', { 
+      const response = await api.patch('/cash-closure/close', {
         closingAmount,
-        withdrawals 
+        withdrawals,
+        printReport: shouldPrint,
       });
-      toast.success('Caixa fechado com sucesso!');
-      refetchCurrent();
-      refetchHistory();
+
+      const result = response.data ?? {};
+      const closureSummary = result?.closure;
+      const printResult = result?.printResult;
+      const reportContent = result?.reportContent ?? null;
+
+      const differenceValue = closureSummary?.difference ?? difference;
+      toast.success(`Caixa fechado com sucesso! Diferença: ${formatCurrency(differenceValue)}`);
+
+      if (shouldPrint) {
+        await handleReportPrinting(printResult, reportContent, 'Relatório enviado para impressão!');
+      }
+
+      await refetchCurrent().catch(() => undefined);
+      if (showHistory) {
+        await refetchHistory().catch(() => undefined);
+      }
+
       setClosingAmount(0);
       setWithdrawals(0);
+      setCloseConfirmationOpen(false);
     } catch (error) {
       handleApiError(error);
     } finally {
@@ -150,58 +187,56 @@ export default function CashClosurePage() {
 
   const handleReprintReport = async (id: string) => {
     try {
-      // Tentar obter conteúdo de impressão do backend
-      let printContentData: string | null = null;
-      
-      try {
-        const response = await cashClosureApi.getPrintContent(id);
-        const responseData = response.data?.data || response.data;
-        printContentData = responseData?.content || responseData?.printContent;
-      } catch (printContentError) {
-        // Se não houver endpoint de conteúdo, continuar com reprint
-        console.log('[CashClosure] Endpoint de conteúdo não disponível, tentando reprint direto');
-      }
+      const response = await cashClosureApi.reprint(id);
+      const result = response.data ?? {};
+      const printResult = result?.printResult;
+      const reportContent = result?.reportContent ?? null;
 
-      // Se conseguiu obter conteúdo, imprimir localmente
-      if (printContentData) {
-        // Obter impressora padrão configurada no computador do usuário
-        let printerName: string | null = null;
-        try {
-          const printerResult = await getDefaultPrinter();
-          if (printerResult.success && printerResult.printerName) {
-            printerName = printerResult.printerName;
-            console.log('[CashClosure] Impressora padrão encontrada:', printerName);
-          } else {
-            console.warn('[CashClosure] Nenhuma impressora padrão encontrada, tentando impressão sem especificar impressora');
-          }
-        } catch (printerError) {
-          console.error('[CashClosure] Erro ao obter impressora padrão:', printerError);
-        }
-
-        // Imprimir localmente usando a impressora padrão
-        const printResult = await printContent(printContentData, printerName);
-        
-        if (printResult.success) {
-          toast.success('Relatório enviado para impressão!');
-        } else {
-          // Se falhar localmente, tentar no servidor como fallback
-          toast.error(`Impressão local falhou: ${printResult.error}. Tentando impressão no servidor...`);
-          try {
-            await cashClosureApi.reprint(id);
-            toast.success('Relatório enviado para impressão no servidor!');
-          } catch (serverError) {
-            console.error('[CashClosure] Erro ao imprimir no servidor:', serverError);
-            handleApiError(serverError);
-          }
-        }
-      } else {
-        // Se não conseguiu conteúdo, tentar impressão no servidor diretamente
-        await cashClosureApi.reprint(id);
-        toast.success('Relatório enviado para impressão!');
+      const printed = await handleReportPrinting(printResult, reportContent, 'Relatório enviado para impressão!');
+      if (!printed && !printResult?.error && !reportContent) {
+        toast.error('Não foi possível reimprimir o relatório.');
       }
     } catch (error) {
       handleApiError(error);
     }
+  };
+
+  const handleReportPrinting = async (
+    printResult?: { success?: boolean; error?: string; content?: string | null },
+    reportContent?: string | null,
+    successMessage = 'Relatório enviado para impressão!',
+  ) => {
+    const fallbackContent = reportContent ?? printResult?.content ?? null;
+
+    if (printResult?.success) {
+      toast.success(successMessage);
+      return true;
+    }
+
+    if (printResult && printResult.success === false) {
+      toast.error(printResult.error || 'Não foi possível enviar o relatório para a impressora configurada.');
+      if (fallbackContent) {
+        const localResult = await printContent(fallbackContent);
+        if (localResult.success) {
+          toast.success('Relatório impresso localmente.');
+          return true;
+        }
+        toast.error(localResult.error || 'Também não foi possível imprimir o relatório localmente.');
+      }
+      return false;
+    }
+
+    if (!printResult && fallbackContent) {
+      const localResult = await printContent(fallbackContent);
+      if (localResult.success) {
+        toast.success(successMessage);
+        return true;
+      }
+      toast.error(localResult.error || 'Não foi possível imprimir o relatório.');
+      return false;
+    }
+
+    return false;
   };
 
   if (isLoadingCurrent) {
@@ -221,9 +256,85 @@ export default function CashClosurePage() {
     : 0;
   
   const difference = Number(closingAmount) - expectedClosing;
+  const differenceColorClass = Math.abs(difference) < 0.01
+    ? 'text-green-600'
+    : difference > 0
+    ? 'text-blue-600'
+    : 'text-red-600';
 
   return (
-    <div className="space-y-6">
+    <>
+      <Dialog
+        open={closeConfirmationOpen}
+        onOpenChange={(open) => {
+          if (!loading) {
+            setCloseConfirmationOpen(open);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Confirmar fechamento do caixa</DialogTitle>
+            <DialogDescription>
+              Revise os valores antes de concluir e escolha se deseja imprimir o relatório.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Saldo esperado</span>
+              <span className="font-semibold">{formatCurrency(expectedClosing)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Valor contado</span>
+              <span className="font-semibold">{formatCurrency(closingAmount)}</span>
+            </div>
+            <div className={`flex items-center justify-between font-semibold ${differenceColorClass}`}>
+              <span>Diferença</span>
+              <span>{difference >= 0 ? '+' : ''}{formatCurrency(difference)}</span>
+            </div>
+            <div className="border-t pt-3 text-muted-foreground">
+              <p>O relatório inclui todas as vendas, trocos e formas de pagamento deste período.</p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setCloseConfirmationOpen(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => executeCloseCashClosure(false)}
+              disabled={loading}
+            >
+              Fechar sem imprimir
+            </Button>
+            <Button
+              onClick={() => executeCloseCashClosure(true)}
+              disabled={loading}
+              className="gap-2"
+            >
+              {loading ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  Fechando...
+                </>
+              ) : (
+                <>
+                  <Printer className="h-4 w-4" />
+                  Fechar e imprimir
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Fechamento de Caixa</h1>
@@ -797,5 +908,6 @@ export default function CashClosurePage() {
         )}
       </Card>
     </div>
+    </>
   );
 }
