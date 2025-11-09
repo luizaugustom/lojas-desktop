@@ -227,6 +227,7 @@ export const reportSchema = z
     startDate: z.string().optional(),
     endDate: z.string().optional(),
     sellerId: z.string().optional(),
+    includeDocuments: z.boolean().optional(),
   })
   .refine(
     (data) => {

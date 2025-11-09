@@ -1,6 +1,6 @@
 {
   "name": "montshop",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "MontShop - Sistema de gerenciamento de lojas",
   "main": "dist-electron/main.js",
   "author": {
@@ -51,6 +51,7 @@
     "electron-updater": "^6.1.7",
     "escpos": "^3.0.0-alpha.6",
     "escpos-usb": "^3.0.0-alpha.4",
+    "iconv-lite": "^0.7.0",
     "lucide-react": "^0.294.0",
     "node-machine-id": "^1.1.12",
     "node-thermal-printer": "^4.4.0",
@@ -110,7 +111,9 @@
       {
         "from": "public/logo.png",
         "to": "resources/logo.png",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {

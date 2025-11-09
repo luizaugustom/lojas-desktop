@@ -1,6 +1,6 @@
 import { Dialog, DialogContent } from './dialog';
 import { Button } from './button';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 
 interface ImageViewerProps {
@@ -30,15 +30,6 @@ export function ImageViewer({ open, onClose, images, initialIndex = 0, alt = 'Im
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl w-full p-0">
         <div className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-2 right-2 z-10"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-
           <div className="relative bg-black rounded-lg overflow-hidden">
             <img
               src={currentImage}

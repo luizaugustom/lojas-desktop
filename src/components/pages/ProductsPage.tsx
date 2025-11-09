@@ -100,7 +100,8 @@ export default function ProductsPage() {
           >
             <Plus className="mr-2 h-4 w-4" />
             Novo Produto
-            {planUsage?.usage.products.percentage && planUsage.usage.products.percentage >= 90 && (
+            {planUsage?.usage.products.percentage != null &&
+              planUsage.usage.products.percentage >= 90 && (
               <AlertTriangle className="ml-2 h-4 w-4 text-yellow-500" />
             )}
           </Button>

@@ -154,7 +154,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
         price: product.price,
         stockQuantity: product.stockQuantity,
         category: product.category,
-        expirationDate: product.expirationDate,
+        expirationDate: product.expirationDate ?? undefined,
         unitOfMeasure: (['kg', 'g', 'ml', 'l', 'm', 'cm', 'un'].includes(product.unitOfMeasure || '') 
           ? product.unitOfMeasure 
           : 'un') as 'kg' | 'g' | 'ml' | 'l' | 'm' | 'cm' | 'un',

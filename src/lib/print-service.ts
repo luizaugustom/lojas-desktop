@@ -1,4 +1,6 @@
-import type { PaperSizeOption } from './print-settings';
+import { loadPrintSettings, DEFAULT_PRINT_SETTINGS, type PaperSizeOption } from './print-settings';
+
+const RECEIPT_CUT_MARKER = '<<CUT_RECEIPT>>';
 
 /**
  * Serviço de impressão universal que funciona tanto no desktop (Electron) quanto na web
@@ -56,16 +58,32 @@ function getWebPaperStyle(paperSize: PaperSizeOption = '80mm', customPaperWidth?
 /**
  * Formata conteúdo de texto para impressão HTML (web)
  */
+function splitReceiptCopies(content: string): string[] {
+  return content
+    .split(RECEIPT_CUT_MARKER)
+    .map((section) => section.replace(/^\n+/, '').trimEnd())
+    .filter((section) => section.trim().length > 0);
+}
+
 function formatContentForWeb(
   content: string,
   paperSize: PaperSizeOption = '80mm',
   customPaperWidth?: number | null
 ): string {
-  const htmlContent = content
-    .split('\n')
-    .map((line) => {
-      const formattedLine = line.replace(/ /g, '&nbsp;');
-      return `<div style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.2; white-space: pre-wrap;">${formattedLine}</div>`;
+  const copiesList = splitReceiptCopies(content);
+  const copies = copiesList.length > 0 ? copiesList : [content];
+
+  const htmlCopies = copies
+    .map((copy) => {
+      const lines = copy.split('\n').map((line) => line.replace(/ /g, '&nbsp;'));
+      const copyHtml = lines
+        .map(
+          (line) =>
+            `<div class="line">${line}</div>`,
+        )
+        .join('');
+
+      return `<div class="copy">${copyHtml}</div>`;
     })
     .join('');
 
@@ -102,13 +120,26 @@ function formatContentForWeb(
           background: white;
         }
         .content {
+          display: flex;
+          flex-direction: column;
+          gap: 12mm;
+        }
+        .copy {
           white-space: pre-wrap;
           word-wrap: break-word;
+        }
+        .copy:not(:last-child) {
+          page-break-after: always;
+        }
+        .line {
+          font-family: 'Courier New', monospace;
+          font-size: 12px;
+          line-height: 1.2;
         }
       </style>
     </head>
     <body>
-      <div class="content">${htmlContent}</div>
+      <div class="content">${htmlCopies}</div>
     </body>
     </html>
   `;
@@ -199,14 +230,15 @@ export async function printContent(
   printerOrOptions?: string | null | PrintJobOptions
 ): Promise<{ success: boolean; error?: string }> {
   const options = normalizePrintOptions(printerOrOptions);
+  const finalOptions = mergeWithStoredSettings(options);
 
   try {
     if (isElectron()) {
       // Desktop: usar Electron
-      return await printInElectron(content, options);
+      return await printInElectron(content, finalOptions);
     } else {
       // Web: usar window.print
-      return await printInBrowser(content, options);
+      return await printInBrowser(content, finalOptions);
     }
   } catch (error: any) {
     console.error('Erro na impressão:', error);
@@ -312,5 +344,23 @@ function normalizePrintOptions(
     customPaperWidth,
     autoCut: printerOrOptions.autoCut !== false,
   };
+}
+
+function mergeWithStoredSettings(options?: PrintJobOptions): PrintJobOptions | undefined {
+  if (!isElectron()) {
+    return options;
+  }
+
+  const settings = loadPrintSettings();
+  const merged: PrintJobOptions = {
+    printerName: options?.printerName ?? settings.printerName ?? null,
+    port: options?.port ?? settings.printerPort ?? null,
+    paperSize: options?.paperSize ?? settings.paperSize ?? DEFAULT_PRINT_SETTINGS.paperSize,
+    customPaperWidth:
+      options?.customPaperWidth ?? settings.customPaperWidth ?? DEFAULT_PRINT_SETTINGS.customPaperWidth ?? 48,
+    autoCut: options?.autoCut ?? true,
+  };
+
+  return merged;
 }
 

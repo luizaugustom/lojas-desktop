@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
 import ThermalPrinter from 'node-thermal-printer';
 import { PrinterTypes } from 'node-thermal-printer';
 import { exec } from 'child_process';
@@ -6,8 +6,11 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import iconv from 'iconv-lite';
 
 const execAsync = promisify(exec);
+
+const RECEIPT_CUT_MARKER = '<<CUT_RECEIPT>>';
 
 // Cache de impressoras conectadas
 let cachedPrinters: any[] = [];
@@ -29,6 +32,258 @@ interface PrintContentPayload {
   options?: PrintJobOptions;
 }
 
+interface NormalizedContent {
+  text: string;
+  compatText: string;
+  hasExtendedCharacters: boolean;
+}
+
+const ESC = 0x1b;
+const GS = 0x1d;
+const DEFAULT_CODE_PAGE = 19; // ESC/POS: Code page 19 = CP858 (Português)
+const NEW_LINE = Buffer.from('\n', 'ascii');
+
+function normalizePrintableContent(content: string | null | undefined): NormalizedContent {
+  const normalized = (content ?? '')
+    .replace(/\r\n?/g, '\n')
+    .normalize('NFC')
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '');
+
+  const compatText = normalized.replace(/[^\u0000-\u00FF]/g, '?');
+  const hasExtendedCharacters = normalized !== compatText;
+
+  return {
+    text: normalized,
+    compatText,
+    hasExtendedCharacters,
+  };
+}
+
+function ensureTrailingNewlines(value: string, minNewlines = 3): string {
+  const match = value.match(/\n*$/);
+  const existingNewlines = match ? match[0].length : 0;
+  if (existingNewlines >= minNewlines) {
+    return value;
+  }
+  return value + '\n'.repeat(minNewlines - existingNewlines);
+}
+
+function splitReceiptCopies(content: string): string[] {
+  return content
+    .split(RECEIPT_CUT_MARKER)
+    .map((segment) => segment.replace(/^\n+/, '').trimEnd())
+    .filter((segment) => segment.trim().length > 0)
+    .map((segment) => ensureTrailingNewlines(segment));
+}
+
+function encodeForEscPos(text: string): Buffer {
+  const encodings = ['cp858', 'cp850', 'windows1252', 'latin1'];
+
+  for (const encoding of encodings) {
+    try {
+      if (encoding === 'latin1') {
+        return Buffer.from(text, 'latin1');
+      }
+
+      if (iconv.encodingExists(encoding)) {
+        return iconv.encode(text, encoding);
+      }
+    } catch (error) {
+      console.warn(`Falha ao codificar texto usando ${encoding}:`, error);
+    }
+  }
+
+  return Buffer.from(text, 'utf8');
+}
+
+function buildInitializationBuffer(): Buffer {
+  return Buffer.from([ESC, 0x40, ESC, 0x74, DEFAULT_CODE_PAGE]);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getHtmlPaperStyle(paperSize: PaperSizeOption = '80mm', customPaperWidth?: number | null) {
+  switch (paperSize) {
+    case '58mm':
+      return {
+        pageSize: '58mm auto',
+        padding: '4mm',
+        width: '52mm',
+      };
+    case 'a4':
+      return {
+        pageSize: '210mm 297mm',
+        padding: '12mm',
+        width: '180mm',
+      };
+    case 'custom': {
+      const columns = customPaperWidth ?? 48;
+      const widthMm = Math.max(45, Math.min(120, Math.round(columns * 1.7)));
+      return {
+        pageSize: `${widthMm}mm auto`,
+        padding: '4mm',
+        width: `${Math.max(widthMm - 6, 40)}mm`,
+      };
+    }
+    case '80mm':
+    default:
+      return {
+        pageSize: '80mm auto',
+        padding: '5mm',
+        width: '70mm',
+      };
+  }
+}
+
+function buildHtmlDocument(content: string, options?: PrintJobOptions): string {
+  const paperStyle = getHtmlPaperStyle(options?.paperSize, options?.customPaperWidth);
+  const copies = splitReceiptCopies(content);
+
+  const htmlCopies = copies
+    .map((copy) => `<pre class="copy">${escapeHtml(copy)}</pre>`)
+    .join('');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Impressão MontShop</title>
+        <style>
+          @media print {
+            @page {
+              size: ${paperStyle.pageSize};
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: ${paperStyle.padding};
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              line-height: 1.2;
+              width: ${paperStyle.width};
+            }
+          }
+          body {
+            margin: 0;
+            padding: ${paperStyle.padding};
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.2;
+            width: ${paperStyle.width};
+            background: white;
+          }
+          .container {
+            display: flex;
+            flex-direction: column;
+            gap: 12mm;
+          }
+          .copy {
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 0;
+          }
+          .copy:not(:last-child) {
+            page-break-after: always;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">${htmlCopies}</div>
+      </body>
+    </html>
+  `;
+}
+
+async function printWithHtmlRenderer(content: string, options?: PrintJobOptions): Promise<{ success: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    let window: BrowserWindow | null = null;
+    let resolved = false;
+
+    const finish = (result: { success: boolean; error?: string }) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(result);
+      }
+      if (window && !window.isDestroyed()) {
+        window.close();
+      }
+    };
+
+    try {
+      const html = buildHtmlDocument(content, options);
+      const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+
+      window = new BrowserWindow({
+        width: 480,
+        height: 720,
+        show: false,
+        webPreferences: {
+          sandbox: false,
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+        backgroundColor: '#ffffff',
+      });
+
+      window.setMenu(null);
+      window.once('closed', () => {
+        window = null;
+      });
+
+      window.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
+        finish({
+          success: false,
+          error: `Falha ao carregar conteúdo (${errorCode}): ${errorDescription}`,
+        });
+      });
+
+      window.webContents.once('did-finish-load', () => {
+        const printOptions: Electron.WebContentsPrintOptions = {
+          silent: true,
+          printBackground: true,
+        };
+
+        if (options?.printerName) {
+          printOptions.deviceName = options.printerName;
+        }
+
+        window?.webContents.print(printOptions, (printed, failureReason) => {
+          if (!printed) {
+            finish({
+              success: false,
+              error: failureReason || 'Falha ao imprimir conteúdo HTML',
+            });
+            return;
+          }
+
+          finish({ success: true });
+        });
+      });
+
+      window
+        .loadURL(dataUrl)
+        .catch((error: any) => {
+          finish({
+            success: false,
+            error: error?.message || 'Erro ao carregar conteúdo para impressão',
+          });
+        });
+    } catch (error: any) {
+      finish({
+        success: false,
+        error: error?.message || 'Erro ao preparar impressão HTML',
+      });
+    }
+  });
+}
 /**
  * Lista impressoras disponíveis no sistema
  */
@@ -256,27 +511,43 @@ async function printWithThermalPrinter(
   try {
     const interfaceTarget = resolveThermalInterface(printerName, options);
     const columns = normalizePaperWidth(options);
-    const lines = formatContentForThermal(content, columns);
+    const segments = splitReceiptCopies(content);
+    const parts = segments.length > 0 ? segments : [ensureTrailingNewlines(content)];
 
     const printer = new ThermalPrinter({
       type: PrinterTypes.EPSON,
       interface: interfaceTarget,
+      removeSpecialCharacters: false,
       options: {
         timeout: 5000,
       },
     });
 
-    for (const line of lines) {
-      printer.alignLeft();
-      printer.println(line);
-    }
+    const initBuffer = buildInitializationBuffer();
 
-    if (options?.autoCut !== false) {
-      for (let i = 0; i < 3; i++) {
-        printer.newLine();
+    parts.forEach((segment, index) => {
+      printer.raw(initBuffer); // Reset e define code page CP858 a cada via
+      printer.alignLeft();
+
+      const lines = formatContentForThermal(segment, columns);
+      for (const line of lines) {
+        const encodedLine = encodeForEscPos(line);
+        if (encodedLine.length > 0) {
+          printer.raw(encodedLine);
+        }
+        printer.raw(NEW_LINE);
       }
-      printer.raw(Buffer.from([0x1D, 0x56, 0x00])); // GS V 0 -> corte total
-    }
+
+      const isLast = index === parts.length - 1;
+
+      printer.raw(NEW_LINE);
+      printer.raw(NEW_LINE);
+      printer.raw(NEW_LINE);
+
+      if (options?.autoCut !== false || !isLast) {
+        printer.cut();
+      }
+    });
 
     const executed = await printer.execute();
     if (!executed) {
@@ -304,17 +575,28 @@ async function printWithSystemPrinter(
     const shouldAutoCut =
       options?.autoCut !== false && (options?.paperSize ?? '80mm') !== 'a4';
 
-    if (shouldAutoCut) {
-      const contentBuffer = Buffer.from(content, 'utf8');
-      const newlineBuffer = Buffer.from('\n\n', 'utf8');
-      const escInit = Buffer.from([0x1B, 0x40]);
-      const feedBuffer = Buffer.from([0x1B, 0x64, 0x03]); // ESC d n -> alimenta 3 linhas
-      const cutFull = Buffer.from([0x1D, 0x56, 0x00]); // GS V 0 -> corte total
-      const combinedBuffer = Buffer.concat([escInit, contentBuffer, newlineBuffer, feedBuffer, cutFull]);
-      fs.writeFileSync(tempFile, combinedBuffer);
-    } else {
-      fs.writeFileSync(tempFile, content, 'utf8');
-    }
+    const segments = splitReceiptCopies(content);
+    const parts = segments.length > 0 ? segments : [ensureTrailingNewlines(content)];
+
+    const initBuffer = buildInitializationBuffer();
+    const newlineBuffer = encodeForEscPos('\n\n\n');
+    const cutFull = Buffer.from([GS, 0x56, 0x00]); // GS V 0 -> corte total
+
+    const buffers: Buffer[] = [];
+
+    parts.forEach((segment, index) => {
+      buffers.push(initBuffer);
+      buffers.push(encodeForEscPos(segment));
+      buffers.push(newlineBuffer);
+
+      const isLast = index === parts.length - 1;
+      if (shouldAutoCut || !isLast) {
+        buffers.push(cutFull);
+      }
+    });
+
+    const combinedBuffer = Buffer.concat(buffers);
+    fs.writeFileSync(tempFile, combinedBuffer);
 
     const target = options?.port?.trim() || printerName;
 
@@ -349,6 +631,7 @@ async function printWithSystemPrinter(
  */
 async function performPrintJob(content: string, options?: PrintJobOptions): Promise<{ success: boolean; error?: string }> {
   try {
+    const normalized = normalizePrintableContent(content);
     let printerName = options?.printerName ?? null;
 
     if (!printerName) {
@@ -364,13 +647,32 @@ async function performPrintJob(content: string, options?: PrintJobOptions): Prom
       printerName,
     };
 
-    let result = await printWithThermalPrinter(printerName, content, jobOptions);
-    if (result.success) {
-      return result;
+    if (!normalized.hasExtendedCharacters) {
+      const thermalResult = await printWithThermalPrinter(printerName, normalized.compatText, jobOptions);
+      if (thermalResult.success) {
+        return thermalResult;
+      }
+
+      const systemResult = await printWithSystemPrinter(printerName, normalized.compatText, jobOptions);
+      if (systemResult.success) {
+        return systemResult;
+      }
+
+      console.warn('Impressão padrão falhou, utilizando fallback HTML.', {
+        thermalError: thermalResult.error,
+        systemError: systemResult.error,
+      });
+
+      return await printWithHtmlRenderer(normalized.text, jobOptions);
     }
 
-    result = await printWithSystemPrinter(printerName, content, jobOptions);
-    return result;
+    const htmlResult = await printWithHtmlRenderer(normalized.text, jobOptions);
+    if (htmlResult.success) {
+      return htmlResult;
+    }
+
+    console.warn('Impressão HTML falhou, utilizando versão reduzida em Latin-1.', htmlResult.error);
+    return await printWithSystemPrinter(printerName, normalized.compatText, jobOptions);
   } catch (error: any) {
     console.error('Erro na impressão:', error);
     return { success: false, error: error?.message || 'Erro desconhecido na impressão' };

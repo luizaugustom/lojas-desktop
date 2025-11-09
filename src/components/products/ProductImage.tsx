@@ -1,3 +1,4 @@
+import { Box } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getImageUrl } from '@/lib/image-utils';
 
@@ -22,8 +23,14 @@ export function ProductImage({ photos, name, className, size = 'md', onClick }: 
 
   if (!hasImage) {
     return (
-      <div className={cn('rounded-md border bg-muted flex items-center justify-center', sizeClasses[size], className)}>
-        <span className="text-xs text-muted-foreground">Sem foto</span>
+      <div
+        className={cn(
+          'rounded-md border bg-muted flex items-center justify-center',
+          sizeClasses[size],
+          className
+        )}
+      >
+        <Box className="h-1/2 w-1/2 text-muted-foreground" aria-hidden="true" />
       </div>
     );
   }

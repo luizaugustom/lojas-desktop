@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { X, Printer } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
@@ -93,12 +93,7 @@ export function SaleDetailsDialog({ open, onClose, saleId }: SaleDetailsDialogPr
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>Detalhes da Venda</DialogTitle>
-            <Button size="icon" variant="ghost" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle>Detalhes da Venda</DialogTitle>
         </DialogHeader>
 
         {isLoading ? (

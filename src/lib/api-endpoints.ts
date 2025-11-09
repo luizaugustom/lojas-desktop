@@ -1,4 +1,5 @@
 import { api } from './apiClient';
+import type { DataPeriodFilter } from '../types';
 
 export const productApi = {
   create: (data: any) => api.post('/product', data),
@@ -49,8 +50,12 @@ export const sellerApi = {
     get: () => api.get('/seller/my-profile'),
     update: (data: any) => api.patch('/seller/my-profile', data),
   },
-  myStats: () => api.get('/seller/my-stats'),
-  mySales: (params?: any) => api.get('/seller/my-sales', { params }),
+  myStats: (params?: { startDate?: string; endDate?: string }) =>
+    api.get('/seller/my-stats', { params }),
+  mySales: (params?: { page?: number; limit?: number; startDate?: string; endDate?: string }) =>
+    api.get('/seller/my-sales', { params }),
+  updateMyDataPeriod: (dataPeriod: DataPeriodFilter) =>
+    api.patch('/seller/my-data-period', { dataPeriod }),
 };
 
 export const saleApi = {
@@ -69,6 +74,8 @@ export const companyApi = {
   stats: () => api.get('/company/stats'),
   get: (id: string) => api.get(`/company/${id}`),
   updateMyCompany: (data: any) => api.patch('/company/my-company', data),
+  updateDataPeriod: (dataPeriod: DataPeriodFilter) =>
+    api.patch('/company/my-company/data-period', { dataPeriod }),
   update: (id: string, data: any) => api.patch(`/company/${id}`, data),
   delete: (id: string, config?: any) => api.delete(`/company/${id}`, config),
   activate: (id: string) => api.patch(`/company/${id}/activate`),
@@ -82,7 +89,7 @@ export const companyApi = {
   },
   removeLogo: () => api.delete('/company/my-company/logo'),
   getFiscalConfig: () => api.get('/company/my-company/fiscal-config'),
-  hasValidFiscalConfig: () => api.get('/company/fiscal-config/check'),
+  hasValidFiscalConfig: () => api.get('/company/my-company/fiscal-config/valid'),
 };
 
 export const fiscalApi = {

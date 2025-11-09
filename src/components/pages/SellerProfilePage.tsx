@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -12,17 +12,56 @@ import {
   DollarSign,
   ShoppingCart
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { DatePicker } from '../ui/date-picker';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDate, formatCurrency } from '../../lib/utils';
 import { SellerCharts } from '../sellers/seller-charts';
 import { sellerApi } from '../../lib/api-endpoints';
-import type { Seller, SellerStats, Sale } from '../../types';
+import type { Seller, SellerStats, Sale, DataPeriodFilter } from '../../types';
+
+const SELLER_PERIOD_OPTIONS: Array<{ value: DataPeriodFilter; label: string }> = [
+  { value: 'LAST_1_MONTH', label: 'Último mês' },
+  { value: 'LAST_3_MONTHS', label: 'Últimos 3 meses' },
+];
+
+const DEFAULT_SELLER_PERIOD: DataPeriodFilter = 'LAST_1_MONTH';
+const ALLOWED_SELLER_PERIODS = SELLER_PERIOD_OPTIONS.map((option) => option.value);
+
+function resolveSellerPeriod(period?: DataPeriodFilter | null): DataPeriodFilter {
+  return period && ALLOWED_SELLER_PERIODS.includes(period) ? period : DEFAULT_SELLER_PERIOD;
+}
+
+function getPeriodRange(period: DataPeriodFilter) {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  const start = new Date(now);
+  if (period === 'LAST_3_MONTHS') {
+    start.setMonth(start.getMonth() - 3);
+  } else {
+    start.setMonth(start.getMonth() - 1);
+  }
+  start.setHours(0, 0, 0, 0);
+
+  return {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+  };
+}
 
 interface UpdateSellerProfileDto {
   name?: string;
@@ -33,7 +72,19 @@ interface UpdateSellerProfileDto {
 }
 
 export default function SellerProfilePage() {
-  const { api, user } = useAuth();
+  const { api, user, updateUser } = useAuth();
+  const [dataPeriod, setDataPeriod] = useState<DataPeriodFilter>(() =>
+    resolveSellerPeriod((user?.dataPeriod as DataPeriodFilter | null) ?? null),
+  );
+  const [isUpdatingDataPeriod, setIsUpdatingDataPeriod] = useState(false);
+
+  useEffect(() => {
+    setDataPeriod(
+      resolveSellerPeriod((user?.dataPeriod as DataPeriodFilter | null) ?? null),
+    );
+  }, [user?.dataPeriod]);
+
+  const { startDate, endDate } = useMemo(() => getPeriodRange(dataPeriod), [dataPeriod]);
 
   const {
     register,
@@ -65,10 +116,10 @@ export default function SellerProfilePage() {
   });
 
   const { data: statsData, isLoading: isLoadingStats, refetch: refetchStats } = useQuery({
-    queryKey: ['seller-stats'],
+    queryKey: ['seller-stats', startDate, endDate],
     queryFn: async () => {
       try {
-        const response = await sellerApi.myStats();
+        const response = await sellerApi.myStats({ startDate, endDate });
         return response.data || response;
       } catch (error) {
         console.error('Erro ao carregar estatísticas:', error);
@@ -79,10 +130,10 @@ export default function SellerProfilePage() {
   });
 
   const { data: salesData, isLoading: isLoadingSales, refetch: refetchSales } = useQuery({
-    queryKey: ['seller-sales'],
+    queryKey: ['seller-sales', startDate, endDate],
     queryFn: async () => {
       try {
-        const response = await sellerApi.mySales({ page: 1, limit: 10 });
+        const response = await sellerApi.mySales({ page: 1, limit: 10, startDate, endDate });
         return response.data || response;
       } catch (error) {
         console.error('Erro ao carregar vendas:', error);
@@ -129,6 +180,29 @@ export default function SellerProfilePage() {
     }
   };
 
+  const handleDataPeriodChange = async (value: string) => {
+    const nextPeriod = resolveSellerPeriod(value as DataPeriodFilter);
+    if (nextPeriod === dataPeriod) {
+      return;
+    }
+
+    const previousPeriod = dataPeriod;
+    setDataPeriod(nextPeriod);
+    setIsUpdatingDataPeriod(true);
+
+    try {
+      await sellerApi.updateMyDataPeriod(nextPeriod);
+      updateUser({ dataPeriod: nextPeriod });
+      toast.success('Período atualizado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao atualizar período do vendedor:', error);
+      toast.error('Não foi possível atualizar o período. Tente novamente.');
+      setDataPeriod(previousPeriod);
+    } finally {
+      setIsUpdatingDataPeriod(false);
+    }
+  };
+
   if (user?.role !== 'vendedor') {
     return (
       <div className="text-center py-8">
@@ -168,6 +242,22 @@ export default function SellerProfilePage() {
           <p className="text-muted-foreground">Visualize suas informações pessoais</p>
         </div>
         <div className="flex items-center gap-2">
+          <Select
+            value={dataPeriod}
+            onValueChange={handleDataPeriodChange}
+            disabled={isUpdatingDataPeriod}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Período" />
+            </SelectTrigger>
+            <SelectContent>
+              {SELLER_PERIOD_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             onClick={handleRefresh}

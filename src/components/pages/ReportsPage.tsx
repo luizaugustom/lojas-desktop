@@ -5,9 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Download, FileText, Calendar, Package, ShoppingCart, FileBarChart, Users, DollarSign, Info } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { DatePicker } from '../ui/date-picker';
+import { Switch } from '../ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import {
   Select,
@@ -19,7 +19,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { handleApiError } from '../../lib/handleApiError';
 import { reportSchema } from '../../lib/validations';
-import { getFileExtension } from '../../lib/utils';
+import { downloadFile, getFileExtension } from '../../lib/utils';
 import type { GenerateReportDto, ReportHistory, Seller } from '../../types';
 
 const reportTypes = [
@@ -39,9 +39,6 @@ export default function ReportsPage() {
   const { api, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<ReportHistory[]>([]);
-  const [selectedType, setSelectedType] = useState<string>('complete');
-  const [selectedFormat, setSelectedFormat] = useState<string>('excel');
-  const [selectedSeller, setSelectedSeller] = useState<string>('all');
 
   const { data: sellersData } = useQuery({
     queryKey: ['sellers'],
@@ -52,57 +49,67 @@ export default function ReportsPage() {
   const sellers: Seller[] = sellersData || [];
 
   const {
-    register,
     handleSubmit,
     formState: { errors },
     setValue,
     control,
+    watch,
   } = useForm<GenerateReportDto>({
     resolver: zodResolver(reportSchema),
     defaultValues: {
       reportType: 'complete',
       format: 'excel',
+      includeDocuments: false,
+      sellerId: 'all',
     },
   });
+
+  const reportTypeValue = watch('reportType', 'complete') || 'complete';
 
   const onSubmit = async (data: GenerateReportDto) => {
     setLoading(true);
     try {
+      const includeDocuments = data.includeDocuments === true;
       const payload = {
         ...data,
         startDate: data.startDate || undefined,
         endDate: data.endDate || undefined,
         sellerId: data.sellerId === 'all' ? undefined : data.sellerId || undefined,
+        includeDocuments,
       };
 
       const response = await api.post('/reports/generate', payload, {
         responseType: 'blob',
       });
 
-      let blob: Blob;
-      if (response.data instanceof Blob) {
-        blob = response.data;
-      } else {
-        blob = new Blob([response.data], {
-          type: response.headers['content-type'] || 'application/octet-stream',
-        });
-      }
+      const blob =
+        response.data instanceof Blob
+          ? response.data
+          : new Blob([response.data], {
+              type: response.headers['content-type'] || 'application/octet-stream',
+            });
 
-      const extension = getFileExtension(data.format);
+      const extractFilename = (contentDisposition?: string): string | null => {
+        if (!contentDisposition) return null;
+        const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (encodedMatch?.[1]) {
+          try {
+            return decodeURIComponent(encodedMatch[1]);
+          } catch {
+            return encodedMatch[1];
+          }
+        }
+        const regularMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+        return regularMatch?.[1]?.trim() ?? null;
+      };
+
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const filename = `relatorio-${data.reportType}-${timestamp}.${extension}`;
+      const fallbackExtension = includeDocuments ? 'zip' : getFileExtension(data.format);
+      const fallbackFilename = `relatorio-${data.reportType}-${timestamp}.${fallbackExtension}`;
+      const contentDisposition = response.headers['content-disposition'] as string | undefined;
+      const filename = extractFilename(contentDisposition) || fallbackFilename;
 
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
+      downloadFile(blob, filename);
 
       const newHistoryItem: ReportHistory = {
         id: Date.now().toString(),
@@ -112,12 +119,12 @@ export default function ReportsPage() {
         size: blob.size,
         filename,
       };
-      setHistory([newHistoryItem, ...history]);
+      setHistory((prev) => [newHistoryItem, ...prev]);
 
       toast.success('Relatório gerado e baixado com sucesso!');
     } catch (error: any) {
       console.error('Erro ao gerar relatório:', error);
-      
+
       if (error.response?.data instanceof Blob) {
         try {
           const text = await error.response.data.text();
@@ -133,6 +140,21 @@ export default function ReportsPage() {
       setLoading(false);
     }
   };
+
+  if (!user) {
+    return null;
+  }
+
+  if (user.role !== 'empresa') {
+    return (
+      <Card className="p-6 text-center">
+        <CardTitle className="text-xl font-semibold text-destructive">Acesso não permitido</CardTitle>
+        <CardDescription className="mt-2">
+          Apenas contas do tipo <strong>empresa</strong> podem gerar relatórios contábeis.
+        </CardDescription>
+      </Card>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2 w-full h-fit -mb-2 sm:-mb-4 lg:-mb-6">
@@ -158,28 +180,31 @@ export default function ReportsPage() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
               <div className="space-y-2">
                 <Label>Tipo de Relatório</Label>
-                <Select
-                  value={selectedType}
-                  onValueChange={(value) => {
-                    setSelectedType(value);
-                    setValue('reportType', value as any);
-                  }}
-                  disabled={loading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo de relatório" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {reportTypes.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        <div className="flex items-center gap-2">
-                          <type.icon className="h-4 w-4" />
-                          {type.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  name="reportType"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ?? 'complete'}
+                      onValueChange={(value) => field.onChange(value)}
+                      disabled={loading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o tipo de relatório" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {reportTypes.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            <div className="flex items-center gap-2">
+                              <type.icon className="h-4 w-4" />
+                              {type.label}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 {errors.reportType && (
                   <p className="text-sm text-destructive">{errors.reportType.message}</p>
                 )}
@@ -187,25 +212,28 @@ export default function ReportsPage() {
 
               <div className="space-y-2">
                 <Label>Formato</Label>
-                <Select
-                  value={selectedFormat}
-                  onValueChange={(value) => {
-                    setSelectedFormat(value);
-                    setValue('format', value as any);
-                  }}
-                  disabled={loading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o formato" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {formats.map((format) => (
-                      <SelectItem key={format.value} value={format.value}>
-                        {format.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  name="format"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ?? 'excel'}
+                      onValueChange={(value) => field.onChange(value)}
+                      disabled={loading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o formato" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {formats.map((format) => (
+                          <SelectItem key={format.value} value={format.value}>
+                            {format.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 {errors.format && (
                   <p className="text-sm text-destructive">{errors.format.message}</p>
                 )}
@@ -255,30 +283,59 @@ export default function ReportsPage() {
                   <Users className="h-4 w-4" />
                   Filtrar por Vendedor (Opcional)
                 </Label>
-                <Select
-                  value={selectedSeller}
-                  onValueChange={(value) => {
-                    setSelectedSeller(value);
-                    setValue('sellerId', value || undefined);
-                  }}
-                  disabled={loading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos os vendedores" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os vendedores</SelectItem>
-                    {sellers.map((seller) => (
-                      <SelectItem key={seller.id} value={seller.id}>
-                        {seller.name} {seller.commissionRate && seller.commissionRate > 0 ? `(${seller.commissionRate}%)` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  name="sellerId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ?? 'all'}
+                      onValueChange={(value) => field.onChange(value)}
+                      disabled={loading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos os vendedores" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os vendedores</SelectItem>
+                        {sellers.map((seller) => (
+                          <SelectItem key={seller.id} value={seller.id}>
+                            {seller.name} {seller.commissionRate && seller.commissionRate > 0 ? `(${seller.commissionRate}%)` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 <p className="text-xs text-muted-foreground">
                   Deixe vazio para incluir todos os vendedores
                 </p>
               </div>
+
+              <Controller
+                name="includeDocuments"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex items-center justify-between rounded-lg border border-dashed border-muted-foreground/40 bg-muted/30 p-3">
+                    <div className="space-y-1 pr-4">
+                      <Label
+                        htmlFor="include-documents"
+                        className="text-sm font-medium leading-none"
+                      >
+                        Incluir arquivos das notas fiscais
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Gera um arquivo ZIP com o relatório e pastas contendo os XMLs das NF-e, NFC-e e notas de entrada.
+                      </p>
+                    </div>
+                    <Switch
+                      id="include-documents"
+                      checked={!!field.value}
+                      onCheckedChange={(checked) => field.onChange(checked === true)}
+                      disabled={loading}
+                    />
+                  </div>
+                )}
+              />
 
               <Button type="submit" disabled={loading} className="w-full">
                 {loading ? (
@@ -341,15 +398,16 @@ export default function ReportsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-1.5 w-full">
         {reportTypes.map((type) => (
-          <Card key={type.value} className={`cursor-pointer transition-all hover:shadow-md ${selectedType === type.value ? 'ring-2 ring-primary' : ''}`}
+          <Card
+            key={type.value}
+            className={`cursor-pointer transition-all hover:shadow-md ${reportTypeValue === type.value ? 'ring-2 ring-primary' : ''}`}
             onClick={() => {
-              setSelectedType(type.value);
-              setValue('reportType', type.value as any);
+              setValue('reportType', type.value as any, { shouldValidate: true, shouldDirty: true });
             }}
           >
             <CardContent className="py-2 px-3">
               <div className="flex justify-center mb-0.5">
-                <div className={`rounded-full p-1.5 ${selectedType === type.value ? 'bg-primary text-primary-foreground' : 'bg-primary/10'}`}>
+                <div className={`rounded-full p-1.5 ${reportTypeValue === type.value ? 'bg-primary text-primary-foreground' : 'bg-primary/10'}`}>
                   <type.icon className="h-4 w-4" />
                 </div>
               </div>
@@ -365,7 +423,7 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {selectedType === 'complete' && (
+      {reportTypeValue === 'complete' && (
         <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
           <CardContent className="py-2 px-3">
             <div className="flex items-start gap-2">

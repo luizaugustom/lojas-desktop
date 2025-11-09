@@ -58,6 +58,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
   const [loadingFiscalConfig, setLoadingFiscalConfig] = useState(false);
   // Cache do conteúdo de impressão para reimpressão
   const [cachedPrintContent, setCachedPrintContent] = useState<{ content: string; type: string } | null>(null);
+  const [currentPrintType, setCurrentPrintType] = useState<string | null>(null);
   const { items, discount, getTotal, clearCart } = useCartStore();
   const { user, isAuthenticated, api } = useAuth();
 
@@ -99,8 +100,24 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       setPrinting(false);
       // Limpar cache de impressão após finalizar
       setCachedPrintContent(null);
+      setCurrentPrintType(null);
     }
   }, [open]);
+
+  const cachePrintPayload = (content: string, type: string = 'nfce') => {
+    setCachedPrintContent({
+      content,
+      type,
+    });
+    setCurrentPrintType(type);
+  };
+
+  const getPrintLabel = (type: string | null | undefined) => {
+    if (type === 'non-fiscal') {
+      return 'Cupom não fiscal';
+    }
+    return 'NFC-e';
+  };
 
   const loadSellers = async () => {
     if (!isCompany) return;
@@ -245,6 +262,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
     if (!createdSaleId) return;
     
     setPrinting(true);
+    let printLabel = 'NFC-e';
     try {
       let printContentText: string | null = null;
       let printType: string = 'nfce';
@@ -254,6 +272,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
         console.log('[Checkout] Usando conteúdo de impressão em cache');
         printContentText = cachedPrintContent.content;
         printType = cachedPrintContent.type || 'nfce';
+        setCurrentPrintType(printType);
       } else {
         // Se não tem cache, buscar do backend
         console.log('[Checkout] Buscando conteúdo de impressão do backend');
@@ -266,10 +285,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
           
           // Armazenar em cache para futuras reimpressões
           if (printContentText) {
-            setCachedPrintContent({
-              content: printContentText,
-              type: printType,
-            });
+            cachePrintPayload(printContentText, printType);
           }
         } else {
           // Fallback: tentar reprint que retorna conteúdo
@@ -281,14 +297,14 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
             printType = reprintData.printType || 'nfce';
             
             if (printContentText) {
-              setCachedPrintContent({
-                content: printContentText,
-                type: printType,
-              });
+              cachePrintPayload(printContentText, printType);
             }
           }
         }
       }
+
+      setCurrentPrintType(printType);
+      printLabel = getPrintLabel(printType);
 
       // Se conseguiu obter conteúdo, imprimir localmente
       if (printContentText) {
@@ -296,14 +312,15 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
         const printResult = await printContent(printContentText);
         
         if (printResult.success) {
-          toast.success('NFC-e enviada para impressão!');
+          toast.success(`${printLabel} enviada para impressão!`);
         } else {
-          toast.error(`Impressão local falhou: ${printResult.error}. Tentando impressão no servidor...`);
+          const printLabelLower = printLabel.toLowerCase();
+          toast.error(`Impressão local do ${printLabelLower} falhou: ${printResult.error}. Tentando impressão no servidor...`);
           
           // Se falhar localmente, tentar no servidor como fallback
           try {
             await saleApi.reprint(createdSaleId);
-            toast.success('NFC-e enviada para impressão no servidor!');
+            toast.success(`${printLabel} enviada para impressão no servidor!`);
           } catch (serverError) {
             console.error('[Checkout] Erro ao imprimir no servidor:', serverError);
           }
@@ -312,15 +329,15 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
         // Se não conseguiu conteúdo, tentar impressão no servidor diretamente
         console.log('[Checkout] Sem conteúdo local, tentando impressão no servidor...');
         await saleApi.reprint(createdSaleId);
-        toast.success('NFC-e enviada para impressão!');
+        toast.success(`${printLabel} enviada para impressão!`);
       }
 
       handlePrintComplete();
     } catch (error: any) {
-      console.error('[Checkout] Erro ao imprimir NFC-e:', error);
+      console.error(`[Checkout] Erro ao imprimir ${printLabel}:`, error);
       
       // Extrai mensagem de erro detalhada do backend
-      let errorMessage = 'Erro ao imprimir NFC-e';
+      let errorMessage = `Erro ao imprimir ${printLabel}`;
       if (error?.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error?.message) {
@@ -351,6 +368,8 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
     setSelectedCustomerId('');
     setShowPrintConfirmation(false);
     setCreatedSaleId(null);
+    setCachedPrintContent(null);
+    setCurrentPrintType(null);
     onClose();
   };
 
@@ -481,12 +500,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
         total: total
       });
 
-      const saleDataWithSkipPrint = {
-        ...saleData,
-        skipPrint: true, // Não imprimir no servidor, vamos imprimir localmente
-      };
-      
-      const response = await saleApi.create(saleDataWithSkipPrint);
+      const response = await saleApi.create(saleData);
       
       // Extrair ID da venda e conteúdo de impressão da resposta
       const saleData_resp = response.data?.data || response.data;
@@ -505,10 +519,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       
       // Armazenar conteúdo de impressão em cache para reimpressão posterior
       if (printContent) {
-        setCachedPrintContent({
-          content: printContent,
-          type: printType,
-        });
+        cachePrintPayload(printContent, printType);
       }
       
       // Mostrar modal de confirmação se houver conteúdo
@@ -774,6 +785,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
         onConfirm={handlePrintConfirm}
         onCancel={handlePrintCancel}
         loading={printing}
+        printType={currentPrintType}
       />
     </>
   );

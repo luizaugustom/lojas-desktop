@@ -14,6 +14,7 @@ import { Input } from '../ui/input';
 import { DollarSign, Calendar, AlertCircle, CheckCircle2, Search, X, ListChecks } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { Skeleton } from '../ui/skeleton';
+import { PaginationControls } from '../ui/pagination-controls';
 
 interface InstallmentsTableProps {
   installments: any[];
@@ -34,6 +35,8 @@ export function InstallmentsTable({
 }: InstallmentsTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -59,6 +62,20 @@ export function InstallmentsTable({
       );
     });
   }, [installments, debouncedSearchTerm]);
+
+  const totalItems = filteredInstallments.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const paginatedInstallments = filteredInstallments.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchTerm, totalItems]);
 
   const clearSearch = () => {
     setSearchTerm('');
@@ -195,7 +212,7 @@ export function InstallmentsTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredInstallments.map((installment) => (
+          {paginatedInstallments.map((installment) => (
             <TableRow 
               key={installment.id}
               className={isOverdue(installment) ? 'bg-red-50/50 dark:bg-red-900/20' : ''}
@@ -288,6 +305,13 @@ export function InstallmentsTable({
           ))}
         </TableBody>
       </Table>
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        pageSize={pageSize}
+        totalItems={totalItems}
+      />
     </Card>
   );
 }

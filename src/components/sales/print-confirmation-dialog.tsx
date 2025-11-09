@@ -14,6 +14,7 @@ interface PrintConfirmationDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
+  printType?: string | null;
 }
 
 export function PrintConfirmationDialog({
@@ -21,7 +22,16 @@ export function PrintConfirmationDialog({
   onConfirm,
   onCancel,
   loading = false,
+  printType,
 }: PrintConfirmationDialogProps) {
+  const normalizedType = (printType || 'nfce')?.toLowerCase();
+  const isNonFiscal = normalizedType === 'non-fiscal';
+  const title = isNonFiscal ? 'Imprimir cupom não fiscal?' : 'Imprimir cupom fiscal?';
+  const description = isNonFiscal
+    ? 'Deseja imprimir o cupom não fiscal desta venda agora?'
+    : 'Deseja imprimir a Nota Fiscal do Consumidor Eletrônica (NFC-e) desta venda agora?';
+  const footerMessage = 'O documento será enviado para a impressora térmica configurada.';
+
   return (
     <Dialog open={open} onOpenChange={onCancel}>
       <DialogContent className="max-w-md">
@@ -31,14 +41,14 @@ export function PrintConfirmationDialog({
               <Printer className="h-6 w-6 text-primary" />
             </div>
             <DialogTitle className="text-xl">
-              Imprimir NFC-e?
+              {title}
             </DialogTitle>
           </div>
           <DialogDescription className="text-base mt-2">
-            Deseja imprimir a Nota Fiscal do Consumidor Eletrônica (NFC-e) desta venda agora?
+            {description}
             <br />
             <br />
-            A nota será enviada para a impressora térmica cadastrada.
+            {footerMessage}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2">

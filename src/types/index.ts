@@ -1,5 +1,14 @@
 export type UserRole = 'admin' | 'empresa' | 'vendedor';
 
+export type DataPeriodFilter =
+  | 'ALL'
+  | 'THIS_YEAR'
+  | 'LAST_6_MONTHS'
+  | 'LAST_3_MONTHS'
+  | 'LAST_1_MONTH'
+  | 'LAST_15_DAYS'
+  | 'THIS_WEEK';
+
 export enum PlanType {
   BASIC = 'BASIC',
   PLUS = 'PLUS',
@@ -51,6 +60,7 @@ export interface User {
   role: UserRole;
   companyId?: string | null;
   plan?: PlanType;
+  dataPeriod?: DataPeriodFilter | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -251,6 +261,7 @@ export interface GenerateReportDto {
   startDate?: string;
   endDate?: string;
   sellerId?: string;
+  includeDocuments?: boolean;
 }
 
 export interface ReportHistory {

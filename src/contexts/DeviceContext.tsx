@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { scaleApi } from '../lib/api-endpoints';
+import { loadPrintSettings } from '../lib/print-settings';
 
 // Função para obter computerId
 async function getComputerId(): Promise<string> {
@@ -28,6 +29,7 @@ interface Printer {
   driver?: string;
   paperStatus?: string;
   lastStatusCheck?: string | Date;
+  isConfigured?: boolean;
 }
 
 interface Scale {
@@ -41,7 +43,8 @@ interface DeviceContextValue {
   scales: Scale[];
   computerId: string | null;
   loading: boolean;
-  refreshPrinters: () => Promise<void>;
+  configuredPrinterName: string | null;
+  refreshPrinters: () => Promise<Printer[]>;
   refreshScales: () => Promise<void>;
 }
 
@@ -52,20 +55,80 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const [scales, setScales] = useState<Scale[]>([]);
   const [computerId, setComputerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configuredPrinterName, setConfiguredPrinterName] = useState<string | null>(null);
   const { api, isAuthenticated } = useAuth();
 
-  const refreshPrinters = async () => {
-    // SEMPRE usar impressoras locais como fonte principal
-    let systemPrinters: any[] = [];
-    
-    // Configuração de impressoras removida - não buscar mais do sistema local
-    // systemPrinters permanece vazio
+  const normalizePrinterName = (name: string | null | undefined) =>
+    typeof name === 'string' && name.trim().length > 0 ? name.trim().toLowerCase() : null;
 
-    // Configuração de impressoras removida - não processar mais
-    const formattedPrinters: Printer[] = [];
-    
-    // Não sincronizar mais com backend - configuração removida
-    setPrinters(formattedPrinters);
+  const refreshPrinters = async (): Promise<Printer[]> => {
+    try {
+      const settings = loadPrintSettings();
+      const configuredName = normalizePrinterName(settings.printerName);
+      let discovered: any[] = [];
+
+      if (window.electronAPI?.printers?.list) {
+        const result = await window.electronAPI.printers.list();
+        const list = Array.isArray(result)
+          ? result
+          : Array.isArray(result?.printers)
+          ? result.printers
+          : [];
+
+        discovered = list
+          .filter(Boolean)
+          .map((printer: any) => ({
+            name: printer?.name ?? printer?.Name ?? 'Impressora desconhecida',
+            status: printer?.status ?? printer?.PrinterStatus ?? 'unknown',
+            driver: printer?.driver ?? printer?.DriverName ?? undefined,
+            port: printer?.port ?? printer?.PortName ?? undefined,
+            isDefault: Boolean(printer?.isDefault ?? printer?.Default),
+            isConnected: printer?.isConnected ?? (printer?.status === 'online'),
+            connection: printer?.connection,
+            paperStatus: printer?.paperStatus,
+            lastStatusCheck: printer?.lastStatusCheck,
+          }));
+      } else {
+        console.warn('[DeviceContext] API de impressoras não disponível');
+      }
+
+      const formattedPrinters: Printer[] = discovered.map((printer: any) => ({
+        ...printer,
+        isConfigured:
+          configuredName !== null
+            ? normalizePrinterName(printer?.name) === configuredName
+            : false,
+      }));
+
+      if (
+        configuredName &&
+        settings.printerName &&
+        !formattedPrinters.some((printer) => normalizePrinterName(printer.name) === configuredName)
+      ) {
+        formattedPrinters.unshift({
+          name: settings.printerName,
+          status: 'unknown',
+          port: settings.printerPort ?? undefined,
+          driver: undefined,
+          isDefault: false,
+          isConnected: false,
+          connection: undefined,
+          paperStatus: undefined,
+          lastStatusCheck: undefined,
+          isConfigured: true,
+        });
+      }
+
+      setConfiguredPrinterName(settings.printerName ?? null);
+      setPrinters(formattedPrinters);
+      return formattedPrinters;
+    } catch (error) {
+      console.error('[DeviceContext] Erro ao atualizar impressoras:', error);
+      const settings = loadPrintSettings();
+      setConfiguredPrinterName(settings.printerName ?? null);
+      setPrinters([]);
+      return [];
+    }
   };
 
   const refreshScales = async () => {
@@ -118,6 +181,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
         scales,
         computerId,
         loading,
+        configuredPrinterName,
         refreshPrinters,
         refreshScales,
       }}

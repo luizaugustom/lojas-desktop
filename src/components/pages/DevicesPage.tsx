@@ -1,65 +1,49 @@
 import { useDevices } from '../../contexts/DeviceContext';
 import { Button } from '../ui/button';
-import { Printer, Scale, Settings, RefreshCw, Search, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Printer, Scale, RefreshCw, Search, CheckCircle2, XCircle, AlertCircle, Check } from 'lucide-react';
 import { useState } from 'react';
-// PrinterDriverSetup removido - configuração de impressoras removida
-// printerApi removido - configuração de impressoras removida
-import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { handleApiError } from '../../lib/handleApiError';
 import { Badge } from '../ui/badge';
-
-// Função para obter computerId
-async function getComputerId(): Promise<string> {
-  if (window.electronAPI) {
-    return await window.electronAPI.devices.getComputerId();
-  }
-  // Fallback: usar ID do localStorage
-  let id = localStorage.getItem('montshop_computer_id');
-  if (!id) {
-    id = `browser-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem('montshop_computer_id', id);
-  }
-  return id;
-}
+import { savePrintSettings } from '@/lib/print-settings';
+import { checkPrinterStatus } from '@/lib/printer-check';
 
 export default function DevicesPage() {
-  const { printers, scales, refreshPrinters, refreshScales, computerId } = useDevices();
-  const { api } = useAuth();
-  // Configuração de impressoras removida - estados removidos
+  const { printers, scales, refreshPrinters, refreshScales, configuredPrinterName } = useDevices();
   const [discovering, setDiscovering] = useState(false);
+  const [settingDefault, setSettingDefault] = useState<string | null>(null);
 
   const handleDiscover = async () => {
     try {
       setDiscovering(true);
-      toast.loading('Descobrindo impressoras no computador...', { id: 'discover-printers' });
-      
-      // Configuração de impressoras removida - não descobrir mais
-      let discovered: any[] = [];
-      toast.error('Configuração de impressoras foi removida do sistema', { id: 'discover-printers' });
-      return;
-      
-      // Se há impressoras descobertas, tenta registrá-las no banco (sincronização)
-      if (discovered.length > 0) {
-        try {
-          const id = computerId || await getComputerId();
-          // Configuração de impressoras removida - não registrar mais
-          // const registerResponse = await printerApi.registerDevices({
-          //   computerId: id,
-          //   printers: discovered,
-          // });
-          
-          // Configuração removida - não processar mais
-        } catch (registerError) {
-          // Configuração removida - não processar mais
-        }
-      }
+      toast.loading('Buscando impressoras conectadas...', { id: 'discover-printers' });
+      const result = await refreshPrinters();
+      toast.success(`${result.length} impressora(s) atualizada(s).`, { id: 'discover-printers' });
     } catch (error) {
       console.error('[DevicesPage] Erro ao descobrir impressoras:', error);
       handleApiError(error);
       toast.error('Erro ao descobrir impressoras', { id: 'discover-printers' });
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  const handleSetDefaultPrinter = async (printerName?: string | null, printerPort?: string | null) => {
+    if (!printerName) return;
+    try {
+      setSettingDefault(printerName);
+      savePrintSettings({
+        printerName,
+        printerPort: printerPort ?? null,
+      });
+      toast.success(`Impressora "${printerName}" definida como padrão local.`);
+      await refreshPrinters();
+      await checkPrinterStatus();
+    } catch (error) {
+      console.error('[DevicesPage] Erro ao definir impressora padrão:', error);
+      toast.error('Não foi possível definir a impressora como padrão.');
+    } finally {
+      setSettingDefault(null);
     }
   };
 
@@ -73,10 +57,17 @@ export default function DevicesPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="p-6 border border-border rounded-lg">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Printer className="h-5 w-5" />
-              Impressoras ({printers.length})
-            </h2>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Printer className="h-5 w-5" />
+                Impressoras ({printers.length})
+              </h2>
+              {configuredPrinterName && (
+                <span className="text-xs text-muted-foreground">
+                  Padrão atual do desktop: <strong>{configuredPrinterName}</strong>
+                </span>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -85,9 +76,9 @@ export default function DevicesPage() {
                 disabled={discovering}
               >
                 <Search className={`mr-2 h-4 w-4 ${discovering ? 'animate-spin' : ''}`} />
-                {discovering ? 'Descobrindo...' : 'Descobrir'}
+                {discovering ? 'Buscando...' : 'Descobrir'}
               </Button>
-              <Button variant="outline" size="sm" onClick={refreshPrinters} disabled={discovering}>
+              <Button variant="outline" size="sm" onClick={() => refreshPrinters()} disabled={discovering}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${discovering ? 'animate-spin' : ''}`} />
                 Atualizar
               </Button>
@@ -95,7 +86,7 @@ export default function DevicesPage() {
           </div>
           <div className="space-y-2">
             {printers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma impressora encontrada</p>
+              <p className="text-sm text-muted-foreground">Nenhuma impressora encontrada. Clique em "Descobrir".</p>
             ) : (
               printers.map((printer, index) => {
                 const isConnected = printer.isConnected ?? (printer.status === 'online');
@@ -111,11 +102,22 @@ export default function DevicesPage() {
                 ) : (
                   <XCircle className="h-4 w-4 text-gray-400" />
                 );
-                
-                const statusText = isConnected 
-                  ? (paperStatus === 'OK' ? 'Conectada' : paperStatus === 'ERROR' ? 'Erro' : paperStatus === 'EMPTY' ? 'Sem papel' : paperStatus === 'LOW' ? 'Papel baixo' : 'Online')
+
+                const statusText = isConnected
+                  ? (paperStatus === 'OK'
+                      ? 'Conectada'
+                      : paperStatus === 'ERROR'
+                      ? 'Erro'
+                      : paperStatus === 'EMPTY'
+                      ? 'Sem papel'
+                      : paperStatus === 'LOW'
+                      ? 'Papel baixo'
+                      : 'Online')
                   : 'Desconectada';
-                
+
+                const isConfigured = printer.isConfigured;
+                const isSystemDefault = printer.isDefault;
+
                 return (
                   <div key={index} className="p-3 bg-muted rounded">
                     <div className="flex items-center justify-between mb-2">
@@ -128,26 +130,56 @@ export default function DevicesPage() {
                       <Badge variant={isConnected ? 'default' : 'secondary'}>
                         {statusText}
                       </Badge>
+                      {isConfigured && (
+                        <Badge variant="default" className="flex items-center gap-1">
+                          <Check className="h-3 w-3" />
+                          Padrão do desktop
+                        </Badge>
+                      )}
+                      {isSystemDefault && (
+                        <Badge variant="outline">Padrão do sistema</Badge>
+                      )}
                       {printer.paperStatus && (
-                        <Badge variant={
-                          paperStatus === 'OK' ? 'default' : 
-                          paperStatus === 'ERROR' || paperStatus === 'EMPTY' ? 'destructive' : 
-                          'secondary'
-                        }>
+                        <Badge
+                          variant={
+                            paperStatus === 'OK'
+                              ? 'default'
+                              : paperStatus === 'ERROR' || paperStatus === 'EMPTY'
+                              ? 'destructive'
+                              : 'secondary'
+                          }
+                        >
                           Papel: {paperStatus === 'OK' ? 'OK' : paperStatus === 'ERROR' ? 'Erro' : paperStatus === 'EMPTY' ? 'Vazio' : paperStatus === 'LOW' ? 'Baixo' : paperStatus}
                         </Badge>
                       )}
                       {printer.connection && (
                         <Badge variant="outline">
-                          {printer.connection === 'usb' ? 'USB' : printer.connection === 'network' ? 'Rede' : printer.connection === 'bluetooth' ? 'Bluetooth' : printer.connection}
+                          {printer.connection === 'usb'
+                            ? 'USB'
+                            : printer.connection === 'network'
+                            ? 'Rede'
+                            : printer.connection === 'bluetooth'
+                            ? 'Bluetooth'
+                            : printer.connection}
                         </Badge>
                       )}
+                      {printer.port && <Badge variant="outline">Porta: {printer.port}</Badge>}
+                      {printer.driver && <Badge variant="outline">Driver: {printer.driver}</Badge>}
                     </div>
-                    {printer.lastStatusCheck && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Última verificação: {new Date(printer.lastStatusCheck).toLocaleString('pt-BR')}
-                      </p>
-                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isConfigured || settingDefault === printer.name}
+                        onClick={() => handleSetDefaultPrinter(printer.name, printer.port)}
+                      >
+                        {isConfigured
+                          ? 'Em uso'
+                          : settingDefault === printer.name
+                          ? 'Aplicando...'
+                          : 'Definir como padrão'}
+                      </Button>
+                    </div>
                   </div>
                 );
               })
@@ -179,8 +211,6 @@ export default function DevicesPage() {
           </div>
         </div>
       </div>
-
-      {/* PrinterDriverSetup removido - configuração de impressoras removida */}
     </div>
   );
 }
