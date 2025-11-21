@@ -123,7 +123,7 @@ export default function SettingsPage() {
   });
 
   const catalogPublicUrl = withPublicSiteUrl(catalogPageConfig?.pageUrl);
-  const catalogPreviewUrl = catalogPageForm.url ? withPublicSiteUrl(`/catalogo/${catalogPageForm.url}`) : null;
+  const catalogPreviewUrl = catalogPageForm.url ? withPublicSiteUrl(`/catalog/${catalogPageForm.url}`) : null;
 
   // Carregar dados da empresa (incluindo plano)
   const loadCompanyData = async () => {
@@ -1744,7 +1744,7 @@ export default function SettingsPage() {
                         disabled={updatingCatalogPage}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Exemplo: se você digitar "masolucoes", sua página será acessível em {`${PUBLIC_SITE_URL}/catalogo/masolucoes`}
+                        Exemplo: se você digitar "masolucoes", sua página será acessível em {`${PUBLIC_SITE_URL}/catalog/masolucoes`}
                       </p>
                     </div>
 

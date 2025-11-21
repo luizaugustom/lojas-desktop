@@ -233,10 +233,21 @@ export default function InvoicesPage() {
     }
     
     if (emissionMode === 'manual') {
-      if (!recipientDocument.trim()) {
-        toast.error('Informe o CPF/CNPJ do destinatário');
+      // Validar CPF/CNPJ (remover formatação e verificar tamanho)
+      const documentCleaned = recipientDocument.replace(/\D/g, '');
+      if (!documentCleaned || documentCleaned.length < 11) {
+        toast.error('Informe um CPF/CNPJ válido do destinatário');
         return;
       }
+      if (recipientType === 'cpf' && documentCleaned.length !== 11) {
+        toast.error('CPF deve ter 11 dígitos');
+        return;
+      }
+      if (recipientType === 'cnpj' && documentCleaned.length !== 14) {
+        toast.error('CNPJ deve ter 14 dígitos');
+        return;
+      }
+      
       if (!recipientName.trim()) {
         toast.error('Informe o nome do destinatário');
         return;
@@ -276,13 +287,20 @@ export default function InvoicesPage() {
           toast.error(`Item ${i + 1}: O valor unitário deve ser maior que zero`);
           return;
         }
-        if (!item.cfop || item.cfop.length !== 4) {
-          toast.error(`Item ${i + 1}: CFOP deve ter 4 dígitos`);
+        // Validar CFOP (obrigatório e deve ter 4 dígitos numéricos)
+        const cfopCleaned = item.cfop?.replace(/\D/g, '') || '';
+        if (!cfopCleaned || cfopCleaned.length !== 4) {
+          toast.error(`Item ${i + 1}: CFOP deve ter exatamente 4 dígitos numéricos`);
           return;
         }
-        if (item.ncm && item.ncm.length !== 8) {
-          toast.error(`Item ${i + 1}: NCM deve ter 8 dígitos`);
-          return;
+        
+        // Validar NCM (opcional, mas se informado deve ter 8 dígitos numéricos)
+        if (item.ncm && item.ncm.trim() !== '') {
+          const ncmCleaned = item.ncm.replace(/\D/g, '');
+          if (ncmCleaned.length !== 8) {
+            toast.error(`Item ${i + 1}: NCM deve ter exatamente 8 dígitos numéricos`);
+            return;
+          }
         }
       }
     }
@@ -296,30 +314,39 @@ export default function InvoicesPage() {
         payload.saleId = saleId.trim();
       } else {
         // Emissão manual com dados completos
+        // Limpar formatação do documento (CPF/CNPJ)
+        const documentCleaned = recipientDocument.replace(/\D/g, '');
+        
         payload.recipient = {
-          document: recipientDocument,
-          name: recipientName,
-          email: recipientEmail || undefined,
-          phone: recipientPhone || undefined,
+          document: documentCleaned,
+          name: recipientName.trim(),
+          email: recipientEmail?.trim() || undefined,
+          phone: recipientPhone?.replace(/\D/g, '') || undefined,
           address: {
-            zipCode: recipientZipCode || undefined,
-            street: recipientStreet || undefined,
-            number: recipientNumber || undefined,
-            complement: recipientComplement || undefined,
-            district: recipientDistrict || undefined,
-            city: recipientCity || undefined,
-            state: recipientState || undefined,
+            zipCode: recipientZipCode?.replace(/\D/g, '') || undefined,
+            street: recipientStreet?.trim() || undefined,
+            number: recipientNumber?.trim() || undefined,
+            complement: recipientComplement?.trim() || undefined,
+            district: recipientDistrict?.trim() || undefined,
+            city: recipientCity?.trim() || undefined,
+            state: recipientState?.trim().toUpperCase() || undefined,
           }
         };
         
-        payload.items = items.map(item => ({
-          description: item.description,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          ncm: item.ncm || undefined,
-          cfop: item.cfop,
-          unitOfMeasure: item.unitOfMeasure,
-        }));
+        payload.items = items.map(item => {
+          // Limpar formatação de NCM e CFOP
+          const ncmCleaned = item.ncm?.replace(/\D/g, '') || '';
+          const cfopCleaned = item.cfop?.replace(/\D/g, '') || '';
+          
+          return {
+            description: item.description.trim(),
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            ncm: ncmCleaned || undefined,
+            cfop: cfopCleaned,
+            unitOfMeasure: item.unitOfMeasure.trim(),
+          };
+        });
         
         payload.payment = {
           method: paymentMethod,

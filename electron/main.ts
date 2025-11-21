@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, systemPreferences } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme, systemPreferences, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import * as path from 'path';
@@ -238,6 +238,41 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // Abrir links externos no navegador padrão
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Abrir todos os links externos no navegador padrão
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  // Abrir links clicados no navegador padrão (para links com target="_blank" ou cliques em links externos)
+  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    const currentUrl = mainWindow?.webContents.getURL();
+    
+    // Se não houver URL atual (primeira carga), permitir navegação
+    if (!currentUrl) {
+      return;
+    }
+    
+    try {
+      const parsedUrl = new URL(navigationUrl);
+      const currentParsedUrl = new URL(currentUrl);
+      
+      // Se for um protocolo http/https e for um domínio diferente, abrir no navegador padrão
+      if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+        // Se for um domínio diferente, abrir no navegador padrão
+        if (currentParsedUrl.hostname !== parsedUrl.hostname || 
+            currentParsedUrl.origin !== parsedUrl.origin) {
+          event.preventDefault();
+          shell.openExternal(navigationUrl);
+        }
+      }
+    } catch (e) {
+      // Se não conseguir parsear, permitir navegação normal
+      log.warn('Erro ao processar URL de navegação:', e);
+    }
   });
 
   // Aplicar tema do sistema
