@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { CompaniesTable } from '../companies/companies-table';
 import { CompanyDialog } from '../companies/company-dialog';
 import { CompanyStatusModal } from '../companies/company-status-modal';
+import { FocusNfeConfigModal } from '../companies/focus-nfe-config-modal';
 import { Company, CreateCompanyDto } from '../../types';
 import { companyApi } from '../../lib/api-endpoints';
 import { toast } from 'react-hot-toast';
@@ -22,6 +23,8 @@ export default function CompaniesPage() {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [companyToToggle, setCompanyToToggle] = useState<Company | null>(null);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [isFocusNfeModalOpen, setIsFocusNfeModalOpen] = useState(false);
+  const [companyForFocusNfe, setCompanyForFocusNfe] = useState<Company | null>(null);
 
   // Verificar se o usuário é admin
   if (user?.role !== 'admin') {
@@ -215,6 +218,10 @@ export default function CompaniesPage() {
           onEdit={handleEditCompany}
           onDelete={handleDeleteCompany}
           onToggleStatus={handleToggleStatus}
+          onConfigureFocusNfe={(company) => {
+            setCompanyForFocusNfe(company);
+            setIsFocusNfeModalOpen(true);
+          }}
         />
       </Card>
 
@@ -244,6 +251,20 @@ export default function CompaniesPage() {
         company={companyToToggle}
         onConfirm={handleConfirmToggleStatus}
         loading={isTogglingStatus}
+      />
+
+      <FocusNfeConfigModal
+        open={isFocusNfeModalOpen}
+        onOpenChange={(open) => {
+          setIsFocusNfeModalOpen(open);
+          if (!open) {
+            setCompanyForFocusNfe(null);
+          }
+        }}
+        company={companyForFocusNfe}
+        onSuccess={() => {
+          fetchCompanies();
+        }}
       />
     </div>
   );

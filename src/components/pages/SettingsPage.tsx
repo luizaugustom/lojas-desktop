@@ -112,15 +112,6 @@ export default function SettingsPage() {
     enabled: false,
   });
 
-  // Estado das configurações do admin (Focus NFe global)
-  const [adminFocusConfig, setAdminFocusConfig] = useState<any>(null);
-  const [loadingAdminFocus, setLoadingAdminFocus] = useState(false);
-  const [updatingAdminFocus, setUpdatingAdminFocus] = useState(false);
-  const [adminFocusForm, setAdminFocusForm] = useState({
-    focusNfeApiKey: '',
-    focusNfeEnvironment: 'sandbox',
-    ibptToken: '',
-  });
 
   const catalogPublicUrl = withPublicSiteUrl(catalogPageConfig?.pageUrl);
   const catalogPreviewUrl = catalogPageForm.url ? withPublicSiteUrl(`/catalog/${catalogPageForm.url}`) : null;
@@ -189,9 +180,6 @@ export default function SettingsPage() {
         loadCompanyLogo();
         loadAutoMessageStatus();
         loadCatalogPageConfig();
-      }
-      if (user.role === 'admin') {
-        loadAdminFocusConfig();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -453,8 +441,15 @@ export default function SettingsPage() {
       return;
     }
 
-    if (!fiscalConfig?.hasCertificatePassword && !fiscalForm.certificatePassword) {
-      toast.error('Configure a senha do certificado antes de fazer upload');
+    // Verificar se o administrador configurou a API Key do Focus NFe
+    if (!fiscalConfig?.hasFocusNfeApiKey) {
+      toast.error('API Key do Focus NFe não configurada. Solicite ao administrador que configure na página de empresas.');
+      return;
+    }
+
+    // A senha DEVE estar salva no banco antes do upload
+    if (!fiscalConfig?.hasCertificatePassword) {
+      toast.error('Configure e SALVE a senha do certificado antes de fazer upload do arquivo. Clique em "Salvar Configurações Fiscais" primeiro.');
       return;
     }
 
@@ -463,11 +458,6 @@ export default function SettingsPage() {
 
       const formData = new FormData();
       formData.append('certificate', certificateFile);
-      
-      // Se houver senha configurada no formulário, incluir no FormData
-      if (fiscalForm.certificatePassword) {
-        formData.append('certificatePassword', fiscalForm.certificatePassword);
-      }
 
       await api.post('/company/my-company/upload-certificate', formData, {
         headers: {
@@ -477,12 +467,6 @@ export default function SettingsPage() {
 
       toast.success('Certificado enviado ao Focus NFe com sucesso!');
       setCertificateFile(null);
-      
-      // Limpar campo de senha após upload bem-sucedido
-      setFiscalForm({
-        ...fiscalForm,
-        certificatePassword: '',
-      });
       
       // Recarregar configurações
       await loadFiscalConfig();
@@ -535,61 +519,6 @@ export default function SettingsPage() {
     }
   };
 
-  const loadAdminFocusConfig = async () => {
-    try {
-      setLoadingAdminFocus(true);
-      const response = await api.get('/admin/focus-nfe-config');
-      const data = response.data;
-      
-      setAdminFocusConfig(data);
-      setAdminFocusForm({
-        focusNfeApiKey: '', // Não preencher por segurança
-        focusNfeEnvironment: data.focusNfeEnvironment || 'sandbox',
-        ibptToken: '', // Não preencher por segurança
-      });
-    } catch (error) {
-      console.error('Erro ao carregar configurações Focus NFe:', error);
-      handleApiError(error);
-    } finally {
-      setLoadingAdminFocus(false);
-    }
-  };
-
-  const handleUpdateAdminFocusConfig = async () => {
-    try {
-      setUpdatingAdminFocus(true);
-
-      // Montar objeto com apenas os campos preenchidos
-      const updates: any = {};
-      
-      if (adminFocusForm.focusNfeApiKey) updates.focusNfeApiKey = adminFocusForm.focusNfeApiKey;
-      if (adminFocusForm.focusNfeEnvironment) updates.focusNfeEnvironment = adminFocusForm.focusNfeEnvironment;
-      if (adminFocusForm.ibptToken) updates.ibptToken = adminFocusForm.ibptToken;
-
-      if (Object.keys(updates).length === 0) {
-        toast.error('Nenhum campo foi alterado');
-        return;
-      }
-
-      await api.patch('/admin/focus-nfe-config', updates);
-      toast.success('Configurações do Focus NFe atualizadas com sucesso!');
-      
-      // Limpar campos sensíveis
-      setAdminFocusForm({
-        ...adminFocusForm,
-        focusNfeApiKey: '',
-        ibptToken: '',
-      });
-      
-      // Recarregar configurações
-      await loadAdminFocusConfig();
-    } catch (error: any) {
-      console.error('Erro ao atualizar configurações Focus NFe:', error);
-      handleApiError(error);
-    } finally {
-      setUpdatingAdminFocus(false);
-    }
-  };
 
   // Funções para gerenciar logo da empresa
   const loadCompanyLogo = async () => {
@@ -840,134 +769,6 @@ export default function SettingsPage() {
       )}
 
       <div className="grid gap-6">
-        {/* Configurações Focus NFe Global - Apenas para Admin */}
-        {user?.role === 'admin' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Focus NFe - Configuração Global
-              </CardTitle>
-              <CardDescription>
-                Configure a assinatura do Focus NFe que será usada por todas as empresas
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {loadingAdminFocus ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-2 text-sm text-muted-foreground">Carregando...</p>
-                </div>
-              ) : (
-                <>
-                  <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-4">
-                    <div className="flex items-start gap-2">
-                      <Shield className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-purple-900 dark:text-purple-100">
-                          Configuração Global do Sistema
-                        </p>
-                        <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
-                          Esta API Key será usada por todas as empresas do sistema. Cada empresa configurará seus dados fiscais específicos (certificado, CSC, etc) individualmente.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="adminFocusApiKey">
-                        API Key Focus NFe * (Global)
-                        {adminFocusConfig?.hasFocusNfeApiKey && (
-                          <span className="text-xs text-green-600 ml-2">✓ Configurado</span>
-                        )}
-                      </Label>
-                      <Input
-                        id="adminFocusApiKey"
-                        type="password"
-                        value={adminFocusForm.focusNfeApiKey}
-                        onChange={(e) => setAdminFocusForm({ ...adminFocusForm, focusNfeApiKey: e.target.value })}
-                        placeholder="Digite a API Key do Focus NFe"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Obtenha em: <a href="https://focusnfe.com.br" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">focusnfe.com.br</a> (R$ 39,90/mês)
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="adminFocusEnv">Ambiente Padrão *</Label>
-                      <Select
-                        value={adminFocusForm.focusNfeEnvironment}
-                        onValueChange={(value) => setAdminFocusForm({ ...adminFocusForm, focusNfeEnvironment: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sandbox">Homologação (Testes)</SelectItem>
-                          <SelectItem value="production">Produção</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Use "Homologação" para testes iniciais
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="adminIbptToken">
-                      Token IBPT (Opcional)
-                      {adminFocusConfig?.hasIbptToken && (
-                        <span className="text-xs text-green-600 ml-2">✓ Configurado</span>
-                      )}
-                    </Label>
-                    <Input
-                      id="adminIbptToken"
-                      type="password"
-                      value={adminFocusForm.ibptToken}
-                      onChange={(e) => setAdminFocusForm({ ...adminFocusForm, ibptToken: e.target.value })}
-                      placeholder="Token da API IBPT (deixe vazio para não alterar)"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Para cálculo preciso de tributos. Obtenha em: <a href="https://deolhonoimposto.ibpt.org.br" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">IBPT</a> (R$ 29,90/mês) - Opcional
-                    </p>
-                  </div>
-
-                  <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                    <p className="text-sm text-blue-800 dark:text-blue-200">
-                      <strong>ℹ️ Informação:</strong> Como funciona:
-                    </p>
-                    <ul className="text-xs text-blue-700 dark:text-blue-300 mt-2 ml-4 space-y-1">
-                      <li>• <strong>Você (Admin)</strong> contrata 1 conta Focus NFe e configura a API Key aqui</li>
-                      <li>• <strong>Cada empresa</strong> configura seus dados fiscais específicos (CSC, certificado, município)</li>
-                      <li>• <strong>Sistema</strong> combina API Key global + dados da empresa para emitir NFC-e</li>
-                      <li>• <strong>Economia</strong>: 1 assinatura Focus NFe serve para N empresas!</li>
-                    </ul>
-                  </div>
-
-                  <Button 
-                    onClick={handleUpdateAdminFocusConfig} 
-                    disabled={updatingAdminFocus}
-                    className="w-full sm:w-auto"
-                  >
-                    {updatingAdminFocus ? (
-                      <>
-                        <span className="animate-spin mr-2">⏳</span>
-                        Salvando...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Salvar Configuração Global
-                      </>
-                    )}
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
         {user?.role === 'empresa' && (
           <Card id="periodo-dados" className="scroll-mt-24">
             <CardHeader>
@@ -1197,6 +998,46 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Alerta se a API Key do Focus NFe não estiver configurada */}
+                  {!fiscalConfig?.hasFocusNfeApiKey && (
+                    <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+                      <div className="flex items-start gap-2">
+                        <Shield className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100">
+                            ⚠️ API Key do Focus NFe não configurada
+                          </p>
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                            Solicite ao administrador que configure a API Key do Focus NFe na página de empresas antes de fazer upload do certificado digital.
+                          </p>
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-2">
+                            <strong>Ambiente atual:</strong> {fiscalConfig?.focusNfeEnvironment === 'production' ? 'Produção' : 'Homologação (Testes)'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Alerta se a API Key estiver configurada */}
+                  {fiscalConfig?.hasFocusNfeApiKey && (
+                    <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+                      <div className="flex items-start gap-2">
+                        <Shield className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                            ✓ API Key do Focus NFe configurada
+                          </p>
+                          <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                            O sistema está pronto para emitir notas fiscais. Configure os dados abaixo e faça upload do certificado digital.
+                          </p>
+                          <p className="text-xs text-green-700 dark:text-green-300 mt-2">
+                            <strong>Ambiente atual:</strong> {fiscalConfig?.focusNfeEnvironment === 'production' ? 'Produção' : 'Homologação (Testes)'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">

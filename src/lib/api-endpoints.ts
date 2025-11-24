@@ -90,6 +90,8 @@ export const companyApi = {
   removeLogo: () => api.delete('/company/my-company/logo'),
   getFiscalConfig: () => api.get('/company/my-company/fiscal-config'),
   hasValidFiscalConfig: () => api.get('/company/my-company/fiscal-config/valid'),
+  updateFocusNfeConfig: (id: string, data: any) => api.patch(`/company/${id}/focus-nfe-config`, data),
+  getFocusNfeConfig: (id: string) => api.get(`/company/${id}/focus-nfe-config`),
 };
 
 export const fiscalApi = {
@@ -228,6 +230,15 @@ export const notificationApi = {
     emailEnabled?: boolean;
     inAppEnabled?: boolean;
   }) => api.put('/notification/preferences', data),
+};
+
+export const storeCreditApi = {
+  getBalance: (customerId: string) => api.get(`/store-credit/balance/${customerId}`),
+  getBalanceByCpfCnpj: (cpfCnpj: string) => api.get(`/store-credit/balance-by-cpf/${cpfCnpj}`),
+  getTransactions: (customerId: string, params?: { page?: number; limit?: number }) =>
+    api.get(`/store-credit/transactions/${customerId}`, { params }),
+  use: (data: { customerId: string; amount: number; saleId?: string; description?: string }) =>
+    api.post('/store-credit/use', data),
 };
 
 export const adminApi = {

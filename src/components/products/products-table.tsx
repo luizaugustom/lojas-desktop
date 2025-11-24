@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit, Trash2, Package, AlertCircle } from 'lucide-react';
+import { Edit, Trash2, Package, AlertCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
@@ -19,9 +19,10 @@ interface ProductsTableProps {
   onEdit: (product: Product) => void;
   onRefetch: () => void;
   canManage?: boolean;
+  onRegisterLoss?: (product: Product) => void;
 }
 
-export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManage = true }: ProductsTableProps) {
+export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManage = true, onRegisterLoss }: ProductsTableProps) {
   const { api } = useAuth();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ images: string[]; index: number } | null>(null);
@@ -124,7 +125,7 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
             <TableHead>Estoque</TableHead>
             <TableHead>Categoria</TableHead>
             <TableHead>Validade</TableHead>
-            {canManage && <TableHead className="text-right">Ações</TableHead>}
+            <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -155,24 +156,38 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
                     {isExpiringSoon && <AlertCircle className="h-4 w-4 text-red-500" />}
                   </div>
                 </TableCell>
-                {canManage && (
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon-sm" onClick={() => onEdit(product)} aria-label={`Editar produto ${product.name}`}>
-                        <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                      </Button>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    {canManage && (
+                      <>
+                        <Button variant="ghost" size="icon-sm" onClick={() => onEdit(product)} aria-label={`Editar produto ${product.name}`}>
+                          <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleDeleteClick(product)}
+                          disabled={deleting === product.id}
+                          aria-label={`Excluir produto ${product.name}`}
+                        >
+                          <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                        </Button>
+                      </>
+                    )}
+                    {onRegisterLoss && (
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        onClick={() => handleDeleteClick(product)}
-                        disabled={deleting === product.id}
-                        aria-label={`Excluir produto ${product.name}`}
+                        onClick={() => onRegisterLoss(product)}
+                        aria-label={`Registrar perda do produto ${product.name}`}
+                        className="text-orange-600 hover:text-orange-700"
+                        title="Registrar perda"
                       >
-                        <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
                       </Button>
-                    </div>
-                  </TableCell>
-                )}
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             );
           })}

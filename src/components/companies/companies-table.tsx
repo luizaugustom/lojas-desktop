@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { Badge } from '../ui/badge';
-import { MoreHorizontal, Edit, Trash2, Building2 } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Building2, Settings } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -26,9 +26,10 @@ interface CompaniesTableProps {
   onEdit: (company: Company) => void;
   onDelete: (id: string) => void;
   onToggleStatus: (company: Company) => void;
+  onConfigureFocusNfe?: (company: Company) => void;
 }
 
-export function CompaniesTable({ companies, loading, onEdit, onDelete, onToggleStatus }: CompaniesTableProps) {
+export function CompaniesTable({ companies, loading, onEdit, onDelete, onToggleStatus, onConfigureFocusNfe }: CompaniesTableProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (loading) {
@@ -120,6 +121,12 @@ export function CompaniesTable({ companies, loading, onEdit, onDelete, onToggleS
                       <Edit className="h-4 w-4 mr-2" />
                       Editar
                     </DropdownMenuItem>
+                    {onConfigureFocusNfe && (
+                      <DropdownMenuItem onClick={() => onConfigureFocusNfe(company)}>
+                        <Settings className="h-4 w-4 mr-2" />
+                        Configurar Focus NFe
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onClick={() => onDelete(company.id)}
                       className="text-destructive"

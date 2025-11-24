@@ -87,6 +87,14 @@ export interface Company {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  // Plan Limits Configuration
+  maxProducts?: number | null;
+  maxCustomers?: number | null;
+  maxSellers?: number | null;
+  photoUploadEnabled?: boolean;
+  maxPhotosPerProduct?: number | null;
+  nfceEmissionEnabled?: boolean;
+  nfeEmissionEnabled?: boolean;
 }
 
 export interface Admin {
@@ -119,7 +127,7 @@ export interface Product {
   updatedAt: string;
 }
 
-export type PaymentMethod = 'cash' | 'credit_card' | 'debit_card' | 'pix' | 'installment';
+export type PaymentMethod = 'cash' | 'credit_card' | 'debit_card' | 'pix' | 'installment' | 'store_credit' | 'loss';
 
 export interface PaymentMethodDetail {
   method: PaymentMethod;
@@ -214,10 +222,40 @@ export interface Customer {
   email?: string;
   phone?: string;
   cpfCnpj?: string;
+  storeCreditBalance?: number;
   address?: CustomerAddress;
   companyId: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface StoreCreditBalance {
+  customerId: string;
+  customerName: string;
+  cpfCnpj?: string;
+  balance: number;
+}
+
+export interface StoreCreditTransaction {
+  id: string;
+  type: 'CREDIT' | 'DEBIT';
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  description?: string;
+  createdAt: string;
+  exchangeId?: string;
+  saleId?: string;
+}
+
+export interface StoreCreditTransactionsResponse {
+  transactions: StoreCreditTransaction[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export interface BillToPay {

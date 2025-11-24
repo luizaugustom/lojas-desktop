@@ -8,6 +8,7 @@ import { Card } from '../ui/card';
 import { useAuth } from '../../hooks/useAuth';
 import { ProductsTable } from '../products/products-table';
 import { ProductDialog } from '../products/product-dialog';
+import { ProductLossDialog } from '../product-losses/product-loss-dialog';
 import { ProductFilters } from '../products/product-filters';
 import { applyProductFilters, getActiveFiltersCount, type ProductFilters as ProductFiltersType } from '../../lib/productFilters';
 import type { Product, PlanUsageStats } from '../../types';
@@ -16,7 +17,9 @@ export default function ProductsPage() {
   const { api, user } = useAuth();
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [lossDialogOpen, setLossDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [productForLoss, setProductForLoss] = useState<Product | null>(null);
   const [filters, setFilters] = useState<ProductFiltersType>({
     expiringSoon: false,
     lowStock: false,
@@ -79,6 +82,18 @@ export default function ProductsPage() {
     refetch();
   };
 
+  const handleRegisterLoss = (product: Product) => {
+    // Vendedores também podem registrar perdas
+    setProductForLoss(product);
+    setLossDialogOpen(true);
+  };
+
+  const handleLossClose = () => {
+    setLossDialogOpen(false);
+    setProductForLoss(null);
+    refetch();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -133,6 +148,7 @@ export default function ProductsPage() {
         onEdit={canManageProducts ? handleEdit : () => {}}
         onRefetch={refetch}
         canManage={canManageProducts}
+        onRegisterLoss={handleRegisterLoss}
       />
 
       {canManageProducts && (
@@ -142,6 +158,11 @@ export default function ProductsPage() {
           product={selectedProduct}
         />
       )}
+      <ProductLossDialog
+        open={lossDialogOpen}
+        onClose={handleLossClose}
+        initialProduct={productForLoss}
+      />
     </div>
   );
 }

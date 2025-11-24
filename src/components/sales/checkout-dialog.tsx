@@ -16,7 +16,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { handleApiError } from '../../lib/handleApiError';
-import { saleApi, sellerApi, companyApi } from '../../lib/api-endpoints';
+import { saleApi, sellerApi, companyApi, storeCreditApi } from '../../lib/api-endpoints';
 import { saleSchema } from '../../lib/validations';
 import { formatCurrency, calculateChange, calculateMultiplePaymentChange, isValidId, validateUUID } from '../../lib/utils-clean';
 import { useCartStore } from '../../store/cart-store';
@@ -59,6 +59,12 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
   // Cache do conteúdo de impressão para reimpressão
   const [cachedPrintContent, setCachedPrintContent] = useState<{ content: string; type: string } | null>(null);
   const [currentPrintType, setCurrentPrintType] = useState<string | null>(null);
+  // Store credit
+  const [storeCreditBalance, setStoreCreditBalance] = useState<number>(0);
+  const [storeCreditCustomerId, setStoreCreditCustomerId] = useState<string | null>(null);
+  const [loadingStoreCredit, setLoadingStoreCredit] = useState(false);
+  const [useStoreCredit, setUseStoreCredit] = useState(false);
+  const [storeCreditAmount, setStoreCreditAmount] = useState<number>(0);
   const { items, discount, getTotal, clearCart } = useCartStore();
   const { user, isAuthenticated, api } = useAuth();
 
@@ -101,8 +107,47 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       // Limpar cache de impressão após finalizar
       setCachedPrintContent(null);
       setCurrentPrintType(null);
+      // Resetar crédito
+      setStoreCreditBalance(0);
+      setStoreCreditCustomerId(null);
+      setUseStoreCredit(false);
+      setStoreCreditAmount(0);
     }
   }, [open]);
+
+  // Buscar saldo de crédito quando CPF/CNPJ for informado
+  useEffect(() => {
+    const cpfCnpj = selectedCustomerCpfCnpj?.trim().replace(/\D/g, '');
+    if (cpfCnpj && cpfCnpj.length >= 11) {
+      loadStoreCreditBalance(cpfCnpj);
+    } else {
+      setStoreCreditBalance(0);
+      setStoreCreditCustomerId(null);
+      setUseStoreCredit(false);
+      setStoreCreditAmount(0);
+    }
+  }, [selectedCustomerCpfCnpj]);
+
+  const loadStoreCreditBalance = async (cpfCnpj: string) => {
+    setLoadingStoreCredit(true);
+    try {
+      const response = await storeCreditApi.getBalanceByCpfCnpj(cpfCnpj);
+      const balance = response.data;
+      if (balance && balance.balance > 0) {
+        setStoreCreditBalance(balance.balance);
+        setStoreCreditCustomerId(balance.customerId);
+      } else {
+        setStoreCreditBalance(0);
+        setStoreCreditCustomerId(null);
+      }
+    } catch (error) {
+      // Cliente não encontrado ou sem crédito - não é erro
+      setStoreCreditBalance(0);
+      setStoreCreditCustomerId(null);
+    } finally {
+      setLoadingStoreCredit(false);
+    }
+  };
 
   const cachePrintPayload = (content: string, type: string = 'nfce') => {
     setCachedPrintContent({
@@ -256,7 +301,17 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
     formState: { errors },
     reset,
     setValue,
+    watch,
   } = useForm<{ clientName?: string; clientCpfCnpj?: string }>({});
+
+  const watchedCpfCnpj = watch('clientCpfCnpj');
+  
+  // Atualizar selectedCustomerCpfCnpj quando o valor do formulário mudar
+  useEffect(() => {
+    if (watchedCpfCnpj !== selectedCustomerCpfCnpj) {
+      setSelectedCustomerCpfCnpj(watchedCpfCnpj || '');
+    }
+  }, [watchedCpfCnpj]);
 
   const handlePrintConfirm = async () => {
     if (!createdSaleId) return;
@@ -493,11 +548,45 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
         }
       }
       
+      // Usar crédito se disponível e solicitado
+      let creditUsed = 0;
+      if (useStoreCredit && storeCreditCustomerId && storeCreditBalance > 0) {
+        const currentTotalPaid = validPaymentDetails.reduce((sum, payment) => sum + Number(payment.amount), 0);
+        const remainingAfterPayments = total - currentTotalPaid;
+        const creditToUse = Math.min(storeCreditBalance, Math.max(0, remainingAfterPayments));
+        
+        if (creditToUse > 0.01) {
+          try {
+            await storeCreditApi.use({
+              customerId: storeCreditCustomerId,
+              amount: creditToUse,
+              description: `Crédito utilizado na venda`,
+            });
+            
+            creditUsed = creditToUse;
+            
+            // Adicionar crédito como método de pagamento
+            saleData.paymentMethods.push({
+              method: 'store_credit',
+              amount: Math.round((creditUsed + Number.EPSILON) * 100) / 100,
+              additionalInfo: '',
+            });
+            
+            toast.success(`Crédito de ${formatCurrency(creditUsed)} aplicado na venda`);
+          } catch (error: any) {
+            console.error('[Checkout] Erro ao usar crédito:', error);
+            toast.error(error?.response?.data?.message || 'Erro ao usar crédito. A venda continuará sem crédito.');
+            // Continuar com a venda mesmo se houver erro ao usar crédito
+          }
+        }
+      }
+      
       console.log('[Checkout] Dados da venda (sem conversões):', {
         itemCount: saleData.items.length,
         paymentMethodsCount: saleData.paymentMethods.length,
         sellerId: saleData.sellerId,
-        total: total
+        total: total,
+        creditUsed: creditUsed
       });
 
       const response = await saleApi.create(saleData);
@@ -578,9 +667,44 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
               <Input
                 id="clientCpfCnpj"
                 placeholder="000.000.000-00"
-                {...register('clientCpfCnpj')}
+                {...register('clientCpfCnpj', {
+                  onChange: (e) => {
+                    setSelectedCustomerCpfCnpj(e.target.value);
+                  },
+                })}
                 disabled={loading}
               />
+              {loadingStoreCredit && (
+                <p className="text-xs text-muted-foreground">Buscando saldo de crédito...</p>
+              )}
+              {!loadingStoreCredit && storeCreditBalance > 0 && (
+                <div className="p-3 border rounded-lg bg-muted/50 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Crédito disponível:</span>
+                    <span className="text-sm font-semibold text-green-600">
+                      {formatCurrency(storeCreditBalance)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="useStoreCredit"
+                      checked={useStoreCredit}
+                      onChange={(e) => setUseStoreCredit(e.target.checked)}
+                      disabled={loading}
+                      className="h-4 w-4"
+                    />
+                    <Label htmlFor="useStoreCredit" className="text-sm cursor-pointer">
+                      Usar crédito nesta venda
+                    </Label>
+                  </div>
+                  {useStoreCredit && (
+                    <p className="text-xs text-muted-foreground">
+                      O crédito será aplicado automaticamente no valor restante após os outros pagamentos.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {isCompany && (
