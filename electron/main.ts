@@ -110,13 +110,39 @@ function findIndexHtml(): string {
 // Definir o ícone da aplicação
 function getIconPath() {
   if (isDev) {
-    return path.join(__dirname, '../../public/logo.png');
+    // Em desenvolvimento, usar .ico no Windows se disponível
+    if (process.platform === 'win32') {
+      const devIco = path.join(__dirname, '../build/icon.ico');
+      if (fs.existsSync(devIco)) {
+        return devIco;
+      }
+    }
+    return path.join(__dirname, '../public/logo.png');
   }
-  // Em produção, o ícone está no resources do app
+  
+  // No Windows, preferir .ico para melhor qualidade e compatibilidade
+  if (process.platform === 'win32') {
+    // Em produção, o ícone .ico está no resources do app
+    const icoPath = path.join(process.resourcesPath, 'icon.ico');
+    if (fs.existsSync(icoPath)) {
+      return icoPath;
+    }
+    // Fallback: tentar no diretório build
+    const buildIco = path.join(__dirname, '../build/icon.ico');
+    if (fs.existsSync(buildIco)) {
+      return buildIco;
+    }
+  }
+  
+  // Em produção, o ícone PNG está no resources do app (para Mac/Linux)
   const iconPath = path.join(process.resourcesPath, 'logo.png');
-  const fs = require('fs');
   if (fs.existsSync(iconPath)) {
     return iconPath;
+  }
+  // Fallback: tentar no diretório public
+  const publicIcon = path.join(__dirname, '../public/logo.png');
+  if (fs.existsSync(publicIcon)) {
+    return publicIcon;
   }
   // Fallback: tentar no diretório dist
   const distIcon = path.join(__dirname, '../dist/logo.png');

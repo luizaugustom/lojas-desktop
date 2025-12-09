@@ -23,24 +23,52 @@ async function convertIcon() {
 
     console.log('Convertendo logo.png para icon.ico...');
     
-    // Converter PNG para ICO usando sharp + png-to-ico
-    const { imagesToIco } = require('png-to-ico');
-    
-    // Criar múltiplos tamanhos para o ICO (16x16, 32x32, 48x48, 256x256)
-    const sizes = [16, 32, 48, 256];
-    const images = await Promise.all(
-      sizes.map(size => 
-        sharp(sourcePath)
-          .resize(size, size, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
-          .png()
-          .toBuffer()
-      )
-    );
-    
-    // Converter para ICO usando png-to-ico
-    const ico = await imagesToIco(images);
-    fs.writeFileSync(destPath, ico);
-    console.log('✓ Ícone convertido com sucesso para build/icon.ico');
+    // Tentar usar png-to-ico primeiro
+    try {
+      const pngToIco = require('png-to-ico');
+      
+      // Criar múltiplos tamanhos para o ICO incluindo todos os tamanhos do Windows
+      // 16x16, 24x24, 32x32, 48x48, 64x64, 128x128, 256x256
+      const sizes = [16, 24, 32, 48, 64, 128, 256];
+      const images = [];
+      
+      for (const size of sizes) {
+        const buffer = await sharp(sourcePath)
+          .resize(size, size, { 
+            fit: 'contain', 
+            background: { r: 0, g: 0, b: 0, alpha: 0 },
+            kernel: sharp.kernel.lanczos3
+          })
+          .png({ 
+            compressionLevel: 9,
+            quality: 100
+          })
+          .toBuffer();
+        images.push(buffer);
+      }
+      
+      // Converter para ICO usando png-to-ico
+      const ico = await pngToIco(images);
+      fs.writeFileSync(destPath, ico);
+      console.log('✓ Ícone convertido com sucesso para build/icon.ico');
+      console.log('✓ Tamanhos incluídos:', sizes.join('x, ') + 'x');
+    } catch (icoError) {
+      console.log('⚠ png-to-ico falhou, usando sharp para criar ICO de 256x256...');
+      // Fallback: criar um PNG de 256x256 e renomear para .ico
+      // Electron Builder pode processar isso
+      await sharp(sourcePath)
+        .resize(256, 256, { 
+          fit: 'contain', 
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+          kernel: sharp.kernel.lanczos3
+        })
+        .png({ 
+          compressionLevel: 9,
+          quality: 100
+        })
+        .toFile(destPath);
+      console.log('✓ Ícone 256x256 criado em build/icon.ico');
+    }
   } catch (error) {
     console.warn('⚠ Aviso: Erro ao converter ícone:', error.message);
     console.log('⚠ Continuando sem ícone customizado - electron-builder converterá automaticamente do PNG');

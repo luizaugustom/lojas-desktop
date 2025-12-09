@@ -1,6 +1,6 @@
 {
   "name": "montshop",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "MontShop - Sistema de gerenciamento de lojas",
   "main": "dist-electron/main.js",
   "author": {
@@ -105,12 +105,20 @@
       "dist/**/*",
       "dist-electron/**/*",
       "package.json",
-      "public/logo.png"
+      "public/logo.png",
+      "build/icon.ico"
     ],
     "extraFiles": [
       {
         "from": "public/logo.png",
         "to": "resources/logo.png",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "resources/icon.ico",
         "filter": [
           "**/*"
         ]
@@ -125,7 +133,7 @@
           ]
         }
       ],
-      "icon": "public/logo.png",
+      "icon": "build/icon.ico",
       "publisherName": "MontShop",
       "verifyUpdateCodeSignature": false,
       "executableName": "MontShop Desktop"
@@ -138,7 +146,9 @@
       "shortcutName": "MontShop Desktop",
       "include": "build/installer.nsh",
       "artifactName": "MontShop-Desktop-Setup-${version}.${ext}",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "mac": {
       "target": "dmg",
