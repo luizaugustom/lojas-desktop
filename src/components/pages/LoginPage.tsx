@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'react-hot-toast';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Headset } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -98,28 +98,29 @@ export default function LoginPage() {
     <>
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
         <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 text-center">
-            <div className="flex justify-center mb-4">
+          <CardHeader className="space-y-1 text-center p-4 sm:p-5">
+            <div className="flex justify-center mb-3">
               <img 
                 src={logoImage} 
                 alt="MontShop Logo" 
-                width={128}
-                height={128}
-                className="h-32 w-32 object-contain"
-                style={{ maxWidth: '128px', maxHeight: '128px' }}
+                width={96}
+                height={96}
+                className="h-24 w-24 object-contain"
+                style={{ maxWidth: '96px', maxHeight: '96px' }}
               />
             </div>
-            <CardTitle className="text-2xl font-bold -m-10">MontShop</CardTitle>
-            <CardDescription>Entre com suas credenciais para acessar o sistema</CardDescription>
+            <CardTitle className="text-xl sm:text-2xl font-bold -m-10">MontShop</CardTitle>
+            <CardDescription className="text-sm">Entre com suas credenciais para acessar o sistema</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="login">Login</Label>
+          <CardContent className="p-4 sm:p-5">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="login" className="text-sm">Login</Label>
                 <Input
                   id="login"
                   type="text"
                   placeholder="seu@email.com"
+                  className="h-8 sm:h-9 text-sm"
                   {...register('login')}
                   disabled={loading}
                 />
@@ -143,19 +144,20 @@ export default function LoginPage() {
                     onChange={(e) => setRememberEmail(e.target.checked)}
                     disabled={loading}
                   />
-                  <Label htmlFor="rememberEmail" className="text-sm text-muted-foreground">
+                  <Label htmlFor="rememberEmail" className="text-xs text-muted-foreground">
                     Salvar este e-mail neste dispositivo
                   </Label>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-sm">Senha</Label>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
+                    className="h-8 sm:h-9 text-sm"
                     {...register('password')}
                     disabled={loading}
                   />
@@ -165,7 +167,7 @@ export default function LoginPage() {
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     disabled={loading}
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </button>
                 </div>
                 {errors.password && (
@@ -179,9 +181,9 @@ export default function LoginPage() {
             </form>
 
             {verse && (
-              <div className="mt-4 text-center text-muted-foreground">
+              <div className="mt-3 text-center text-muted-foreground">
                 <p className="italic text-xs">"{verse.text}"</p>
-                <p className="mt-1 font-medium text-[10px]">{verse.reference}</p>
+                <p className="mt-0.5 font-medium text-[10px]">{verse.reference}</p>
               </div>
             )}
           </CardContent>
@@ -220,6 +222,20 @@ export default function LoginPage() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Botão SAC no canto inferior esquerdo */}
+      <a
+        href="https://wa.me/5548998482590?text=Eu%20sou%20usuario%20do%20MontShop%20e%20preciso%20de%20atendimento"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed left-4 bottom-4 bg-primary hover:bg-primary/90 text-primary-foreground p-3 rounded-full shadow-lg transition-all hover:scale-110 group"
+        title="Serviço de Atendimento ao Consumidor"
+      >
+        <Headset className="h-6 w-6" />
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          Serviço de Atendimento ao Consumidor
+        </span>
+      </a>
+      
       {/* Marca fixa no canto inferior direito */}
       <div className="fixed right-4 bottom-4 select-none flex flex-col items-center">
         <div className="text-sky-300 font-extrabold tracking-widest">MONT</div>
