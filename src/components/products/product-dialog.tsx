@@ -160,6 +160,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
           : 'un') as 'kg' | 'g' | 'ml' | 'l' | 'm' | 'cm' | 'un',
         ncm: product.ncm || '',
         cfop: product.cfop || '',
+        costPrice: product.costPrice,
       });
     } else {
       // Ao criar novo produto, manter apenas a categoria, limpar todo o resto
