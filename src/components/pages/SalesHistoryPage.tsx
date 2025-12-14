@@ -115,21 +115,6 @@ export default function SalesHistoryPage() {
   const totalPages = salesData?.totalPages || Math.ceil(total / limit);
 
   // Backend retorna totalValue, mas o código espera totalRevenue
-  const stats = {
-    totalSales: statsData?.totalSales || 0,
-    totalRevenue: statsData?.totalRevenue || statsData?.totalValue || 0,
-    averageTicket: statsData?.averageTicket || 0,
-    totalCostOfGoods: statsData?.totalCostOfGoods || 0,
-  };
-
-  // Debug: log stats data
-  if (statsData) {
-    console.log('[Sales History] Stats from API:', statsData);
-    console.log('[Sales History] Parsed stats:', stats);
-    console.log('[Sales History] Bills:', paidBillsAmount, 'Losses:', totalLosses);
-    console.log('[Sales History] Net Profit:', stats.totalRevenue - stats.totalCostOfGoods - paidBillsAmount - totalLosses);
-  }
-
   // Buscar perdas (totalCost no período)
   const { data: lossesSummary } = useQuery({
     queryKey: ['losses-summary', startDate, endDate],
@@ -160,6 +145,21 @@ export default function SalesHistoryPage() {
   const paidBillsAmount = Array.isArray(paidBillsData?.bills)
     ? paidBillsData.bills.reduce((sum: number, bill: any) => sum + (bill?.amount || 0), 0)
     : 0;
+
+  const stats = {
+    totalSales: statsData?.totalSales || 0,
+    totalRevenue: statsData?.totalRevenue || statsData?.totalValue || 0,
+    averageTicket: statsData?.averageTicket || 0,
+    totalCostOfGoods: statsData?.totalCostOfGoods || 0,
+  };
+
+  // Debug: log stats data
+  if (statsData) {
+    console.log('[Sales History] Stats from API:', statsData);
+    console.log('[Sales History] Parsed stats:', stats);
+    console.log('[Sales History] Bills:', paidBillsAmount, 'Losses:', totalLosses);
+    console.log('[Sales History] Net Profit:', stats.totalRevenue - stats.totalCostOfGoods - paidBillsAmount - totalLosses);
+  }
 
   const netProfit = (stats.totalRevenue || 0) - (stats.totalCostOfGoods || 0) - paidBillsAmount - totalLosses;
 
