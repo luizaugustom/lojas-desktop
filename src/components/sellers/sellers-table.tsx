@@ -11,7 +11,7 @@ import {
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { DeleteSellerModal } from './delete-seller-modal';
-import { formatDate, formatCurrency } from '../../lib/utils';
+import { formatCurrency } from '../../lib/utils';
 import type { Seller } from '../../types';
 
 interface SellersTableProps {
@@ -71,7 +71,6 @@ export function SellersTable({ sellers, isLoading, onEdit, onView, onRefetch }: 
               <TableHead className="text-foreground">CPF</TableHead>
               <TableHead className="text-foreground">Comissão</TableHead>
               <TableHead className="text-foreground">Vendas do Mês</TableHead>
-              <TableHead className="text-foreground">Cadastrado em</TableHead>
               <TableHead className="text-right text-foreground">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -125,7 +124,6 @@ export function SellersTable({ sellers, isLoading, onEdit, onView, onRefetch }: 
                     <span className="text-muted-foreground">R$ 0,00</span>
                   )}
                 </TableCell>
-                <TableCell className="text-foreground">{formatDate(seller.createdAt)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
                     <Button

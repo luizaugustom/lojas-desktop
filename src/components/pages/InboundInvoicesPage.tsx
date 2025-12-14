@@ -9,7 +9,7 @@ import { Input, InputWithIcon } from '../ui/input';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { formatCurrency, formatDateTime, downloadFile } from '@/lib/utils';
-import { fiscalApi, uploadApi } from '@/lib/api-endpoints';
+import { fiscalApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
 
 interface InboundDoc {
@@ -517,37 +517,32 @@ export default function InboundInvoicesPage() {
                     return;
                   }
 
-                  const payload: Record<string, any> = {
-                    supplierName,
-                    totalValue: totalValueNumber,
-                  };
+                  const formData = new FormData();
+                  formData.append('supplierName', supplierName);
+                  formData.append('totalValue', totalValueNumber.toString());
 
                   if (accessKey) {
-                    payload.accessKey = accessKey;
+                    formData.append('accessKey', accessKey);
                   } else if (editingDoc) {
-                    payload.accessKey = null;
+                    formData.append('accessKey', '');
                   }
 
-                  let attachmentUrl: string | undefined;
                   if (manualAttachment) {
-                    try {
-                      const uploaded = await uploadApi.single(manualAttachment, 'inbound-invoices');
-                      attachmentUrl = uploaded.data?.fileUrl || uploaded.data?.url;
-                    } catch (e) {
-                      console.warn('Falha no upload do anexo. Continuando sem anexo.', e);
-                    }
-                  }
-
-                  if (attachmentUrl) {
-                    payload.pdfUrl = attachmentUrl;
-                  } else if (editingDoc?.pdfUrl) {
-                    payload.pdfUrl = editingDoc.pdfUrl;
+                    formData.append('file', manualAttachment);
                   }
 
                   if (editingDoc) {
-                    await api.patch(`/fiscal/inbound-invoice/${editingDoc.id}`, payload);
+                    await api.patch(
+                      `/fiscal/inbound-invoice/${editingDoc.id}`,
+                      formData,
+                      {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                      }
+                    );
                   } else {
-                    await api.post('/fiscal/inbound-invoice', payload);
+                    await api.post('/fiscal/inbound-invoice', formData, {
+                      headers: { 'Content-Type': 'multipart/form-data' },
+                    });
                   }
 
                   toast.success(editingDoc ? 'Nota fiscal de entrada atualizada com sucesso' : 'Nota fiscal de entrada registrada com sucesso');

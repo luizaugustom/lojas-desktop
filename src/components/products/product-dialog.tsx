@@ -157,6 +157,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
       console.log('[ProductDialog] Fotos do produto:', product.photos);
       console.log('[ProductDialog] Tipo das fotos:', typeof product.photos);
       console.log('[ProductDialog] Array das fotos:', Array.isArray(product.photos));
+      console.log('[ProductDialog] costPrice recebido:', product.costPrice, 'tipo:', typeof product.costPrice);
       
       reset({
         name: product.name,
@@ -170,7 +171,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
           : 'un') as 'kg' | 'g' | 'ml' | 'l' | 'm' | 'cm' | 'un',
         ncm: product.ncm || '',
         cfop: product.cfop || '',
-        costPrice: product.costPrice,
+        costPrice: product.costPrice ? Number(product.costPrice) : undefined,
       });
     } else {
       // Ao criar novo produto, manter apenas a categoria, limpar todo o resto

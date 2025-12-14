@@ -317,12 +317,17 @@ export default function ReportsPage() {
                 render={({ field }) => (
                   <div className="flex items-center justify-between rounded-lg border border-dashed border-muted-foreground/40 bg-muted/30 p-3">
                     <div className="space-y-1 pr-4">
-                      <Label
-                        htmlFor="include-documents"
-                        className="text-sm font-medium leading-none"
-                      >
-                        Incluir arquivos das notas fiscais
-                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Label
+                          htmlFor="include-documents"
+                          className="text-sm font-medium leading-none"
+                        >
+                          Incluir arquivos das notas fiscais
+                        </Label>
+                        <span className="inline-block px-2 py-0.5 text-xs font-medium text-orange-600 bg-orange-50 rounded">
+                          Em desenvolvimento
+                        </span>
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         Gera um arquivo ZIP com o relatório e pastas contendo os XMLs das NF-e, NFC-e e notas de entrada.
                       </p>
@@ -331,7 +336,7 @@ export default function ReportsPage() {
                       id="include-documents"
                       checked={!!field.value}
                       onCheckedChange={(checked) => field.onChange(checked === true)}
-                      disabled={loading}
+                      disabled={true}
                     />
                   </div>
                 )}

@@ -54,16 +54,26 @@ export default function ProductsPage() {
     }
 
     try {
-      const response = (await api.get(`/product/${product.id}`)).data as { product?: Product } | Product | undefined;
-      const detailedProduct = (response as any)?.product ?? response;
+      console.log('[ProductsPage] Buscando detalhes do produto:', product.id);
+      const response = await api.get(`/product/${product.id}`);
+      console.log('[ProductsPage] Resposta completa da API:', response);
+      console.log('[ProductsPage] Resposta data:', response.data);
+      
+      const detailedProduct = (response.data as any)?.product ?? response.data;
+      console.log('[ProductsPage] Produto detalhado:', detailedProduct);
+      console.log('[ProductsPage] costPrice no detailedProduct:', detailedProduct?.costPrice);
 
       // Preenche com todos os campos disponíveis, garantindo custo
       if (detailedProduct) {
-        setSelectedProduct({ ...product, ...detailedProduct });
+        const merged = { ...product, ...detailedProduct };
+        console.log('[ProductsPage] Produto merged:', merged);
+        console.log('[ProductsPage] costPrice no merged:', merged.costPrice);
+        setSelectedProduct(merged);
       } else {
         setSelectedProduct(product);
       }
     } catch (error) {
+      console.error('[ProductsPage] Erro ao buscar detalhes:', error);
       handleApiError(error);
       // Fallback para o produto já carregado caso a busca detalhada falhe
       setSelectedProduct(product);

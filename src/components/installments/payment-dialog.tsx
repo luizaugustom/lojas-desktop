@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
@@ -39,7 +39,26 @@ interface PaymentFormData {
 }
 
 export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps) {
-  const { api } = useAuth();
+  const { api, user } = useAuth();
+  const [company, setCompany] = useState<any>(null);
+  const companyInfo = useMemo(() => {
+    if (!company) return null;
+    const addressParts = [
+      company.address?.street,
+      company.address?.number,
+      company.address?.complement,
+      company.address?.neighborhood,
+      company.address?.city,
+      company.address?.state,
+    ].filter(Boolean);
+
+    return {
+      name: company.name,
+      cnpj: company.cnpj,
+      address: addressParts.join(', '),
+    };
+  }, [company]);
+
   const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
   const [showReceiptConfirm, setShowReceiptConfirm] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -68,6 +87,23 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
     }
   }, [open, installment, setValue]);
 
+  useEffect(() => {
+    let active = true;
+    const loadCompany = async () => {
+      if (!open) return;
+      try {
+        const response = await api.get('/company/my-company');
+        if (active) setCompany(response.data);
+      } catch (err) {
+        if (active) setCompany(null);
+      }
+    };
+    loadCompany();
+    return () => {
+      active = false;
+    };
+  }, [open, api]);
+
   const paymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {
       return api.post(`/installment/${installment?.id}/pay`, data);
@@ -79,6 +115,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
         paymentMethod: variables.paymentMethod,
         notes: variables.notes,
         date: new Date().toISOString(),
+        sellerName: user?.name,
       });
       
       toast.success(response.data.message || 'Pagamento registrado com sucesso!');
@@ -319,6 +356,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
             cpfCnpj: installment.customer?.cpfCnpj,
             phone: installment.customer?.phone,
           }}
+          companyInfo={companyInfo ?? undefined}
           onPrintComplete={handlePrintComplete}
         />
       )}
