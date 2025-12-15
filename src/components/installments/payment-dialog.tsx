@@ -207,7 +207,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
     try {
       // Gera o conteúdo de impressão
       const receiptContent = generatePaymentReceiptContent({
-        companyInfo,
+        companyInfo: companyInfo || undefined,
         customerInfo: {
           name: installment.customer?.name,
           cpfCnpj: installment.customer?.cpfCnpj,
