@@ -1,4 +1,4 @@
-import { Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, ChevronLeft, ChevronRight, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { formatCurrency, formatDate } from '../../lib/utils';
@@ -9,6 +9,7 @@ interface Sale {
   saleDate?: string;
   createdAt: string;
   total: number;
+  isCancelled?: boolean;
   clientName?: string;
   clientCpfCnpj?: string;
   seller?: {
@@ -37,6 +38,7 @@ interface SalesTableProps {
   totalPages: number;
   onPageChange: (page: number) => void;
   onViewDetails: (saleId: string) => void;
+  onCancelSale?: (saleId: string) => void;
 }
 
 const getPaymentMethodLabel = (method: string) => {
@@ -68,6 +70,7 @@ export function SalesTable({
   totalPages,
   onPageChange,
   onViewDetails,
+  onCancelSale,
 }: SalesTableProps) {
   if (isLoading) {
     return (
@@ -157,16 +160,37 @@ export function SalesTable({
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold">
-                  {formatCurrency(sale.total)}
+                  <div className="flex items-center justify-end gap-2">
+                    {formatCurrency(sale.total)}
+                    {sale.isCancelled && (
+                      <Badge variant="destructive" className="ml-2">
+                        Cancelada
+                      </Badge>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onViewDetails(sale.id)}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onViewDetails(sale.id)}
+                      title="Ver detalhes"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    {onCancelSale && !sale.isCancelled && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onCancelSale(sale.id)}
+                        title="Cancelar venda"
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -185,7 +209,14 @@ export function SalesTable({
                   {formatDate(sale.saleDate || sale.createdAt)}
                 </p>
               </div>
-              <p className="font-semibold text-lg">{formatCurrency(sale.total)}</p>
+              <div className="text-right">
+                <p className="font-semibold text-lg">{formatCurrency(sale.total)}</p>
+                {sale.isCancelled && (
+                  <Badge variant="destructive" className="mt-1">
+                    Cancelada
+                  </Badge>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-between text-sm">
@@ -212,15 +243,28 @@ export function SalesTable({
               </div>
             )}
 
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full"
-              onClick={() => onViewDetails(sale.id)}
-            >
-              <Eye className="mr-2 h-4 w-4" />
-              Ver Detalhes
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                onClick={() => onViewDetails(sale.id)}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                Ver Detalhes
+              </Button>
+              {onCancelSale && !sale.isCancelled && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={() => onCancelSale(sale.id)}
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Cancelar
+                </Button>
+              )}
+            </div>
           </div>
         ))}
       </div>

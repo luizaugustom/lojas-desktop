@@ -99,6 +99,11 @@ interface CashClosureReportData {
   paymentSummary: PaymentSummaryEntry[];
   sellers: SellerReport[];
   includeSaleDetails: boolean;
+  installmentPayments?: {
+    total: number;
+    byMethod: PaymentSummaryEntry[];
+    count: number;
+  };
   metadata?: {
     clientTimeInfo?: {
       timeZone?: string;
@@ -166,6 +171,8 @@ interface CashStats {
   salesCount?: number;
   salesByPaymentMethod?: Record<string, number>;
   salesBySeller?: Record<string, number>;
+  totalInstallmentPayments?: number;
+  installmentPaymentsByMethod?: Record<string, number>;
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -601,6 +608,35 @@ export default function CashClosurePage() {
                     )}
                   </div>
 
+                  {reportData.installmentPayments && reportData.installmentPayments.count > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-foreground">Pagamentos de Parcelas</h3>
+                      <div className="rounded-lg border p-4 bg-muted/50">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm text-muted-foreground">Total de pagamentos:</span>
+                          <span className="font-semibold">{reportData.installmentPayments.count}</span>
+                        </div>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm text-muted-foreground">Valor total:</span>
+                          <span className="font-semibold text-lg">{formatCurrency(reportData.installmentPayments.total)}</span>
+                        </div>
+                        {reportData.installmentPayments.byMethod.length > 0 && (
+                          <div className="mt-3 pt-3 border-t">
+                            <p className="text-xs text-muted-foreground mb-2">Por forma de pagamento:</p>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {reportData.installmentPayments.byMethod.map((entry) => (
+                                <div key={entry.method} className="flex items-center justify-between rounded border p-2 text-sm bg-background">
+                                  <span>{getPaymentMethodLabel(entry.method)}</span>
+                                  <span className="font-semibold">{formatCurrency(entry.total)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-foreground">Vendas por vendedor</h3>
                     {reportData.sellers.length === 0 ? (
@@ -865,6 +901,53 @@ export default function CashClosurePage() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Pagamentos de Parcelas */}
+          {stats?.installmentPaymentsByMethod && Object.keys(stats.installmentPaymentsByMethod).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Pagamentos de Parcelas
+                </CardTitle>
+                <CardDescription>
+                  Pagamentos de parcelas realizados durante este período
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                  {Object.entries(stats.installmentPaymentsByMethod).map(([method, amount]) => (
+                    <div key={method} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium capitalize">
+                          {method === 'cash' && '💵 Dinheiro'}
+                          {method === 'credit_card' && '💳 Crédito'}
+                          {method === 'debit_card' && '💳 Débito'}
+                          {method === 'pix' && '📱 PIX'}
+                          {method === 'store_credit' && '🏬 Crédito em Loja'}
+                          {!['cash', 'credit_card', 'debit_card', 'pix', 'store_credit'].includes(method) && method}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Pagamentos de parcelas
+                        </p>
+                      </div>
+                      <div className="text-lg font-bold">
+                        {formatCurrency(amount as number)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {stats.totalInstallmentPayments && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">Total de Pagamentos de Parcelas:</span>
+                      <span className="text-lg font-bold">{formatCurrency(stats.totalInstallmentPayments)}</span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

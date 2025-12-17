@@ -1,14 +1,24 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { DollarSign, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { DollarSign, AlertTriangle, CheckCircle2, Filter, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Button } from '../ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 import { useAuth } from '../../hooks/useAuth';
 import { InstallmentsTable } from '../installments/installments-table';
 import { CustomersDebtList } from '../installments/customers-debt-list';
 import { PaymentDialog } from '../installments/payment-dialog';
 import { CustomerDebtPaymentDialog } from '../installments/customer-debt-payment-dialog';
 import { formatCurrency } from '../../lib/utils';
+
+type DateFilter = 'all' | 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'this-year';
 
 export default function InstallmentsPage() {
   const { api, user } = useAuth();
@@ -19,9 +29,96 @@ export default function InstallmentsPage() {
     customer: any;
     totalRemaining: number;
   } | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('this-month');
 
   const isSeller = user?.role === 'vendedor';
   const isCompany = user?.role === 'empresa';
+
+  // Calcular datas baseadas no filtro
+  const { startDate, endDate } = useMemo(() => {
+    const now = new Date();
+    now.setHours(23, 59, 59, 999);
+
+    switch (dateFilter) {
+      case 'this-week': {
+        const start = new Date(now);
+        start.setDate(now.getDate() - now.getDay()); // Domingo da semana atual
+        start.setHours(0, 0, 0, 0);
+        return {
+          startDate: start,
+          endDate: now,
+        };
+      }
+      case 'last-week': {
+        const end = new Date(now);
+        end.setDate(now.getDate() - now.getDay() - 1); // Sábado da semana passada
+        end.setHours(23, 59, 59, 999);
+        const start = new Date(end);
+        start.setDate(end.getDate() - 6); // Domingo da semana passada
+        start.setHours(0, 0, 0, 0);
+        return {
+          startDate: start,
+          endDate: end,
+        };
+      }
+      case 'this-month': {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        start.setHours(0, 0, 0, 0);
+        return {
+          startDate: start,
+          endDate: now,
+        };
+      }
+      case 'last-month': {
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth(), 0);
+        end.setHours(23, 59, 59, 999);
+        return {
+          startDate: start,
+          endDate: end,
+        };
+      }
+      case 'this-year': {
+        const start = new Date(now.getFullYear(), 0, 1);
+        start.setHours(0, 0, 0, 0);
+        return {
+          startDate: start,
+          endDate: now,
+        };
+      }
+      default:
+        return { startDate: undefined, endDate: undefined };
+    }
+  }, [dateFilter]);
+
+  // Função para filtrar parcelas: parcelas futuras sempre aparecem, parcelas do passado só se estiverem no intervalo
+  const filterInstallments = (installments: any[]) => {
+    if (dateFilter === 'all' || !startDate || !endDate) {
+      return installments;
+    }
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    return installments.filter((installment) => {
+      const dueDate = new Date(installment.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+
+      // Parcelas futuras sempre aparecem
+      if (dueDate > now) {
+        return true;
+      }
+
+      // Parcelas do passado só aparecem se estiverem no intervalo do filtro
+      // Comparar apenas as datas (sem horas)
+      const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+      const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+
+      return dueDateOnly >= startDateOnly && dueDateOnly <= endDateOnly;
+    });
+  };
 
   const normalizeInstallments = (raw: any): any[] => {
     if (!raw) return [];
@@ -213,6 +310,40 @@ export default function InstallmentsPage() {
           </Card>
         </div>
 
+        {/* Filtro de Data */}
+        <Card className="p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Filtrar por vencimento:</span>
+            </div>
+            <Select value={dateFilter} onValueChange={(value) => setDateFilter(value as DateFilter)}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Selecione um filtro" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="this-week">Esta semana</SelectItem>
+                <SelectItem value="last-week">Semana passada</SelectItem>
+                <SelectItem value="this-month">Este mês</SelectItem>
+                <SelectItem value="last-month">Mês passado</SelectItem>
+                <SelectItem value="this-year">Este ano</SelectItem>
+              </SelectContent>
+            </Select>
+            {dateFilter !== 'all' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDateFilter('all')}
+                className="h-8"
+              >
+                <X className="mr-1 h-3 w-3" />
+                Limpar
+              </Button>
+            )}
+          </div>
+        </Card>
+
         <Tabs defaultValue="all" className="space-y-4">
           <TabsList>
             <TabsTrigger value="all">
@@ -231,7 +362,7 @@ export default function InstallmentsPage() {
 
           <TabsContent value="all" className="space-y-4">
             <InstallmentsTable
-              installments={allInstallments || []}
+              installments={filterInstallments(allInstallments || [])}
               isLoading={allLoading}
               onPayment={handlePayment}
               onRefetch={refetchAll}
@@ -241,7 +372,7 @@ export default function InstallmentsPage() {
 
           <TabsContent value="pending" className="space-y-4">
             <InstallmentsTable
-              installments={pendingInstallments || []}
+              installments={filterInstallments(pendingInstallments || [])}
               isLoading={pendingLoading}
               onPayment={handlePayment}
               onRefetch={refetchPending}
@@ -251,7 +382,7 @@ export default function InstallmentsPage() {
 
           <TabsContent value="overdue" className="space-y-4">
             <InstallmentsTable
-              installments={overdueInstallments || []}
+              installments={filterInstallments(overdueInstallments || [])}
               isLoading={overdueLoading}
               onPayment={handlePayment}
               onRefetch={refetchOverdue}
@@ -261,7 +392,7 @@ export default function InstallmentsPage() {
 
           <TabsContent value="paid" className="space-y-4">
             <InstallmentsTable
-              installments={paidInstallments || []}
+              installments={filterInstallments(paidInstallments || [])}
               isLoading={paidLoading}
               onPayment={handlePayment}
               onRefetch={refetchPaid}

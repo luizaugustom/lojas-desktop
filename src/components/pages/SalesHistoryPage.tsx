@@ -18,6 +18,8 @@ import { handleApiError } from '../../lib/handleApiError';
 import { formatCurrency, formatDateTime, toLocalISOString } from '../../lib/utils';
 import { SalesTable } from '../sales-history/sales-table';
 import { SaleDetailsDialog } from '../sales-history/sale-details-dialog';
+import { CancelSaleDialog } from '../sales/cancel-sale-dialog';
+import { saleApi } from '../../lib/api-endpoints';
 
 type PeriodFilter = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
 
@@ -44,6 +46,9 @@ export default function SalesHistoryPage() {
   const [limit] = useState(20);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [cancelSaleId, setCancelSaleId] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [filterClient, setFilterClient] = useState('');
   const [filterSeller, setFilterSeller] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
@@ -225,6 +230,28 @@ export default function SalesHistoryPage() {
   const handleViewDetails = (saleId: string) => {
     setSelectedSaleId(saleId);
     setDetailsOpen(true);
+  };
+
+  const handleCancelSale = (saleId: string) => {
+    setCancelSaleId(saleId);
+    setCancelDialogOpen(true);
+  };
+
+  const handleConfirmCancel = async (reason: string) => {
+    if (!cancelSaleId) return;
+
+    setCancelling(true);
+    try {
+      await saleApi.cancel(cancelSaleId, { reason });
+      toast.success('Venda cancelada com sucesso!');
+      setCancelDialogOpen(false);
+      setCancelSaleId(null);
+      refetch();
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const getPaymentMethodLabel = (method: string) => {
@@ -471,6 +498,7 @@ export default function SalesHistoryPage() {
           totalPages={totalPages}
           onPageChange={setPage}
           onViewDetails={handleViewDetails}
+          onCancelSale={!isSeller ? handleCancelSale : undefined}
         />
       </Card>
 
@@ -485,6 +513,17 @@ export default function SalesHistoryPage() {
           saleId={selectedSaleId}
         />
       )}
+
+      {/* Dialog de Cancelamento */}
+      <CancelSaleDialog
+        open={cancelDialogOpen}
+        onClose={() => {
+          setCancelDialogOpen(false);
+          setCancelSaleId(null);
+        }}
+        onConfirm={handleConfirmCancel}
+        loading={cancelling}
+      />
     </div>
   );
 }

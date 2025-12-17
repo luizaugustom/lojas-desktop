@@ -66,6 +66,7 @@ export const saleApi = {
   reprint: (id: string) => api.post(`/sale/${id}/reprint`),
   getPrintContent: (id: string) => api.get(`/sale/${id}/print-content`),
   exchange: (data: any) => api.post('/sale/exchange', data),
+  cancel: (id: string, data: { reason: string }) => api.post(`/sale/${id}/cancel`, data),
 };
 
 export const companyApi = {

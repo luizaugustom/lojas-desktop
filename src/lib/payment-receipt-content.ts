@@ -217,8 +217,9 @@ export function generatePaymentReceiptContent(data: PaymentReceiptContentData): 
   content += center('Documento nao fiscal', width) + '\n';
   content += center('Obrigado pela preferencia!', width) + '\n';
   content += '\n';
-  content += center('MontShop', width) + '\n';
+  content += center('🚀SISTEMA MONTSHOP! 🚀', width) + '\n';
+  content += center('sistemamontshop.com', width) + '\n';
   content += '\n';
 
-  return content;
+  return content;  
 }

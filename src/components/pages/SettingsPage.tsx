@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Bell, Lock, Save, Upload, X, Image, MessageSquare, Store, ExternalLink, Calendar, Settings as SettingsIcon } from 'lucide-react';
+import { User, Bell, Lock, Save, Upload, X, Image, MessageSquare, Store, ExternalLink, Settings as SettingsIcon } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -12,17 +12,6 @@ import { companyApi, notificationApi, adminApi } from '@/lib/api-endpoints';
 import { getImageUrl } from '@/lib/image-utils';
 import { useUIStore } from '@/store/ui-store';
 import { useQueryClient } from '@tanstack/react-query';
-import type { DataPeriodFilter } from '@/types';
-
-const COMPANY_PERIOD_OPTIONS: Array<{ value: DataPeriodFilter; label: string }> = [
-  { value: 'ALL', label: 'Todos os dados' },
-  { value: 'THIS_YEAR', label: 'Este ano' },
-  { value: 'LAST_6_MONTHS', label: 'Últimos 6 meses' },
-  { value: 'LAST_3_MONTHS', label: 'Últimos 3 meses' },
-  { value: 'LAST_1_MONTH', label: 'Último mês' },
-  { value: 'LAST_15_DAYS', label: 'Últimos 15 dias' },
-  { value: 'THIS_WEEK', label: 'Esta semana' },
-];
 
 const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL || 'https://montshop.vercel.app').replace(/\/+$/, '');
 
@@ -73,10 +62,6 @@ export default function SettingsPage() {
   // Cor da marca
   const [brandColor, setBrandColor] = useState<string>('#3B82F6');
   const [savingBrandColor, setSavingBrandColor] = useState(false);
-
-  // Período padrão dos dados
-  const [dataPeriod, setDataPeriod] = useState<DataPeriodFilter>((user?.dataPeriod as DataPeriodFilter | null) ?? 'THIS_YEAR');
-  const [savingDataPeriod, setSavingDataPeriod] = useState(false);
 
   // Estado da empresa (incluindo plano)
   const [companyData, setCompanyData] = useState<any>(null);
@@ -168,21 +153,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveDataPeriod = async () => {
-    if (user?.role !== 'empresa') return;
-
-    try {
-      setSavingDataPeriod(true);
-      await companyApi.updateDataPeriod(dataPeriod);
-      toast.success('Período atualizado! Você será desconectado para aplicar as mudanças.');
-      await logout();
-    } catch (error: any) {
-      handleApiError(error);
-    } finally {
-      setSavingDataPeriod(false);
-    }
-  };
-
   // Carregar perfil do usuário quando o user mudar
   useEffect(() => {
     if (user) {
@@ -241,12 +211,6 @@ export default function SettingsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-
-  useEffect(() => {
-    if (user?.role === 'empresa') {
-      setDataPeriod((user.dataPeriod as DataPeriodFilter | null) ?? 'THIS_YEAR');
-    }
-  }, [user?.dataPeriod, user?.role]);
 
   const loadProfile = async () => {
     try {
@@ -867,7 +831,6 @@ export default function SettingsPage() {
         <nav className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b rounded-md">
           <div className="flex flex-wrap gap-2 p-2">
             <a href="#empresa-logo-cor"><Button variant="outline" size="sm">Empresa</Button></a>
-            <a href="#periodo-dados"><Button variant="outline" size="sm">Período</Button></a>
             <a href="#certificado-digital"><Button variant="outline" size="sm">Certificado Digital</Button></a>
             <a href="#catalogo-titulo"><Button variant="outline" size="sm">Catálogo</Button></a>
             <a href="#notificacoes-fim"><Button variant="outline" size="sm">Notificações</Button></a>
@@ -1007,52 +970,6 @@ export default function SettingsPage() {
                   </div>
                 </>
               )}
-            </CardContent>
-          </Card>
-        )}
-
-        {user?.role === 'empresa' && (
-          <Card id="periodo-dados" className="scroll-mt-24">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Período padrão dos dados
-              </CardTitle>
-              <CardDescription>
-                Defina o intervalo padrão utilizado em vendas, orçamentos e fechamento de caixa.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                <div className="space-y-2">
-                  <Label htmlFor="data-period-select">Período padrão</Label>
-                  <Select
-                    value={dataPeriod}
-                    onValueChange={(value) => setDataPeriod(value as DataPeriodFilter)}
-                  >
-                    <SelectTrigger id="data-period-select" className="w-full sm:w-64">
-                      <SelectValue placeholder="Selecione um período" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMPANY_PERIOD_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  onClick={handleSaveDataPeriod}
-                  disabled={savingDataPeriod}
-                  className="w-full sm:w-auto"
-                >
-                  {savingDataPeriod ? 'Salvando...' : 'Salvar período'}
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Após salvar, você será direcionado para o login. Na próxima autenticação os dados serão carregados automaticamente com o período escolhido.
-              </p>
             </CardContent>
           </Card>
         )}
