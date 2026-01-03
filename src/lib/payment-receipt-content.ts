@@ -223,3 +223,200 @@ export function generatePaymentReceiptContent(data: PaymentReceiptContentData): 
 
   return content;  
 }
+
+/**
+ * Gera conteúdo de texto para impressão de comprovante de pagamento em bulk (múltiplas parcelas)
+ */
+export interface BulkPaymentReceiptContentData {
+  companyInfo?: {
+    name: string;
+    cnpj?: string;
+    address?: string;
+  };
+  customerInfo?: {
+    id: string;
+    name: string;
+    cpfCnpj?: string;
+    phone?: string;
+  };
+  paymentData: {
+    totalPaid: number;
+    paymentMethod: string;
+    date: string;
+    notes?: string;
+    sellerName?: string;
+    payments: Array<{
+      installmentId: string;
+      amountPaid: number;
+      remainingAmount: number;
+      isPaid: boolean;
+      dueDate?: string | null;
+    }>;
+  };
+  installmentsData?: Array<{
+    id: string;
+    installmentNumber: number;
+    totalInstallments: number;
+    amount: number | string;
+    remainingAmount: number | string;
+    dueDate: string;
+  }>;
+  remainingDebts?: Array<{
+    id: string;
+    installmentNumber: number;
+    totalInstallments: number;
+    amount: number;
+    remainingAmount: number;
+    dueDate: string;
+  }>;
+  totalRemainingDebt?: number | null;
+}
+
+export function generateBulkPaymentReceiptContent(data: BulkPaymentReceiptContentData): string {
+  const width = 48;
+  
+  const paymentDate = new Date(data.paymentData.date);
+  const paymentDateStr = paymentDate.toLocaleDateString('pt-BR', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric' 
+  });
+  const paymentTimeStr = paymentDate.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  // Combinar dados das parcelas pagas com informações adicionais se disponível
+  const paidInstallments = data.paymentData.payments.map((payment) => {
+    const installmentInfo = data.installmentsData?.find((inst) => inst.id === payment.installmentId);
+    return {
+      ...payment,
+      installmentNumber: installmentInfo?.installmentNumber || '?',
+      totalInstallments: installmentInfo?.totalInstallments || '?',
+    };
+  });
+
+  let content = '';
+
+  // Cabeçalho
+  content += center('COMPROVANTE DE PAGAMENTO', width) + '\n';
+  
+  if (data.companyInfo) {
+    content += '\n';
+    content += center(data.companyInfo.name, width) + '\n';
+    if (data.companyInfo.cnpj) {
+      content += center(`CNPJ: ${data.companyInfo.cnpj}`, width) + '\n';
+    }
+    if (data.companyInfo.address) {
+      const address = data.companyInfo.address;
+      const addressChunks = address.match(new RegExp(`.{1,${width}}`, 'g')) || [];
+      addressChunks.forEach(chunk => {
+        content += center(chunk, width) + '\n';
+      });
+    }
+  }
+
+  content += '\n';
+  content += line(width) + '\n';
+
+  // Dados do Pagamento
+  content += '\n';
+  content += 'DADOS DO PAGAMENTO\n';
+  content += line(width) + '\n';
+  content += `Data: ${paymentDateStr} ${paymentTimeStr}\n`;
+  content += `Metodo: ${getPaymentMethodLabel(data.paymentData.paymentMethod)}\n`;
+  content += `Total Pago: ${formatCurrency(data.paymentData.totalPaid)}\n`;
+  
+  if (data.paymentData.sellerName) {
+    content += `Recebido por: ${data.paymentData.sellerName}\n`;
+  }
+  
+  if (data.paymentData.notes) {
+    content += `Observacao: ${data.paymentData.notes}\n`;
+  }
+
+  content += '\n';
+  content += line(width) + '\n';
+
+  // Informações do Cliente
+  if (data.customerInfo) {
+    content += '\n';
+    content += 'CLIENTE\n';
+    content += line(width) + '\n';
+    content += `Nome: ${data.customerInfo.name}\n`;
+    
+    if (data.customerInfo.cpfCnpj) {
+      content += `CPF/CNPJ: ${data.customerInfo.cpfCnpj}\n`;
+    }
+    
+    if (data.customerInfo.phone) {
+      content += `Telefone: ${data.customerInfo.phone}\n`;
+    }
+    
+    content += '\n';
+    content += line(width) + '\n';
+  }
+
+  // Parcelas Pagas
+  content += '\n';
+  content += `PARCELAS PAGAS (${paidInstallments.length})\n`;
+  content += line(width) + '\n';
+  
+  if (paidInstallments.length === 0) {
+    content += 'Nenhuma parcela paga\n';
+  } else {
+    paidInstallments.forEach((payment, index) => {
+      if (index > 0) content += '\n';
+      content += `Parcela ${payment.installmentNumber}/${payment.totalInstallments}\n`;
+      content += `Valor pago: ${formatCurrency(payment.amountPaid || 0)}\n`;
+      if (payment.isPaid) {
+        content += 'Status: Pago integralmente\n';
+      } else {
+        content += `Saldo restante: ${formatCurrency(payment.remainingAmount || 0)}\n`;
+      }
+    });
+  }
+
+  content += '\n';
+  content += line(width) + '\n';
+
+  // Dívidas Pendentes
+  content += '\n';
+  content += 'DIVIDAS PENDENTES\n';
+  content += line(width) + '\n';
+  
+  if (!data.remainingDebts || data.remainingDebts.length === 0) {
+    content += 'Nenhuma divida pendente\n';
+  } else {
+    data.remainingDebts.forEach((debt, index) => {
+      if (index > 0) content += '\n';
+      content += `Parcela ${debt.installmentNumber}/${debt.totalInstallments}\n`;
+      content += `Valor: ${formatCurrency(debt.remainingAmount)}\n`;
+      if (debt.dueDate) {
+        const dueDateStr = formatDate(debt.dueDate);
+        content += `Vencimento: ${dueDateStr}\n`;
+      }
+    });
+    content += '\n';
+    content += line(width) + '\n';
+    if (data.totalRemainingDebt !== null && data.totalRemainingDebt !== undefined) {
+      content += `Total em aberto: ${formatCurrency(data.totalRemainingDebt)}\n`;
+    } else {
+      content += 'Total em aberto: Nao disponivel\n';
+    }
+  }
+
+  content += '\n';
+  content += line(width) + '\n';
+
+  // Rodapé
+  content += '\n';
+  content += center('Documento nao fiscal', width) + '\n';
+  content += center('Obrigado pela preferencia!', width) + '\n';
+  content += '\n';
+  content += center('🚀SISTEMA MONTSHOP! 🚀', width) + '\n';
+  content += center('sistemamontshop.com', width) + '\n';
+  content += '\n';
+
+  return content;
+}

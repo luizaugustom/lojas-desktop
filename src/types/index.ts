@@ -133,6 +133,15 @@ export type PaymentMethod = 'cash' | 'credit_card' | 'debit_card' | 'pix' | 'ins
 export interface PaymentMethodDetail {
   method: PaymentMethod;
   amount: number;
+  customerId?: string;
+  installments?: number;
+  firstDueDate?: Date;
+  description?: string;
+  // Grupo Card (NT 2025.001) - Obrigatório para pagamentos com cartão
+  cardIntegrationType?: string; // '1' = Integrado, '2' = Não integrado
+  acquirerCnpj?: string; // CNPJ da credenciadora (14 dígitos)
+  cardBrand?: string; // '01' = Visa, '02' = Mastercard, '03' = Amex, '04' = Elo, '05' = Hipercard, '99' = Outras
+  cardOperationType?: string; // '01' = Crédito à vista, '02' = Crédito parcelado, '03' = Débito
 }
 
 export interface SaleItem {
@@ -469,10 +478,21 @@ export interface CreateSaleDto {
     method: PaymentMethod;
     amount: number;
     additionalInfo?: string;
+    // Grupo Card (NT 2025.001) - Obrigatório para pagamentos com cartão
+    cardIntegrationType?: string;
+    acquirerCnpj?: string;
+    cardBrand?: string;
+    cardOperationType?: string;
+    // Campos específicos para vendas a prazo
+    customerId?: string;
+    installments?: number;
+    firstDueDate?: string;
+    description?: string;
   }[];
   clientName?: string;
   clientCpfCnpj?: string;
   sellerId?: string;
+  discount?: number; // Valor do desconto aplicado na venda
 }
 
 export interface CreateCustomerDto {

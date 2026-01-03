@@ -25,6 +25,7 @@ import { PrintConfirmationDialog } from './print-confirmation-dialog';
 import { CustomerCopyConfirmationDialog } from './customer-copy-confirmation-dialog';
 import { useAuth } from '../../contexts/AuthContext';
 import { printContent as printContentService } from '../../lib/print-service';
+import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import type { CreateSaleDto, PaymentMethod, PaymentMethodDetail, InstallmentData, Seller } from '../../types';
 
 interface CheckoutDialogProps {
@@ -68,7 +69,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
   const [loadingStoreCredit, setLoadingStoreCredit] = useState(false);
   const [useStoreCredit, setUseStoreCredit] = useState(false);
   const [storeCreditAmount, setStoreCreditAmount] = useState<number>(0);
-  const { items, discount, getTotal, clearCart } = useCartStore();
+  const { items, discount, getTotal, getSubtotal, clearCart } = useCartStore();
   const { user, isAuthenticated, api } = useAuth();
 
   const total = getTotal();
@@ -236,10 +237,21 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
     setPaymentInputValues(reindexed);
   };
 
-  const updatePaymentMethod = (index: number, field: keyof PaymentMethodDetail, value: PaymentMethod | number) => {
-    const updated = [...paymentDetails];
-    updated[index] = { ...updated[index], [field]: value };
-    setPaymentDetails(updated);
+  const updatePaymentMethod = <K extends keyof PaymentMethodDetail>(
+    index: number,
+    field: K,
+    value: PaymentMethodDetail[K],
+  ) => {
+    setPaymentDetails((prev) => {
+      const updated = [...prev];
+      if (field === 'amount') {
+        const numericValue = typeof value === 'number' ? value : Number(value);
+        updated[index] = { ...updated[index], amount: numericValue };
+      } else {
+        updated[index] = { ...updated[index], [field]: value };
+      }
+      return updated;
+    });
   };
 
   const getTotalPaid = () => {
@@ -598,6 +610,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
             quantity: item.quantity,
           };
         }),
+        discount: discount > 0 ? Math.round((discount + Number.EPSILON) * 100) / 100 : undefined,
         paymentMethods: validPaymentDetails.map((payment) => {
           const amount = Math.max(Number(payment.amount) || 0, 0.01);
           
@@ -612,6 +625,41 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
             paymentMethod.firstDueDate = installmentData.firstDueDate.toISOString();
             paymentMethod.description = installmentData.description || `Parcelado em ${installmentData.installments}x de ${formatCurrency(installmentData.installmentValue)}`;
             paymentMethod.additionalInfo = `Parcelado em ${installmentData.installments}x de ${formatCurrency(installmentData.installmentValue)}`;
+          }
+          
+          // Adicionar dados do grupo Card (NT 2025.001) - Obrigatório para cartão
+          if (payment.method === 'credit_card' || payment.method === 'debit_card') {
+            // Sistema não tem máquinas integradas, sempre usar "2 - Pagamento Não Integrado"
+            const cardIntegrationType = '2';
+            
+            // Verificar quais campos estão faltando para dar mensagem mais específica
+            const missingFields: string[] = [];
+            if (!payment.acquirerCnpj || payment.acquirerCnpj.replace(/\D/g, '').length !== 14) missingFields.push('CNPJ da Credenciadora');
+            if (!payment.cardBrand) missingFields.push('Bandeira do Cartão');
+            if (!payment.cardOperationType) missingFields.push('Tipo de Operação');
+            
+            if (missingFields.length > 0) {
+              toast.error(
+                `Pagamento com ${payment.method === 'credit_card' ? 'cartão de crédito' : 'cartão de débito'} requer preenchimento completo dos dados do cartão (NT 2025.001). ` +
+                `Campos faltando: ${missingFields.join(', ')}`,
+                { duration: 6000 }
+              );
+              setLoading(false);
+              return;
+            }
+            
+            // Validar CNPJ da credenciadora (deve ter 14 dígitos)
+            const cnpjCleaned = payment.acquirerCnpj.replace(/\D/g, '');
+            if (cnpjCleaned.length !== 14) {
+              toast.error('CNPJ da credenciadora deve ter exatamente 14 dígitos numéricos', { duration: 5000 });
+              setLoading(false);
+              return;
+            }
+            
+            paymentMethod.cardIntegrationType = cardIntegrationType;
+            paymentMethod.acquirerCnpj = cnpjCleaned;
+            paymentMethod.cardBrand = payment.cardBrand;
+            paymentMethod.cardOperationType = payment.cardOperationType;
           }
           
           return paymentMethod;
@@ -842,7 +890,8 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
               )}
 
               {paymentDetails.map((payment, index) => (
-                <div key={index} className="flex items-center gap-2 p-3 border rounded-lg">
+                <div key={index}>
+                <div className="flex items-center gap-2 p-3 border rounded-lg">
                   <div className="flex-1">
                     <Select
                       value={payment.method}
@@ -857,6 +906,22 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
                           setShowInstallmentModal(true);
                         } else {
                           updatePaymentMethod(index, 'method', value);
+                          
+                          // Inicializar campos do grupo Card (NT 2025.001) quando método for cartão
+                          if (value === 'credit_card' || value === 'debit_card') {
+                            // Definir valores padrão para os campos do grupo Card
+                            // Sistema não tem máquinas integradas, sempre usar "2 - Pagamento Não Integrado"
+                            updatePaymentMethod(index, 'cardIntegrationType', '2');
+                            const defaultCardOperationType = value === 'credit_card' ? '01' : '03';
+                            updatePaymentMethod(index, 'cardOperationType', defaultCardOperationType);
+                          } else {
+                            // Limpar campos do grupo Card quando método não for cartão
+                            updatePaymentMethod(index, 'cardIntegrationType', undefined);
+                            updatePaymentMethod(index, 'acquirerCnpj', undefined);
+                            updatePaymentMethod(index, 'cardBrand', undefined);
+                            updatePaymentMethod(index, 'cardOperationType', undefined);
+                          }
+                          
                           const currentAmount = paymentDetails[index].amount;
                           let newAmount = currentAmount;
                           let newInputValue = '';
@@ -937,11 +1002,91 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
+                
+                {/* Campos do Grupo Card (NT 2025.001) - Obrigatório para pagamentos com cartão */}
+                {(payment.method === 'credit_card' || payment.method === 'debit_card') && (
+                  <div className="ml-4 p-4 border rounded-lg bg-blue-50 dark:bg-blue-900/20 space-y-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <Label className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                        Dados do Cartão (NT 2025.001 - Obrigatório)
+                      </Label>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor={`cardBrand-${index}`} className="text-xs">
+                          Bandeira *
+                        </Label>
+                        <Select
+                          value={payment.cardBrand || ''}
+                          onValueChange={(value) => updatePaymentMethod(index, 'cardBrand', value)}
+                          disabled={loading}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="01">01 - Visa</SelectItem>
+                            <SelectItem value="02">02 - Mastercard</SelectItem>
+                            <SelectItem value="03">03 - American Express</SelectItem>
+                            <SelectItem value="04">04 - Elo</SelectItem>
+                            <SelectItem value="05">05 - Hipercard</SelectItem>
+                            <SelectItem value="99">99 - Outras</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <Label htmlFor={`acquirerCnpj-${index}`} className="text-xs">
+                          CNPJ da Credenciadora *
+                        </Label>
+                        <AcquirerCnpjSelect
+                          id={`acquirerCnpj-${index}`}
+                          value={payment.acquirerCnpj || ''}
+                          onChange={(value) => updatePaymentMethod(index, 'acquirerCnpj', value)}
+                          disabled={loading}
+                        />
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <Label htmlFor={`cardOperationType-${index}`} className="text-xs">
+                          Tipo de Operação *
+                        </Label>
+                        <Select
+                          value={payment.cardOperationType || (payment.method === 'credit_card' ? '01' : '03')}
+                          onValueChange={(value) => updatePaymentMethod(index, 'cardOperationType', value)}
+                          disabled={loading}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="01">01 - Crédito à Vista</SelectItem>
+                            <SelectItem value="02">02 - Crédito Parcelado</SelectItem>
+                            <SelectItem value="03">03 - Débito</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                </div>
               ))}
             </div>
 
             <div className="rounded-lg bg-muted p-4 space-y-2">
               <div className="flex justify-between">
+                <span>Subtotal:</span>
+                <span>{formatCurrency(getSubtotal())}</span>
+              </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-green-600 dark:text-green-400">
+                  <span>Desconto:</span>
+                  <span>-{formatCurrency(discount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t pt-2">
                 <span>Total da Venda:</span>
                 <span className="font-bold">{formatCurrency(total)}</span>
               </div>

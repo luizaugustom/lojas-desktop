@@ -27,6 +27,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { useAuth } from '../../hooks/useAuth';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { Loader2, Square, CheckSquare } from 'lucide-react';
+import { PaymentReceiptConfirmDialog } from './payment-receipt-confirm-dialog';
+import { printContent } from '../../lib/print-service';
+import { generateBulkPaymentReceiptContent } from '../../lib/payment-receipt-content';
 
 interface CustomerDebtPaymentDialogProps {
   open: boolean;
@@ -82,7 +85,7 @@ export function CustomerDebtPaymentDialog({
   customer,
   onPaid,
 }: CustomerDebtPaymentDialogProps) {
-  const { api } = useAuth();
+  const { api, user } = useAuth();
   const customerId = customer?.id;
 
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
@@ -98,6 +101,54 @@ export function CustomerDebtPaymentDialog({
       }
     >
   >({});
+  const [showReceiptConfirm, setShowReceiptConfirm] = useState(false);
+  const [paymentData, setPaymentData] = useState<any>(null);
+  const [printing, setPrinting] = useState(false);
+  const [company, setCompany] = useState<any>(null);
+  const [remainingDebts, setRemainingDebts] = useState<Array<{
+    id: string;
+    installmentNumber: number;
+    totalInstallments: number;
+    amount: number;
+    remainingAmount: number;
+    dueDate: string;
+  }>>([]);
+  const [totalRemainingDebt, setTotalRemainingDebt] = useState<number | null>(null);
+
+  const companyInfo = useMemo(() => {
+    if (!company) return null;
+    const addressParts = [
+      company.address?.street,
+      company.address?.number,
+      company.address?.complement,
+      company.address?.neighborhood,
+      company.address?.city,
+      company.address?.state,
+    ].filter(Boolean);
+
+    return {
+      name: company.name,
+      cnpj: company.cnpj,
+      address: addressParts.join(', '),
+    };
+  }, [company]);
+
+  useEffect(() => {
+    let active = true;
+    const loadCompany = async () => {
+      if (!open) return;
+      try {
+        const response = await api.get('/company/my-company');
+        if (active) setCompany(response.data);
+      } catch (err) {
+        if (active) setCompany(null);
+      }
+    };
+    loadCompany();
+    return () => {
+      active = false;
+    };
+  }, [open, api]);
 
   const {
     data,
@@ -119,6 +170,10 @@ export function CustomerDebtPaymentDialog({
       setSelection({});
       setPaymentMethod('cash');
       setNotes('');
+      setShowReceiptConfirm(false);
+      setPaymentData(null);
+      setRemainingDebts([]);
+      setTotalRemainingDebt(null);
     }
   }, [open]);
 
@@ -253,16 +308,77 @@ export function CustomerDebtPaymentDialog({
     });
   };
 
+  // Carrega dívidas pendentes após o pagamento
+  useEffect(() => {
+    if (!paymentData || !customerId) {
+      setRemainingDebts([]);
+      setTotalRemainingDebt(null);
+      return;
+    }
+
+    let isCancelled = false;
+    const loadRemainingDebts = async () => {
+      try {
+        const resp = await api.get(`/installment/customer/${customerId}/summary`);
+        const raw = resp?.data ?? {};
+        const installmentsList: any[] = Array.isArray(raw.installments) ? raw.installments : [];
+
+        const pending = installmentsList
+          .filter((inst) => {
+            const remaining = toNumber(inst.remainingAmount ?? inst.amount);
+            return remaining > 0;
+          })
+          .map((inst) => ({
+            id: inst.id,
+            installmentNumber: inst.installmentNumber,
+            totalInstallments: inst.totalInstallments,
+            amount: toNumber(inst.amount),
+            remainingAmount: toNumber(inst.remainingAmount ?? inst.amount),
+            dueDate: inst.dueDate,
+          }));
+
+        const total = pending.reduce((sum, inst) => sum + inst.remainingAmount, 0);
+
+        if (!isCancelled) {
+          setRemainingDebts(pending);
+          setTotalRemainingDebt(total);
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          setRemainingDebts([]);
+          setTotalRemainingDebt(null);
+        }
+      }
+    };
+
+    loadRemainingDebts();
+    return () => {
+      isCancelled = true;
+    };
+  }, [paymentData, customerId, api]);
+
   const bulkPaymentMutation = useMutation({
     mutationFn: async (payload: any) => {
       if (!customerId) return null;
       return api.post(`/installment/customer/${customerId}/pay/bulk`, payload);
     },
-    onSuccess: async (response) => {
+    onSuccess: async (response, variables) => {
+      // Armazena os dados do pagamento para o comprovante
+      setPaymentData({
+        totalPaid: response?.data?.totalPaid || 0,
+        paymentMethod: variables.paymentMethod,
+        notes: variables.notes,
+        date: new Date().toISOString(),
+        sellerName: user?.name,
+        payments: response?.data?.payments || [],
+      });
+      
       toast.success(response?.data?.message || 'Pagamentos registrados com sucesso!');
       await refetch();
       onPaid?.();
-      onClose();
+      
+      // Mostra o diálogo de confirmação de impressão
+      setShowReceiptConfirm(true);
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Erro ao registrar pagamentos');
@@ -306,6 +422,86 @@ export function CustomerDebtPaymentDialog({
       notes: notes || undefined,
       payAll: true,
     });
+  };
+
+  const handlePrintReceipt = async () => {
+    setShowReceiptConfirm(false);
+    
+    if (!paymentData || !customer) {
+      toast.error('Dados do pagamento não carregados');
+      return;
+    }
+
+    setPrinting(true);
+    try {
+      // Aguarda carregamento das dívidas pendentes se ainda não foram carregadas
+      let finalRemainingDebts = remainingDebts;
+      let finalTotalRemaining = totalRemainingDebt;
+
+      if (remainingDebts.length === 0 && customerId) {
+        try {
+          const resp = await api.get(`/installment/customer/${customerId}/summary`);
+          const raw = resp?.data ?? {};
+          const installmentsList: any[] = Array.isArray(raw.installments) ? raw.installments : [];
+
+          const pending = installmentsList
+            .filter((inst) => {
+              const remaining = toNumber(inst.remainingAmount ?? inst.amount);
+              return remaining > 0;
+            })
+            .map((inst) => ({
+              id: inst.id,
+              installmentNumber: inst.installmentNumber,
+              totalInstallments: inst.totalInstallments,
+              amount: toNumber(inst.amount),
+              remainingAmount: toNumber(inst.remainingAmount ?? inst.amount),
+              dueDate: inst.dueDate,
+            }));
+
+          finalRemainingDebts = pending;
+          finalTotalRemaining = pending.reduce((sum, inst) => sum + inst.remainingAmount, 0);
+        } catch (err) {
+          // Usa os valores já carregados em caso de erro
+        }
+      }
+
+      // Gera o conteúdo de impressão
+      const receiptContent = generateBulkPaymentReceiptContent({
+        companyInfo: companyInfo || undefined,
+        customerInfo: {
+          id: customer.id,
+          name: customer.name || '',
+          cpfCnpj: customer.cpfCnpj,
+          phone: undefined,
+        },
+        paymentData,
+        installmentsData: data?.installments,
+        remainingDebts: finalRemainingDebts,
+        totalRemainingDebt: finalTotalRemaining,
+      });
+
+      // Imprime usando o serviço universal
+      const printResult = await printContent(receiptContent);
+      
+      if (printResult.success) {
+        toast.success('Comprovante enviado para impressão!');
+      } else {
+        toast.error(`Erro ao imprimir: ${printResult.error || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error('Erro ao imprimir comprovante:', error);
+      toast.error('Erro ao preparar comprovante para impressão');
+    } finally {
+      setPrinting(false);
+      setPaymentData(null);
+      onClose();
+    }
+  };
+
+  const handleSkipReceipt = () => {
+    setShowReceiptConfirm(false);
+    setPaymentData(null);
+    onClose();
   };
 
   return (
@@ -512,6 +708,13 @@ export function CustomerDebtPaymentDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Modal de confirmação de impressão */}
+      <PaymentReceiptConfirmDialog
+        open={showReceiptConfirm}
+        onConfirm={handlePrintReceipt}
+        onCancel={handleSkipReceipt}
+      />
     </Dialog>
   );
 }
