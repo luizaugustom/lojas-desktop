@@ -649,6 +649,11 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
             }
             
             // Validar CNPJ da credenciadora (deve ter 14 dígitos)
+            if (!payment.acquirerCnpj) {
+              toast.error('CNPJ da credenciadora é obrigatório', { duration: 5000 });
+              setLoading(false);
+              return;
+            }
             const cnpjCleaned = payment.acquirerCnpj.replace(/\D/g, '');
             if (cnpjCleaned.length !== 14) {
               toast.error('CNPJ da credenciadora deve ter exatamente 14 dígitos numéricos', { duration: 5000 });

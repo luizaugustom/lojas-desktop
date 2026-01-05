@@ -60,7 +60,6 @@ interface Budget {
 
 export default function BudgetsPage() {
   const { api, user } = useAuth();
-  const { queryKeyPart } = useDateRange();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
