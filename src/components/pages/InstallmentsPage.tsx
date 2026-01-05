@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '../ui/select';
 import { useAuth } from '../../hooks/useAuth';
+import { useDateRange } from '../../hooks/useDateRange';
 import { InstallmentsTable } from '../installments/installments-table';
 import { CustomersDebtList } from '../installments/customers-debt-list';
 import { PaymentDialog } from '../installments/payment-dialog';
@@ -22,6 +23,7 @@ type DateFilter = 'all' | 'this-week' | 'last-week' | 'this-month' | 'last-month
 
 export default function InstallmentsPage() {
   const { api, user } = useAuth();
+  const { queryKeyPart } = useDateRange();
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedInstallment, setSelectedInstallment] = useState<any>(null);
   const [customerDebtDialogOpen, setCustomerDebtDialogOpen] = useState(false);
@@ -129,7 +131,7 @@ export default function InstallmentsPage() {
   };
 
   const { data: pendingInstallments, isLoading: pendingLoading, refetch: refetchPending } = useQuery({
-    queryKey: ['installments-pending'],
+    queryKey: ['installments-pending', queryKeyPart],
     queryFn: async () => {
       const response = await api.get('/installment?isPaid=false');
       return normalizeInstallments(response.data);
@@ -138,7 +140,7 @@ export default function InstallmentsPage() {
   });
 
   const { data: allInstallments, isLoading: allLoading, refetch: refetchAll } = useQuery({
-    queryKey: ['installments-all'],
+    queryKey: ['installments-all', queryKeyPart],
     queryFn: async () => {
       const response = await api.get('/installment');
       return normalizeInstallments(response.data);
@@ -147,7 +149,7 @@ export default function InstallmentsPage() {
   });
 
   const { data: overdueInstallments, isLoading: overdueLoading, refetch: refetchOverdue } = useQuery({
-    queryKey: ['installments-overdue'],
+    queryKey: ['installments-overdue', queryKeyPart],
     queryFn: async () => {
       const response = await api.get('/installment/overdue');
       return normalizeInstallments(response.data);
@@ -156,7 +158,7 @@ export default function InstallmentsPage() {
   });
 
   const { data: paidInstallments, isLoading: paidLoading, refetch: refetchPaid } = useQuery({
-    queryKey: ['installments-paid'],
+    queryKey: ['installments-paid', queryKeyPart],
     queryFn: async () => {
       const response = await api.get('/installment?isPaid=true');
       return normalizeInstallments(response.data);
@@ -165,7 +167,7 @@ export default function InstallmentsPage() {
   });
 
   const { data: stats } = useQuery({
-    queryKey: ['installments-stats'],
+    queryKey: ['installments-stats', queryKeyPart],
     queryFn: async () => {
       const response = await api.get('/installment/stats');
       return response.data || {};

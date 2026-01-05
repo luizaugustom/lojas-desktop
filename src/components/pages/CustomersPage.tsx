@@ -5,6 +5,7 @@ import { Button } from '../ui/button';
 import { InputWithIcon } from '../ui/input';
 import { Card } from '../ui/card';
 import { useAuth } from '../../hooks/useAuth';
+import { useDateRange } from '../../hooks/useDateRange';
 import { customerApi } from '../../lib/api-endpoints';
 import { CustomersTable } from '../customers/customers-table';
 import { CustomerDialog } from '../customers/customer-dialog';
@@ -12,12 +13,13 @@ import type { Customer } from '../../types';
 
 export default function CustomersPage() {
   const { user, api } = useAuth();
+  const { queryKeyPart } = useDateRange();
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const { data: customersResponse, isLoading, refetch, error } = useQuery({
-    queryKey: ['customers', search, user?.companyId],
+    queryKey: ['customers', queryKeyPart, search, user?.companyId],
     queryFn: async () => {
       console.log('[CustomersPage] Buscando clientes com search:', search, 'companyId:', user?.companyId);
       console.log('[CustomersPage] Usuário completo:', user);

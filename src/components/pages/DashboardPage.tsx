@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ShoppingCart, Package, Users, DollarSign, TrendingUp, TrendingDown, AlertTriangle, Building2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDateRange } from '../../hooks/useDateRange';
 import { handleApiError } from '../../lib/handleApiError';
 import { formatCurrency, formatDate, toLocalISOString } from '../../lib/utils';
 import { ProductImage } from '../products/ProductImage';
@@ -79,18 +80,19 @@ interface Customer {
 
 export default function DashboardPage() {
   const { api, isAuthenticated, user } = useAuth();
+  const { queryParams, queryKeyPart, dateRange } = useDateRange();
   const { printers, scales } = useDevices();
   // Variáveis de impressora removidas - funcionalidades de impressão removidas
 
-  // Dates for current month
-  const now = new Date();
-  const startOfMonth = toLocalISOString(new Date(now.getFullYear(), now.getMonth(), 1));
-  const endOfMonth = toLocalISOString(new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59));
-
-  // Sales this month
+  // Sales com filtro global de data
   const { data: salesData, isLoading: isSalesLoading, error: salesError } = useQuery({
-    queryKey: ['sales', 'month', startOfMonth, endOfMonth],
-    queryFn: async () => (await api.get('/sale', { params: { startDate: startOfMonth, endDate: endOfMonth, limit: 1000 } })).data,
+    queryKey: ['sales', 'dashboard', queryKeyPart],
+    queryFn: async () => {
+      const params: any = { limit: 1000 };
+      if (queryParams.startDate) params.startDate = queryParams.startDate;
+      if (queryParams.endDate) params.endDate = queryParams.endDate;
+      return (await api.get('/sale', { params })).data;
+    },
     enabled: isAuthenticated,
   });
 
@@ -103,13 +105,24 @@ export default function DashboardPage() {
     return [];
   };
 
-  // Sales last 7 days (for chart)
-  const start7 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0);
-  const end7 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  // Sales last 7 days (for chart) - usa filtro global se disponível
+  const now = new Date();
+  const chartStartDate = dateRange.startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0);
+  const chartEndDate = dateRange.endDate || new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  
+  // Para o gráfico, sempre mostra os últimos 7 dias dentro do período filtrado ou últimos 7 dias globais
+  const start7 = new Date(Math.max(
+    chartEndDate.getTime() - 6 * 24 * 60 * 60 * 1000,
+    chartStartDate?.getTime() || 0
+  ));
+  start7.setHours(0, 0, 0, 0);
+  const end7 = chartEndDate;
+  end7.setHours(23, 59, 59, 999);
   const start7Iso = toLocalISOString(start7);
   const end7Iso = toLocalISOString(end7);
+  
   const { data: last7SalesRaw } = useQuery({
-    queryKey: ['sales', 'last7', start7Iso, end7Iso],
+    queryKey: ['sales', 'last7', queryKeyPart, start7Iso, end7Iso],
     queryFn: async () => (await api.get('/sale', { params: { startDate: start7Iso, endDate: end7Iso, limit: 1000 } })).data,
     enabled: isAuthenticated,
   });
@@ -144,7 +157,7 @@ export default function DashboardPage() {
 
   // Products for this company
   const { data: productsData, isLoading: isProductsLoading, error: productsError } = useQuery({
-    queryKey: ['products', 'company'],
+    queryKey: ['products', 'company', queryKeyPart],
     queryFn: async () => {
       const response = (await api.get('/product', { params: { page: 1, limit: 1000 } })).data;
       return response;
@@ -154,7 +167,7 @@ export default function DashboardPage() {
 
   // Customers for this company
   const { data: customersData, isLoading: isCustomersLoading, error: customersError } = useQuery({
-    queryKey: ['customers', 'company', user?.companyId],
+    queryKey: ['customers', 'company', queryKeyPart, user?.companyId],
     queryFn: async () => {
       const response = await customerApi.list({ 
         page: 1, 

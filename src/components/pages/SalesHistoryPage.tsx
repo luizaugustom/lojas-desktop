@@ -4,6 +4,7 @@ import { Calendar, Download, Filter, TrendingUp, Wallet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../hooks/useAuth';
+import { useDateRange } from '../../hooks/useDateRange';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Input } from '../ui/input';
@@ -41,6 +42,7 @@ const periodOptions: PeriodOption[] = [
 
 export default function SalesHistoryPage() {
   const { api, user } = useAuth();
+  const { queryParams, queryKeyPart, dateRange } = useDateRange();
   const [period, setPeriod] = useState<PeriodFilter>('today');
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
@@ -58,8 +60,8 @@ export default function SalesHistoryPage() {
   // Verificar se é vendedor
   const isSeller = user?.role === 'vendedor';
 
-  // Calcular datas com base no período selecionado
-  const { startDate, endDate } = useMemo(() => {
+  // Calcular datas com base no período selecionado da página
+  const periodRange = useMemo(() => {
     const end = new Date();
     end.setHours(23, 59, 59, 999);
     
@@ -78,14 +80,43 @@ export default function SalesHistoryPage() {
     }
 
     return {
-      startDate: toLocalISOString(start),
-      endDate: toLocalISOString(end),
+      startDate: start,
+      endDate: end,
     };
   }, [period]);
 
+  // Combinar filtro global com filtro de período: usar o mais restritivo
+  const { startDate, endDate } = useMemo(() => {
+    const globalStart = queryParams.startDate ? new Date(queryParams.startDate) : null;
+    const globalEnd = queryParams.endDate ? new Date(queryParams.endDate) : null;
+    const periodStart = periodRange.startDate ? new Date(periodRange.startDate) : null;
+    const periodEnd = periodRange.endDate ? new Date(periodRange.endDate) : null;
+    
+    // Encontrar a intersecção dos ranges
+    let finalStart: Date | null = null;
+    let finalEnd: Date | null = null;
+    
+    if (globalStart && periodStart) {
+      finalStart = globalStart > periodStart ? globalStart : periodStart;
+    } else {
+      finalStart = globalStart || periodStart;
+    }
+    
+    if (globalEnd && periodEnd) {
+      finalEnd = globalEnd < periodEnd ? globalEnd : periodEnd;
+    } else {
+      finalEnd = globalEnd || periodEnd;
+    }
+    
+    return {
+      startDate: finalStart ? toLocalISOString(finalStart) : undefined,
+      endDate: finalEnd ? toLocalISOString(finalEnd) : undefined,
+    };
+  }, [periodRange, queryParams]);
+
   // Buscar vendas - usar endpoint correto baseado no role
   const { data: salesData, isLoading, refetch } = useQuery({
-    queryKey: ['sales-history', isSeller, period, page, limit, startDate, endDate],
+    queryKey: ['sales-history', queryKeyPart, isSeller, period, page, limit, startDate, endDate],
     queryFn: async () => {
       const params: any = { page, limit };
       if (startDate) params.startDate = startDate;
@@ -101,7 +132,7 @@ export default function SalesHistoryPage() {
 
   // Buscar estatísticas - usar endpoint correto baseado no role
   const { data: statsData } = useQuery({
-    queryKey: ['sales-stats', isSeller, period, startDate, endDate],
+    queryKey: ['sales-stats', queryKeyPart, isSeller, period, startDate, endDate],
     queryFn: async () => {
       const params: any = {};
       if (startDate) params.startDate = startDate;

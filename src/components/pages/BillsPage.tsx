@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '../ui/select';
 import { useAuth } from '../../hooks/useAuth';
+import { useDateRange } from '../../hooks/useDateRange';
 import { BillsTable } from '../bills/bills-table';
 import { BillDialog } from '../bills/bill-dialog';
 
@@ -18,11 +19,12 @@ type DateFilter = 'all' | 'this-week' | 'next-week' | 'next-month' | 'this-year'
 
 export default function BillsPage() {
   const { api } = useAuth();
+  const { queryParams, queryKeyPart, dateRange } = useDateRange();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
 
-  // Calcular datas baseadas no filtro
-  const { startDate, endDate } = useMemo(() => {
+  // Calcular datas baseadas no filtro da página
+  const pageDateRange = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
@@ -68,8 +70,37 @@ export default function BillsPage() {
     }
   }, [dateFilter]);
 
+  // Combinar filtro global com filtro da página
+  const { startDate, endDate } = useMemo(() => {
+    const globalStart = queryParams.startDate ? new Date(queryParams.startDate) : null;
+    const globalEnd = queryParams.endDate ? new Date(queryParams.endDate) : null;
+    const pageStart = pageDateRange.startDate ? new Date(pageDateRange.startDate) : null;
+    const pageEnd = pageDateRange.endDate ? new Date(pageDateRange.endDate) : null;
+    
+    // Encontrar a intersecção dos ranges
+    let finalStart: Date | null = null;
+    let finalEnd: Date | null = null;
+    
+    if (globalStart && pageStart) {
+      finalStart = globalStart > pageStart ? globalStart : pageStart;
+    } else {
+      finalStart = globalStart || pageStart;
+    }
+    
+    if (globalEnd && pageEnd) {
+      finalEnd = globalEnd < pageEnd ? globalEnd : pageEnd;
+    } else {
+      finalEnd = globalEnd || pageEnd;
+    }
+    
+    return {
+      startDate: finalStart?.toISOString().split('T')[0],
+      endDate: finalEnd?.toISOString().split('T')[0],
+    };
+  }, [pageDateRange, queryParams]);
+
   // Construir query string
-  const queryParams = useMemo(() => {
+  const finalQueryParams = useMemo(() => {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
@@ -77,9 +108,9 @@ export default function BillsPage() {
   }, [startDate, endDate]);
 
   const { data: billsResponse, isLoading, refetch } = useQuery({
-    queryKey: ['bills', queryParams],
+    queryKey: ['bills', queryKeyPart, finalQueryParams],
     queryFn: async () => {
-      const url = queryParams ? `/bill-to-pay?${queryParams}` : '/bill-to-pay';
+      const url = finalQueryParams ? `/bill-to-pay?${finalQueryParams}` : '/bill-to-pay';
       return (await api.get(url)).data;
     },
   });

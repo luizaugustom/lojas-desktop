@@ -40,6 +40,7 @@ import {
 } from '../ui/dialog';
 import { Switch } from '../ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDateRange } from '../../hooks/useDateRange';
 import { printContent } from '@/lib/print-service';
 import { cashClosureApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
@@ -187,6 +188,7 @@ const getPaymentMethodLabel = (method: string) => PAYMENT_METHOD_LABELS[method] 
 
 export default function CashClosurePage() {
   const { api } = useAuth();
+  const { queryParams, queryKeyPart } = useDateRange();
   const [openingAmount, setOpeningAmount] = useState<number>(0);
   const [closingAmount, setClosingAmount] = useState<number>(0);
   const [withdrawals, setWithdrawals] = useState<number>(0);
@@ -223,8 +225,13 @@ export default function CashClosurePage() {
 
   // Buscar histórico
   const { data: historyData, refetch: refetchHistory } = useQuery<CashClosureHistoryResponse>({
-    queryKey: ['cash-history'],
-    queryFn: async () => (await api.get('/cash-closure/history')).data as CashClosureHistoryResponse,
+    queryKey: ['cash-history', queryKeyPart],
+    queryFn: async () => {
+      const params: any = {};
+      if (queryParams.startDate) params.startDate = queryParams.startDate;
+      if (queryParams.endDate) params.endDate = queryParams.endDate;
+      return (await api.get('/cash-closure/history', { params })).data as CashClosureHistoryResponse;
+    },
     enabled: showHistory,
   });
 

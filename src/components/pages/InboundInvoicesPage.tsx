@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FileText, RefreshCw, Search, Download, Upload, PlusCircle, Trash2, Pencil, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDateRange } from '../../hooks/useDateRange';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Input, InputWithIcon } from '../ui/input';
@@ -40,6 +41,7 @@ interface DownloadFormatOption {
 
 export default function InboundInvoicesPage() {
   const { api, user } = useAuth();
+  const { queryKeyPart } = useDateRange();
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [uploading, setUploading] = useState(false);

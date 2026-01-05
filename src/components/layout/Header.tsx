@@ -1,10 +1,11 @@
-import { Menu, Moon, Sun, LogOut, Megaphone, RefreshCw } from 'lucide-react';
+import { Menu, Moon, Sun, LogOut, Megaphone, RefreshCw, Calendar } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useUIStore } from '@/store/ui-store';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDeviceStore } from '@/store/device-store';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { AdminBroadcastDialog } from '../admin-broadcast-dialog';
+import { DateRangeModal } from '../date-range/DateRangeModal';
 import { checkPrinterStatus } from '@/lib/printer-check';
 import { companyApi } from '@/lib/api-endpoints';
 import { getImageUrl } from '@/lib/image-utils';
@@ -21,6 +22,7 @@ export function Header({ onLogout }: HeaderProps) {
   const { printerStatus, printerName } = useDeviceStore();
   const [checkingPrinter, setCheckingPrinter] = useState(false);
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+  const [dateRangeModalOpen, setDateRangeModalOpen] = useState(false);
 
   // Buscar logo da empresa quando o usuário mudar
   useEffect(() => {
@@ -183,6 +185,18 @@ export function Header({ onLogout }: HeaderProps) {
           </AdminBroadcastDialog>
         )}
 
+        {/* Botão de filtro de data */}
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => setDateRangeModalOpen(true)}
+          className="focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          aria-label="Filtrar por período de datas"
+          title="Filtrar dados por período"
+        >
+          <Calendar className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
+        </Button>
+
         <Button
           variant="ghost"
           size="icon"
@@ -201,6 +215,9 @@ export function Header({ onLogout }: HeaderProps) {
           <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
         </Button>
       </div>
+
+      {/* Modal de filtro de data */}
+      <DateRangeModal open={dateRangeModalOpen} onOpenChange={setDateRangeModalOpen} />
     </header>
   );
 }

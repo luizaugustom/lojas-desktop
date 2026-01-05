@@ -28,6 +28,7 @@ import { Textarea } from '../ui/textarea';
 import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency } from '@/lib/utils-clean';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDateRange } from '../../hooks/useDateRange';
 import { printContent } from '@/lib/print-service';
 interface Budget {
   id: string;
@@ -59,6 +60,7 @@ interface Budget {
 
 export default function BudgetsPage() {
   const { api, user } = useAuth();
+  const { queryKeyPart } = useDateRange();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -75,13 +77,16 @@ export default function BudgetsPage() {
   
   const isCompany = user?.role === 'empresa';
 
+  const { queryParams, queryKeyPart } = useDateRange();
   const { data: budgets, isLoading, refetch } = useQuery({
-    queryKey: ['budgets', statusFilter],
+    queryKey: ['budgets', queryKeyPart, statusFilter],
     queryFn: async () => {
       const params: any = {};
       if (statusFilter !== 'all') {
         params.status = statusFilter;
       }
+      if (queryParams.startDate) params.startDate = queryParams.startDate;
+      if (queryParams.endDate) params.endDate = queryParams.endDate;
       const response = await api.get('/budget', { params });
       return Array.isArray(response.data) ? response.data : response.data?.budgets || [];
     },

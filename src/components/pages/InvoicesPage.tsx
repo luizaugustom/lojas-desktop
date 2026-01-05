@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FileText, Download, RefreshCw, Search, PlusCircle, Trash2, Plus, Package, XCircle, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDateRange } from '../../hooks/useDateRange';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Input, InputWithIcon } from '../ui/input';
@@ -46,6 +47,7 @@ interface Product {
 
 export default function InvoicesPage() {
   const { api, user } = useAuth();
+  const { queryKeyPart } = useDateRange();
   const [search, setSearch] = useState('');
   const [emitOpen, setEmitOpen] = useState(false);
   const [emitType, setEmitType] = useState<'nfe' | null>(null);

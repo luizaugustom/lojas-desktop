@@ -71,3 +71,53 @@ export function formatCurrency(value: number | null | undefined): string {
   }).format(value);
 }
 
+/**
+ * Parseia um valor de desconto que pode ser percentual (ex: "5%") ou absoluto (ex: "10.50")
+ * @param discountInput - Valor de entrada do desconto (pode conter %)
+ * @param subtotal - Subtotal da venda para calcular desconto percentual
+ * @returns Objeto com valor absoluto do desconto e se era percentual
+ */
+export function parseDiscount(
+  discountInput: string,
+  subtotal: number
+): { absoluteValue: number; isPercentage: boolean; percentageValue: number | null } {
+  if (!discountInput || discountInput.trim() === '') {
+    return { absoluteValue: 0, isPercentage: false, percentageValue: null };
+  }
+
+  const trimmed = discountInput.trim();
+  const isPercentage = trimmed.endsWith('%');
+  
+  // Remover o % se existir
+  const numericString = isPercentage ? trimmed.slice(0, -1).trim() : trimmed;
+  
+  // Converter vírgula para ponto e remover caracteres não numéricos (exceto ponto)
+  let cleaned = numericString.replace(/,/g, '.');
+  cleaned = cleaned.replace(/[^0-9.]/g, '');
+  
+  // Remover múltiplos pontos decimais
+  const parts = cleaned.split('.');
+  if (parts.length > 2) {
+    cleaned = parts[0] + '.' + parts.slice(1).join('');
+  }
+  
+  const numericValue = cleaned === '' || cleaned === '.' ? 0 : parseFloat(cleaned) || 0;
+  
+  if (isPercentage) {
+    // Calcular desconto percentual sobre o subtotal
+    const absoluteValue = Math.max(0, (subtotal * numericValue) / 100);
+    return {
+      absoluteValue: Math.round((absoluteValue + Number.EPSILON) * 100) / 100, // Arredondar para 2 casas decimais
+      isPercentage: true,
+      percentageValue: numericValue
+    };
+  } else {
+    // Valor absoluto
+    return {
+      absoluteValue: Math.max(0, numericValue),
+      isPercentage: false,
+      percentageValue: null
+    };
+  }
+}
+
