@@ -182,7 +182,7 @@ export function CustomerDebtPaymentDialog({
   }, [open]);
 
   useEffect(() => {
-    if (!data || !data.installments) return;
+    if (!open || !data || !data.installments) return;
 
     const initialSelection: Record<
       string,
@@ -321,9 +321,10 @@ export function CustomerDebtPaymentDialog({
     }
 
     let isCancelled = false;
+    const currentCustomerId = customerId;
     const loadRemainingDebts = async () => {
       try {
-        const resp = await api.get(`/installment/customer/${customerId}/summary`);
+        const resp = await api.get(`/installment/customer/${currentCustomerId}/summary`);
         const raw = resp?.data ?? {};
         const installmentsList: any[] = Array.isArray(raw.installments) ? raw.installments : [];
 
@@ -359,7 +360,9 @@ export function CustomerDebtPaymentDialog({
     return () => {
       isCancelled = true;
     };
-  }, [paymentData, customerId, api]);
+    // Usa apenas customerId e verifica se paymentData existe (não o objeto inteiro)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!paymentData, customerId, api]);
 
   const bulkPaymentMutation = useMutation({
     mutationFn: async (payload: any) => {

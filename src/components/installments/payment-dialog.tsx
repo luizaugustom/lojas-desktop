@@ -89,8 +89,11 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
       const fullAmount = installment.remainingAmount || 0;
       setValue('amount', fullAmount);
       setPaymentType('full');
+    } else if (!open) {
+      // Limpa o formulário quando o diálogo fecha
+      reset();
     }
-  }, [open, installment, setValue]);
+  }, [open, installment?.id, installment?.remainingAmount, setValue, reset]);
 
   useEffect(() => {
     let active = true;
@@ -150,9 +153,13 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
     }
 
     let isCancelled = false;
+    const customerId = installment.customer.id;
+    const paymentAmount = paymentData.amount;
+    const installmentRemaining = installment?.remainingAmount;
+
     const loadCustomerDebt = async () => {
       try {
-        const resp = await api.get(`/installment/customer/${installment.customer.id}/summary`);
+        const resp = await api.get(`/installment/customer/${customerId}/summary`);
         const raw = resp?.data ?? {};
         const installmentsList: any[] = Array.isArray(raw.installments) ? raw.installments : [];
         const totalDebtFromSummary = Number(raw.totalDebt) || 0;
@@ -162,8 +169,8 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
           .reduce((sum, inst) => sum + Number(inst.remainingAmount ?? inst.amount), 0);
 
         // Subtrai o pagamento atual do restante
-        const currentRemaining = Number(installment?.remainingAmount) || 0;
-        const paidNow = Math.min(Number(paymentData.amount), currentRemaining);
+        const currentRemaining = Number(installmentRemaining) || 0;
+        const paidNow = Math.min(Number(paymentAmount), currentRemaining);
         const adjustedTotal = totalRemaining - paidNow;
 
         if (!isCancelled) {
@@ -180,7 +187,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
     return () => {
       isCancelled = true;
     };
-  }, [paymentData, installment?.customer?.id, api]);
+  }, [paymentData?.amount, installment?.customer?.id, installment?.remainingAmount, api]);
 
   const onSubmit = (data: PaymentFormData) => {
     if (!installment) return;

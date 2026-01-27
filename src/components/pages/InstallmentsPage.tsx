@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DollarSign, AlertTriangle, CheckCircle2, Filter, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -44,6 +44,19 @@ export default function InstallmentsPage() {
     scannerActive,
     setScannerActive,
   } = useDeviceStore();
+
+  // Refs para valores que mudam frequentemente, evitando re-execuções do useEffect
+  const barcodeBufferRef = useRef(barcodeBuffer);
+  const lastScannedRef = useRef(lastScanned);
+
+  // Atualiza refs quando os valores mudam
+  useEffect(() => {
+    barcodeBufferRef.current = barcodeBuffer;
+  }, [barcodeBuffer]);
+
+  useEffect(() => {
+    lastScannedRef.current = lastScanned;
+  }, [lastScanned]);
 
   const isSeller = user?.role === 'vendedor';
   const isCompany = user?.role === 'empresa';
@@ -263,9 +276,8 @@ export default function InstallmentsPage() {
 
   // Leitura de código de barras
   useEffect(() => {
-    if (!scannerActive) {
-      setScannerActive(true);
-    }
+    // Ativa o scanner apenas uma vez na montagem
+    setScannerActive(true);
 
     const scanStartedAtRef = { current: null as number | null };
 
@@ -273,7 +285,8 @@ export default function InstallmentsPage() {
       if (!e.key) return;
 
       if (e.key === 'Enter') {
-        const code = barcodeBuffer.trim();
+        // Usa ref para obter o valor mais recente sem causar re-execução do useEffect
+        const code = barcodeBufferRef.current.trim();
         if (code.length >= 3) {
           const startedAt = scanStartedAtRef.current ?? Date.now();
           const duration = Date.now() - startedAt;
@@ -281,7 +294,7 @@ export default function InstallmentsPage() {
           const isLikelyScanner = avgPerChar < 80;
 
           const now = Date.now();
-          if (isLikelyScanner && now - lastScanned > 500) {
+          if (isLikelyScanner && now - lastScannedRef.current > 500) {
             console.log('[Installments Barcode Scanner] Código escaneado:', code);
             handleBarcodeScanned(code);
             setLastScanned(now);
@@ -290,7 +303,8 @@ export default function InstallmentsPage() {
         setBarcodeBuffer('');
         scanStartedAtRef.current = null;
       } else if (e.key.length === 1) {
-        if (!barcodeBuffer) {
+        // Usa ref para obter o valor mais recente
+        if (!barcodeBufferRef.current) {
           scanStartedAtRef.current = Date.now();
         }
         setBarcodeBuffer((s) => {
@@ -305,7 +319,8 @@ export default function InstallmentsPage() {
       window.removeEventListener('keydown', onKey);
       setScannerActive(false);
     };
-  }, [barcodeBuffer, lastScanned, scannerActive, setScannerActive, setBarcodeBuffer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (isSeller) {
     return (
