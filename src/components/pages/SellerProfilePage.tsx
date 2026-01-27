@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -77,11 +77,29 @@ export default function SellerProfilePage() {
     resolveSellerPeriod((user?.dataPeriod as DataPeriodFilter | null) ?? null),
   );
   const [isUpdatingDataPeriod, setIsUpdatingDataPeriod] = useState(false);
+  const isInternalUpdateRef = useRef(false);
+  const lastUserDataPeriodRef = useRef<DataPeriodFilter | null | undefined>(undefined);
 
   useEffect(() => {
-    setDataPeriod(
-      resolveSellerPeriod((user?.dataPeriod as DataPeriodFilter | null) ?? null),
-    );
+    // Ignora atualizações quando estamos atualizando internamente
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false;
+      lastUserDataPeriodRef.current = user?.dataPeriod;
+      return;
+    }
+
+    // Só atualiza se o valor do usuário realmente mudou
+    if (user?.dataPeriod !== lastUserDataPeriodRef.current) {
+      lastUserDataPeriodRef.current = user?.dataPeriod;
+      const newPeriod = resolveSellerPeriod((user?.dataPeriod as DataPeriodFilter | null) ?? null);
+      // Só atualiza se o valor realmente mudou para evitar loops infinitos
+      setDataPeriod((prev) => {
+        if (prev !== newPeriod) {
+          return newPeriod;
+        }
+        return prev;
+      });
+    }
   }, [user?.dataPeriod]);
 
   const { startDate, endDate } = useMemo(() => getPeriodRange(dataPeriod), [dataPeriod]);
@@ -147,8 +165,11 @@ export default function SellerProfilePage() {
   const stats: SellerStats = statsData;
   const recentSales: Sale[] = Array.isArray(salesData) ? salesData : salesData?.data || [];
 
+  const previousProfileIdRef = useRef<string | undefined>(undefined);
+  
   useEffect(() => {
-    if (profile) {
+    if (profile && profile.id !== previousProfileIdRef.current) {
+      previousProfileIdRef.current = profile.id;
       reset({
         name: profile.name,
         cpf: profile.cpf || '',
@@ -157,7 +178,8 @@ export default function SellerProfilePage() {
         phone: profile.phone || '',
       });
     }
-  }, [profile, reset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]); // Usa apenas o ID para evitar atualizações desnecessárias
 
 
   const handleRefresh = () => {
@@ -187,6 +209,7 @@ export default function SellerProfilePage() {
     }
 
     const previousPeriod = dataPeriod;
+    isInternalUpdateRef.current = true; // Marca que é uma atualização interna
     setDataPeriod(nextPeriod);
     setIsUpdatingDataPeriod(true);
 
@@ -197,6 +220,7 @@ export default function SellerProfilePage() {
     } catch (error) {
       console.error('Erro ao atualizar período do vendedor:', error);
       toast.error('Não foi possível atualizar o período. Tente novamente.');
+      isInternalUpdateRef.current = true; // Marca novamente ao reverter
       setDataPeriod(previousPeriod);
     } finally {
       setIsUpdatingDataPeriod(false);

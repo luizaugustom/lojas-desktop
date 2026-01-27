@@ -32,7 +32,8 @@ export function CompanyColorProvider({ children }: { children: React.ReactNode }
     } else {
       setCompanyColor(null);
     }
-  }, [companyData?.brandColor, setCompanyColor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyData?.brandColor]);
 
   return <>{children}</>;
 }
