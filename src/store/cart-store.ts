@@ -29,7 +29,7 @@ interface CartState {
 }
 
 // Função auxiliar para obter o preço efetivo do produto (promocional ou normal)
-const getEffectivePrice = (product: Product): number => {
+export const getEffectivePrice = (product: Product): number => {
   if (product.isOnPromotion && product.promotionPrice !== undefined) {
     return product.promotionPrice;
   }
@@ -54,6 +54,8 @@ export const useCartStore = create<CartState>((set, get) => ({
     const items = get().items;
     const existingItem = items.find((item) => item.product.id === product.id);
     
+    const effectivePrice = getEffectivePrice(product);
+    
     if (existingItem) {
       set({
         items: items.map((item) =>
@@ -61,7 +63,7 @@ export const useCartStore = create<CartState>((set, get) => ({
             ? {
                 ...item,
                 quantity: item.quantity + quantity,
-                subtotal: (item.quantity + quantity) * Number(product.price),
+                subtotal: (item.quantity + quantity) * effectivePrice,
               }
             : item
         ),
@@ -73,7 +75,7 @@ export const useCartStore = create<CartState>((set, get) => ({
           {
             product,
             quantity,
-            subtotal: quantity * Number(product.price),
+            subtotal: quantity * effectivePrice,
           },
         ],
       });

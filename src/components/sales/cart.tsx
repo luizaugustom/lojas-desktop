@@ -5,7 +5,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/card
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { ProductImage } from '../products/ProductImage';
-import { useCartStore } from '../../store/cart-store';
+import { useCartStore, getEffectivePrice } from '../../store/cart-store';
 import { formatCurrency } from '../../lib/utils';
 import { parseDiscount } from '../../lib/utils-clean';
 
@@ -78,7 +78,7 @@ export function Cart({ onCheckout, onBudget }: CartProps) {
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm line-clamp-2">{item.product.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  {formatCurrency(item.product.price)} x {item.quantity}
+                  {formatCurrency(getEffectivePrice(item.product))} x {item.quantity}
                 </p>
                 <p className="font-semibold">{formatCurrency(item.subtotal)}</p>
               </div>
