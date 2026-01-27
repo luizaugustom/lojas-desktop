@@ -96,6 +96,9 @@ export interface Company {
   // Feature Permissions
   catalogPageAllowed?: boolean;
   autoMessageAllowed?: boolean;
+  // Installment Configuration
+  installmentInterestRates?: Record<string, number>; // Taxas de juros por parcela: { "1": 0, "2": 2.5, "3": 3.0, ... }
+  maxInstallments?: number; // Limite máximo de parcelas
 }
 
 export interface Admin {
@@ -126,6 +129,12 @@ export interface Product {
   companyId: string;
   createdAt: string;
   updatedAt: string;
+  // Promotion fields
+  promotionPrice?: number;
+  promotionDiscount?: number;
+  isOnPromotion?: boolean;
+  promotionName?: string;
+  originalPrice?: number;
 }
 
 export type PaymentMethod = 'cash' | 'credit_card' | 'debit_card' | 'pix' | 'installment' | 'store_credit' | 'loss';
@@ -142,6 +151,7 @@ export interface PaymentMethodDetail {
   acquirerCnpj?: string; // CNPJ da credenciadora (14 dígitos)
   cardBrand?: string; // '01' = Visa, '02' = Mastercard, '03' = Amex, '04' = Elo, '05' = Hipercard, '99' = Outras
   cardOperationType?: string; // '01' = Crédito à vista, '02' = Crédito parcelado, '03' = Débito
+  installmentCount?: number; // Número de parcelas (obrigatório quando cardOperationType = '02')
 }
 
 export interface SaleItem {

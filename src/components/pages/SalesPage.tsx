@@ -288,11 +288,6 @@ export default function SalesPage() {
                 placeholder="0.00"
                 value={openingBalance}
                 onChange={(e) => handleNumberInputChange(e, setOpeningBalance)}
-                onBlur={() => {
-                  if (openingBalance === '') {
-                    setOpeningBalance('0');
-                  }
-                }}
                 className="no-spinner"
               />
             </div>

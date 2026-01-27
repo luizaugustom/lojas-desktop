@@ -6,6 +6,7 @@ import { ProductImage } from '../products/ProductImage';
 import { ImageViewer } from '../ui/image-viewer';
 import { formatCurrency } from '../../lib/utils';
 import { getImageUrl } from '../../lib/image-utils';
+import { Tag } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -83,9 +84,34 @@ export function ProductList({ products, isLoading, onAddToCart }: ProductListPro
                 onClick={() => handleImageClick(product)}
               />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium truncate">{product.name}</h3>
-                  <div className="text-sm font-semibold">{formatCurrency(product.price)}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-sm font-medium truncate">{product.name}</h3>
+                      {product.isOnPromotion && (
+                        <Tag className="h-3 w-3 text-red-500 flex-shrink-0" />
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    {product.isOnPromotion && product.promotionPrice !== undefined ? (
+                      <>
+                        <div className="text-sm font-semibold text-red-600">
+                          {formatCurrency(product.promotionPrice)}
+                        </div>
+                        <div className="text-xs text-muted-foreground line-through">
+                          {formatCurrency(product.price)}
+                        </div>
+                        {product.promotionDiscount && (
+                          <div className="text-[10px] text-red-600 font-medium">
+                            -{product.promotionDiscount.toFixed(0)}%
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-sm font-semibold">{formatCurrency(product.price)}</div>
+                    )}
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Estoque: {product.stockQuantity ?? 0}

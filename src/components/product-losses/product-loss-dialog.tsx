@@ -154,7 +154,12 @@ export function ProductLossDialog({ open, onClose, initialProduct }: ProductLoss
               type="number"
               min="1"
               max={selectedProduct?.stockQuantity || 0}
-              {...register('quantity', { valueAsNumber: true })}
+              {...register('quantity', { 
+                setValueAs: (v) =>
+                  v === '' || v === undefined
+                    ? undefined
+                    : (isNaN(Number(v)) ? undefined : Number(v)),
+              })}
               disabled={loading || !selectedProductId}
             />
             {errors.quantity && (

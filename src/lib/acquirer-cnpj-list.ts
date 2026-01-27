@@ -21,6 +21,8 @@ export const DEFAULT_ACQUIRERS: AcquirerInfo[] = [
   { cnpj: '08561701000282', name: 'PagSeguro Instituição de Pagamento' },
   { cnpj: '16501555000238', name: 'Stone Pagamentos' },
   { cnpj: '01203026000221', name: 'GetNet Instituição de Pagamento' },
+  { cnpj: '02038232000164', name: 'Sicoob' },
+  { cnpj: '03106213000271', name: 'Sicredi' },
 ];
 
 const STORAGE_KEY = 'montshop_acquirer_cnpjs';

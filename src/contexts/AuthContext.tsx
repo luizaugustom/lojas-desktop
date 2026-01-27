@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { authLogin, authLogout, getAccessToken, setAccessToken, api } from '../lib/apiClient';
+import { authLogin, authLogout, getAccessToken, setAccessToken, api, type DeviceInfo } from '../lib/apiClient';
 import toast from 'react-hot-toast';
 import type { User } from '../types';
 import { getComputerId, detectAllDevices } from '../lib/device-detection';
@@ -22,6 +22,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Listener para logout automático (login em outro dispositivo)
+    const handleAutoLogout = (event: CustomEvent) => {
+      if (event.detail?.reason === 'login-em-outro-dispositivo') {
+        console.log('[AuthContext] Logout automático detectado: login em outro dispositivo');
+        setAccessToken(null);
+        setUser(null);
+        toast.error('Você foi desconectado porque fez login em outro dispositivo');
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:auto-logout', handleAutoLogout as EventListener);
+    }
+
     // Tentar recuperar sessão
     const init = async () => {
       const token = getAccessToken();
@@ -38,6 +52,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     };
     init();
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('auth:auto-logout', handleAutoLogout as EventListener);
+      }
+    };
   }, []);
 
   // Função para detectar e registrar dispositivos do computador
@@ -75,7 +95,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (loginStr: string, password: string) => {
     try {
-      const data = await authLogin(loginStr, password);
+      // Obter informações do dispositivo
+      const computerId = getComputerId();
+      const deviceInfo: DeviceInfo = {
+        deviceId: computerId,
+        deviceName: 'Desktop App',
+      };
+
+      const data = await authLogin(loginStr, password, deviceInfo);
       setAccessToken(data.access_token);
       
       // Normalizar role da API para o frontend (igual ao frontend)
@@ -97,7 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[AuthContext] Login realizado:', { 
         originalRole: data.user?.role, 
         normalizedRole: normalizedUser.role, 
-        user: normalizedUser 
+        user: normalizedUser,
+        deviceInfo,
       });
       
       setUser(normalizedUser);

@@ -253,6 +253,8 @@ export const storeCreditApi = {
     api.get(`/store-credit/transactions/${customerId}`, { params }),
   use: (data: { customerId: string; amount: number; saleId?: string; description?: string }) =>
     api.post('/store-credit/use', data),
+  printRemainingBalanceVoucher: (data: { customerId: string; amountUsed: number }) =>
+    api.post('/store-credit/print-remaining-balance-voucher', data),
 };
 
 export const adminApi = {
@@ -276,5 +278,31 @@ export const adminApi = {
    * Roles: ADMIN - Obter configuração global do Focus NFe
    */
   getFocusNfeConfig: () => api.get('/admin/focus-nfe-config'),
+};
+
+export const dashboardApi = {
+  metrics: () => api.get('/dashboard/metrics'),
+};
+
+export const cardAcquirerRateApi = {
+  list: () => api.get('/card-acquirer-rates'),
+  get: (id: string) => api.get(`/card-acquirer-rates/${id}`),
+  create: (data: {
+    acquirerCnpj: string;
+    acquirerName: string;
+    debitRate: number;
+    creditRate: number;
+    installmentRates?: Record<string, number>;
+    isActive?: boolean;
+  }) => api.post('/card-acquirer-rates', data),
+  update: (id: string, data: {
+    acquirerCnpj?: string;
+    acquirerName?: string;
+    debitRate?: number;
+    creditRate?: number;
+    installmentRates?: Record<string, number>;
+    isActive?: boolean;
+  }) => api.patch(`/card-acquirer-rates/${id}`, data),
+  delete: (id: string) => api.delete(`/card-acquirer-rates/${id}`),
 };
 

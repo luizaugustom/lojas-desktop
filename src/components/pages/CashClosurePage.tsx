@@ -189,9 +189,9 @@ const getPaymentMethodLabel = (method: string) => PAYMENT_METHOD_LABELS[method] 
 export default function CashClosurePage() {
   const { api } = useAuth();
   const { queryParams, queryKeyPart } = useDateRange();
-  const [openingAmount, setOpeningAmount] = useState<number>(0);
-  const [closingAmount, setClosingAmount] = useState<number>(0);
-  const [withdrawals, setWithdrawals] = useState<number>(0);
+  const [openingAmount, setOpeningAmount] = useState<number | undefined>(0);
+  const [closingAmount, setClosingAmount] = useState<number | undefined>(0);
+  const [withdrawals, setWithdrawals] = useState<number | undefined>(0);
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [closeConfirmationOpen, setCloseConfirmationOpen] = useState(false);
@@ -236,7 +236,7 @@ export default function CashClosurePage() {
   });
 
   const handleOpenCashClosure = async () => {
-    if (openingAmount < 0) {
+    if ((openingAmount ?? 0) < 0) {
       toast.error('Valor de abertura não pode ser negativo');
       return;
     }
@@ -244,7 +244,7 @@ export default function CashClosurePage() {
     setLoading(true);
     try {
       await api.post('/cash-closure', {
-        openingAmount,
+        openingAmount: openingAmount ?? 0,
         openingDate: toLocalISOString(),
       });
       toast.success('Caixa aberto com sucesso!');
@@ -260,17 +260,17 @@ export default function CashClosurePage() {
   const handleCloseCashClosure = () => {
     if (!currentClosure) return;
 
-    if (closingAmount < 0) {
+    if ((closingAmount ?? 0) < 0) {
       toast.error('Valor de fechamento não pode ser negativo');
       return;
     }
 
-    if (withdrawals < 0) {
+    if ((withdrawals ?? 0) < 0) {
       toast.error('Valor de saques não pode ser negativo');
       return;
     }
 
-    if (closingAmount === 0) {
+    if ((closingAmount ?? 0) === 0) {
       toast.error('Informe o valor contado no caixa antes de fechar.');
       return;
     }
@@ -285,8 +285,8 @@ export default function CashClosurePage() {
     setLoading(true);
     try {
       const response = await api.patch('/cash-closure/close', {
-        closingAmount,
-        withdrawals,
+        closingAmount: closingAmount ?? 0,
+        withdrawals: withdrawals ?? 0,
         printReport: shouldPrint,
         closingDate: toLocalISOString(),
         includeSaleDetails,
@@ -425,10 +425,10 @@ export default function CashClosurePage() {
 
   // Cálculos - Usar apenas vendas em dinheiro para o caixa
   const expectedClosing = currentClosure
-    ? Number(currentClosure.openingAmount || 0) + Number(stats?.totalCashSales || 0) - Number(withdrawals)
+    ? Number(currentClosure.openingAmount || 0) + Number(stats?.totalCashSales || 0) - Number(withdrawals ?? 0)
     : 0;
 
-  const difference = Number(closingAmount) - expectedClosing;
+  const difference = Number(closingAmount ?? 0) - expectedClosing;
   const differenceColorClass = Math.abs(difference) < 0.01
     ? 'text-green-600'
     : difference > 0
@@ -471,7 +471,7 @@ export default function CashClosurePage() {
             </div>
             <div className="flex items-center justify-between">
               <span>Valor contado</span>
-              <span className="font-semibold">{formatCurrency(closingAmount)}</span>
+              <span className="font-semibold">{formatCurrency(closingAmount ?? 0)}</span>
             </div>
             <div className={`flex items-center justify-between font-semibold ${differenceColorClass}`}>
               <span>Diferença</span>
@@ -746,21 +746,19 @@ export default function CashClosurePage() {
                   type="number"
                   step="0.01"
                   min="0"
-                  value={openingAmount}
-                  onChange={(e) => setOpeningAmount(Number(e.target.value))}
+                  value={openingAmount ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setOpeningAmount(v === '' ? undefined : (() => { const n = Number(v); return isNaN(n) ? undefined : n; })());
+                  }}
                   onFocus={(e) => {
                     if (Number(e.target.value) === 0) {
                       e.target.value = '';
                     }
                   }}
-                  onBlur={(e) => {
-                    if (e.target.value === '') {
-                      setOpeningAmount(0);
-                    }
-                  }}
                   placeholder="0.00"
                   disabled={loading}
-                  className="text-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="text-lg"
                 />
                 <p className="text-sm text-muted-foreground">
                   Digite o valor em dinheiro que está no caixa no início do expediente
@@ -1004,21 +1002,19 @@ export default function CashClosurePage() {
                     type="number"
                     step="0.01"
                     min="0"
-                    value={closingAmount}
-                    onChange={(e) => setClosingAmount(Number(e.target.value))}
+                    value={closingAmount ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setClosingAmount(v === '' ? undefined : (() => { const n = Number(v); return isNaN(n) ? undefined : n; })());
+                    }}
                     onFocus={(e) => {
                       if (Number(e.target.value) === 0) {
                         e.target.value = '';
                       }
                     }}
-                    onBlur={(e) => {
-                      if (e.target.value === '') {
-                        setClosingAmount(0);
-                      }
-                    }}
                     placeholder="0.00"
                     disabled={loading}
-                    className="text-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="text-lg"
                   />
                   <p className="text-xs text-muted-foreground">
                     Conte todo o dinheiro físico no caixa
@@ -1035,21 +1031,19 @@ export default function CashClosurePage() {
                     type="number"
                     step="0.01"
                     min="0"
-                    value={withdrawals}
-                    onChange={(e) => setWithdrawals(Number(e.target.value))}
+                    value={withdrawals ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setWithdrawals(v === '' ? undefined : (() => { const n = Number(v); return isNaN(n) ? undefined : n; })());
+                    }}
                     onFocus={(e) => {
                       if (Number(e.target.value) === 0) {
                         e.target.value = '';
                       }
                     }}
-                    onBlur={(e) => {
-                      if (e.target.value === '') {
-                        setWithdrawals(0);
-                      }
-                    }}
                     placeholder="0.00"
                     disabled={loading}
-                    className="text-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="text-lg"
                   />
                   <p className="text-xs text-muted-foreground">
                     Total de saques/retiradas durante o dia
@@ -1071,18 +1065,18 @@ export default function CashClosurePage() {
                   </div>
                   <div className="flex justify-between text-red-600 dark:text-red-400">
                     <span>- Saques:</span>
-                    <span className="font-medium">{formatCurrency(withdrawals)}</span>
+                    <span className="font-medium">{formatCurrency(withdrawals ?? 0)}</span>
                   </div>
                   <div className="border-t pt-2 flex justify-between font-bold">
                     <span>Saldo Esperado:</span>
                     <span>{formatCurrency(expectedClosing)}</span>
                   </div>
-                  {closingAmount > 0 && (
-                    <>
-                      <div className="flex justify-between">
-                        <span>Valor Contado:</span>
-                        <span className="font-medium">{formatCurrency(closingAmount)}</span>
-                      </div>
+{(closingAmount ?? 0) > 0 && (
+                      <>
+                        <div className="flex justify-between">
+                          <span>Valor Contado:</span>
+                          <span className="font-medium">{formatCurrency(closingAmount ?? 0)}</span>
+                        </div>
                       <div className={`border-t pt-2 flex justify-between font-bold ${
                         Math.abs(difference) < 0.01 ? 'text-green-600' :
                         difference > 0 ? 'text-blue-600' : 'text-red-600'
@@ -1107,7 +1101,7 @@ export default function CashClosurePage() {
 
               <Button
                 onClick={handleCloseCashClosure}
-                disabled={loading || closingAmount === 0}
+                disabled={loading || (closingAmount ?? 0) === 0}
                 className="w-full"
                 size="lg"
                 variant="destructive"

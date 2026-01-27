@@ -1,5 +1,94 @@
 import * as z from 'zod';
 
+/**
+ * Valida CPF com dígitos verificadores
+ */
+export function isValidCPF(cpf: string): boolean {
+  if (!cpf) return false;
+  
+  const numbers = cpf.replace(/\D/g, '');
+  
+  // Verifica se tem 11 dígitos
+  if (numbers.length !== 11) return false;
+  
+  // Verifica se todos os dígitos são iguais (inválidos: 111.111.111-11, 222.222.222-22, etc)
+  if (/^(\d)\1+$/.test(numbers)) return false;
+  
+  // Validação do primeiro dígito verificador
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(numbers.charAt(i)) * (10 - i);
+  }
+  let digit = 11 - (sum % 11);
+  if (digit >= 10) digit = 0;
+  if (digit !== parseInt(numbers.charAt(9))) return false;
+  
+  // Validação do segundo dígito verificador
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += parseInt(numbers.charAt(i)) * (11 - i);
+  }
+  digit = 11 - (sum % 11);
+  if (digit >= 10) digit = 0;
+  if (digit !== parseInt(numbers.charAt(10))) return false;
+  
+  return true;
+}
+
+/**
+ * Valida CNPJ com dígitos verificadores
+ */
+export function isValidCNPJ(cnpj: string): boolean {
+  if (!cnpj) return false;
+  
+  const numbers = cnpj.replace(/\D/g, '');
+  
+  // Verifica se tem 14 dígitos
+  if (numbers.length !== 14) return false;
+  
+  // Verifica se todos os dígitos são iguais (inválidos: 11.111.111/1111-11, etc)
+  if (/^(\d)\1+$/.test(numbers)) return false;
+  
+  // Validação do primeiro dígito verificador
+  let sum = 0;
+  let pos = 5;
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(numbers.charAt(i)) * pos;
+    pos = pos === 2 ? 9 : pos - 1;
+  }
+  let digit = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (digit !== parseInt(numbers.charAt(12))) return false;
+  
+  // Validação do segundo dígito verificador
+  sum = 0;
+  pos = 6;
+  for (let i = 0; i < 13; i++) {
+    sum += parseInt(numbers.charAt(i)) * pos;
+    pos = pos === 2 ? 9 : pos - 1;
+  }
+  digit = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (digit !== parseInt(numbers.charAt(13))) return false;
+  
+  return true;
+}
+
+/**
+ * Valida CPF ou CNPJ
+ */
+export function isValidCPFOrCNPJ(document: string): boolean {
+  if (!document) return false;
+  
+  const numbers = document.replace(/\D/g, '');
+  
+  if (numbers.length === 11) {
+    return isValidCPF(document);
+  } else if (numbers.length === 14) {
+    return isValidCNPJ(document);
+  }
+  
+  return false;
+}
+
 export const loginSchema = z.object({
   login: z.string().min(1, 'Login não pode ser vazio'),
   password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),

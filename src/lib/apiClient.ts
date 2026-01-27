@@ -172,11 +172,7 @@ instance.interceptors.response.use(
 
 export const api = instance;
 
-// API methods
-export async function authLogin(login: string, password: string): Promise<{ access_token: string; user: any }> {
-  const res = await instance.post('/auth/login', { login, password });
-  return res.data;
-}
+// API methods - authLogin movido para depois das interfaces
 
 export async function authLogout(): Promise<void> {
   try {
@@ -189,5 +185,62 @@ export async function authLogout(): Promise<void> {
 export async function authRefresh(): Promise<{ access_token: string; user: any }> {
   const data = await requestRefresh();
   return data;
+}
+
+export interface DeviceInfo {
+  deviceId?: string;
+  deviceName?: string;
+}
+
+export interface ActiveSession {
+  id: string;
+  deviceId?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  deviceName: string;
+  createdAt: string;
+  expiresAt: string;
+  isCurrent: boolean;
+}
+
+export async function authLogin(
+  login: string, 
+  password: string, 
+  deviceInfo?: DeviceInfo
+): Promise<{ access_token: string; user: any }> {
+  const res = await instance.post('/auth/login', { 
+    login, 
+    password,
+    deviceId: deviceInfo?.deviceId,
+    deviceName: deviceInfo?.deviceName,
+  });
+  return res.data;
+}
+
+/**
+ * GET /auth/sessions
+ * Listar sessões ativas do usuário
+ */
+export async function getActiveSessions(): Promise<ActiveSession[]> {
+  const res = await instance.get('/auth/sessions');
+  return res.data;
+}
+
+/**
+ * POST /auth/sessions/:sessionId/revoke
+ * Invalidar uma sessão específica
+ */
+export async function revokeSession(sessionId: string): Promise<{ message: string }> {
+  const res = await instance.post(`/auth/sessions/${sessionId}/revoke`);
+  return res.data;
+}
+
+/**
+ * POST /auth/sessions/revoke-others
+ * Invalidar todas as outras sessões (exceto a atual)
+ */
+export async function revokeOtherSessions(): Promise<{ message: string; revokedCount: number }> {
+  const res = await instance.post('/auth/sessions/revoke-others');
+  return res.data;
 }
 

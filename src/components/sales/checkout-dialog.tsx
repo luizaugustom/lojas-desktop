@@ -21,11 +21,16 @@ import { saleSchema } from '../../lib/validations';
 import { formatCurrency, calculateChange, calculateMultiplePaymentChange, isValidId, validateUUID } from '../../lib/utils-clean';
 import { useCartStore } from '../../store/cart-store';
 import { InstallmentSaleModal } from './installment-sale-modal';
+import { CreditCardInstallmentModal } from './credit-card-installment-modal';
 import { PrintConfirmationDialog } from './print-confirmation-dialog';
 import { CustomerCopyConfirmationDialog } from './customer-copy-confirmation-dialog';
+import { BilletPrintConfirmationDialog } from './billet-print-confirmation-dialog';
+import { StoreCreditVoucherConfirmationDialog } from './store-credit-voucher-confirmation-dialog';
+import { InstallmentBilletViewer } from '../installments/installment-billet-viewer';
 import { useAuth } from '../../contexts/AuthContext';
 import { printContent as printContentService } from '../../lib/print-service';
 import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
+import { CardBrandSelect } from '../ui/card-brand-select';
 import type { CreateSaleDto, PaymentMethod, PaymentMethodDetail, InstallmentData, Seller } from '../../types';
 
 interface CheckoutDialogProps {
@@ -47,6 +52,8 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
   const [paymentInputValues, setPaymentInputValues] = useState<Record<number, string>>({});
   const [showInstallmentModal, setShowInstallmentModal] = useState(false);
   const [installmentData, setInstallmentData] = useState<InstallmentData | null>(null);
+  const [showCreditCardInstallmentModal, setShowCreditCardInstallmentModal] = useState(false);
+  const [creditCardInstallmentPaymentIndex, setCreditCardInstallmentPaymentIndex] = useState<number | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [selectedCustomerName, setSelectedCustomerName] = useState<string>('');
   const [selectedCustomerCpfCnpj, setSelectedCustomerCpfCnpj] = useState<string>('');
@@ -59,26 +66,62 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
   const [printing, setPrinting] = useState(false);
   const [hasValidFiscalConfig, setHasValidFiscalConfig] = useState<boolean | null>(null);
   const [loadingFiscalConfig, setLoadingFiscalConfig] = useState(false);
+  const [companyConfig, setCompanyConfig] = useState<{ maxInstallments?: number }>({ maxInstallments: 12 });
   // Cache do conteúdo de impressão para reimpressão
   const [cachedPrintContent, setCachedPrintContent] = useState<{ content: string | { storeCopy: string; customerCopy: string; isInstallmentSale: boolean }; type: string } | null>(null);
   const [currentPrintType, setCurrentPrintType] = useState<string | null>(null);
   const [customerCopyContent, setCustomerCopyContent] = useState<string | null>(null);
+  // Boletos PDF
+  const [billetsPdf, setBilletsPdf] = useState<string | null>(null);
+  const [showBillets, setShowBillets] = useState(false);
+  const [showBilletPrintConfirmation, setShowBilletPrintConfirmation] = useState(false);
+  const [pendingPrintContent, setPendingPrintContent] = useState<{
+    content: any;
+    type: string;
+  } | null>(null);
   // Store credit
   const [storeCreditBalance, setStoreCreditBalance] = useState<number>(0);
   const [storeCreditCustomerId, setStoreCreditCustomerId] = useState<string | null>(null);
   const [loadingStoreCredit, setLoadingStoreCredit] = useState(false);
   const [useStoreCredit, setUseStoreCredit] = useState(false);
   const [storeCreditAmount, setStoreCreditAmount] = useState<number>(0);
+  const [showStoreCreditVoucherConfirmation, setShowStoreCreditVoucherConfirmation] = useState(false);
+  const [pendingCreditVoucherData, setPendingCreditVoucherData] = useState<{
+    creditUsed: number;
+    remainingBalance: number;
+    customerId: string;
+  } | null>(null);
   const { items, discount, getTotal, getSubtotal, clearCart } = useCartStore();
   const { user, isAuthenticated, api } = useAuth();
 
-  const total = getTotal();
+  const baseTotal = getTotal();
+  // Calcular crédito disponível para aplicar como desconto
+  const creditToApply = useStoreCredit && storeCreditCustomerId && storeCreditBalance > 0
+    ? Math.min(storeCreditBalance, baseTotal) // Não pode passar o valor total
+    : 0;
+  const total = Math.round((baseTotal - creditToApply + Number.EPSILON) * 100) / 100; // Total com desconto de crédito
   const isCompany = user?.role === 'empresa';
+
+  // Carregar configuração da empresa
+  const loadCompanyConfig = async () => {
+    if (!isCompany) return;
+    
+    try {
+      const response = await companyApi.myCompany();
+      setCompanyConfig({
+        maxInstallments: response.data?.maxInstallments ?? 12,
+      });
+    } catch (error) {
+      console.error('Erro ao carregar configuração da empresa:', error);
+      setCompanyConfig({ maxInstallments: 12 });
+    }
+  };
 
   useEffect(() => {
     if (open && isCompany) {
       loadSellers();
       checkFiscalConfig();
+      loadCompanyConfig();
     }
   }, [open, isCompany]);
 
@@ -103,6 +146,8 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       setPaymentInputValues({});
       setShowInstallmentModal(false);
       setInstallmentData(null);
+      setShowCreditCardInstallmentModal(false);
+      setCreditCardInstallmentPaymentIndex(null);
       setSelectedCustomerId('');
       setSelectedSellerId('');
       setShowPrintConfirmation(false);
@@ -116,6 +161,11 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       setStoreCreditCustomerId(null);
       setUseStoreCredit(false);
       setStoreCreditAmount(0);
+      // Resetar boletos
+      setBilletsPdf(null);
+      setShowBillets(false);
+      setShowBilletPrintConfirmation(false);
+      setPendingPrintContent(null);
     }
   }, [open]);
 
@@ -507,6 +557,116 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
     handlePrintComplete();
   };
 
+  const handleBilletPrintConfirm = () => {
+    setShowBilletPrintConfirmation(false);
+    setShowBillets(true);
+  };
+
+  const handleBilletPrintCancel = () => {
+    setShowBilletPrintConfirmation(false);
+    // Se houver printContent pendente, mostrar modal de confirmação de NFCe/cupom
+    if (pendingPrintContent) {
+      const contentToCache = typeof pendingPrintContent.content === 'object' 
+        ? JSON.stringify(pendingPrintContent.content) 
+        : pendingPrintContent.content;
+      cachePrintPayload(contentToCache, pendingPrintContent.type);
+      setCachedPrintContent(pendingPrintContent);
+      setCurrentPrintType(pendingPrintContent.type);
+      setShowPrintConfirmation(true);
+      setPendingPrintContent(null);
+    } else {
+      handlePrintComplete();
+    }
+  };
+
+  const handleBilletsClose = () => {
+    setShowBillets(false);
+    // Se houver printContent pendente, mostrar modal de confirmação de NFCe/cupom
+    if (pendingPrintContent) {
+      const contentToCache = typeof pendingPrintContent.content === 'object' 
+        ? JSON.stringify(pendingPrintContent.content) 
+        : pendingPrintContent.content;
+      cachePrintPayload(contentToCache, pendingPrintContent.type);
+      setCachedPrintContent(pendingPrintContent);
+      setCurrentPrintType(pendingPrintContent.type);
+      setShowPrintConfirmation(true);
+      setPendingPrintContent(null);
+    } else {
+      handlePrintComplete();
+    }
+  };
+
+  const handleStoreCreditVoucherConfirm = async () => {
+    if (!pendingCreditVoucherData) return;
+    
+    setPrinting(true);
+    try {
+      const voucherResponse = await storeCreditApi.printRemainingBalanceVoucher({
+        customerId: pendingCreditVoucherData.customerId,
+        amountUsed: pendingCreditVoucherData.creditUsed,
+      });
+      
+      const voucherData = voucherResponse.data;
+      
+      // Usar sistema de impressão padrão (printContentService)
+      if (voucherData.content && typeof window !== 'undefined' && window.electronAPI?.printers) {
+        const printResult = await printContentService(voucherData.content);
+        
+        if (printResult.success) {
+          toast.success('Comprovante de saldo restante impresso com sucesso!');
+        } else {
+          throw new Error(printResult.error || 'Erro ao imprimir');
+        }
+      } else {
+        toast.success('Comprovante de saldo restante enviado para impressão!');
+      }
+    } catch (voucherError: any) {
+      console.error('[Checkout] Erro ao imprimir comprovante de saldo restante:', voucherError);
+      toast.error('Erro ao imprimir comprovante. Você pode imprimi-lo depois.');
+    } finally {
+      setPrinting(false);
+      setShowStoreCreditVoucherConfirmation(false);
+      setPendingCreditVoucherData(null);
+      
+      // Após imprimir comprovante de crédito, verificar se há conteúdo de impressão pendente
+      if (billetsPdf) {
+        setShowBilletPrintConfirmation(true);
+      } else if (pendingPrintContent) {
+        const contentToCache = typeof pendingPrintContent.content === 'object' 
+          ? JSON.stringify(pendingPrintContent.content) 
+          : pendingPrintContent.content;
+        cachePrintPayload(contentToCache, pendingPrintContent.type);
+        setCachedPrintContent(pendingPrintContent);
+        setCurrentPrintType(pendingPrintContent.type);
+        setShowPrintConfirmation(true);
+        setPendingPrintContent(null);
+      } else {
+        handlePrintComplete();
+      }
+    }
+  };
+
+  const handleStoreCreditVoucherCancel = () => {
+    setShowStoreCreditVoucherConfirmation(false);
+    setPendingCreditVoucherData(null);
+    
+    // Após fechar modal de crédito, verificar se há conteúdo de impressão pendente
+    if (billetsPdf) {
+      setShowBilletPrintConfirmation(true);
+    } else if (pendingPrintContent) {
+      const contentToCache = typeof pendingPrintContent.content === 'object' 
+        ? JSON.stringify(pendingPrintContent.content) 
+        : pendingPrintContent.content;
+      cachePrintPayload(contentToCache, pendingPrintContent.type);
+      setCachedPrintContent(pendingPrintContent);
+      setCurrentPrintType(pendingPrintContent.type);
+      setShowPrintConfirmation(true);
+      setPendingPrintContent(null);
+    } else {
+      handlePrintComplete();
+    }
+  };
+
   const handlePrintComplete = () => {
     clearCart();
     reset();
@@ -515,10 +675,14 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
     setSelectedCustomerId('');
     setShowPrintConfirmation(false);
     setShowCustomerCopyConfirmation(false);
+    setShowBilletPrintConfirmation(false);
+    setShowStoreCreditVoucherConfirmation(false);
     setCreatedSaleId(null);
     setCachedPrintContent(null);
     setCurrentPrintType(null);
     setCustomerCopyContent(null);
+    setPendingPrintContent(null);
+    setPendingCreditVoucherData(null);
     onClose();
   };
 
@@ -555,43 +719,58 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       }
     }
 
-    const validPaymentDetails = paymentDetails.filter(p => Number(p.amount) >= 0.01);
+    // O crédito já foi aplicado como desconto no total (calculado acima)
+    // Agora só validar métodos de pagamento contra o total já com desconto
+    const totalPaid = paymentDetails.reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const remainingAmount = total - totalPaid;
     
-    if (validPaymentDetails.length === 0) {
-      toast.error('Adicione pelo menos um método de pagamento com valor maior que zero!');
-      return;
-    }
-    
-    if (validPaymentDetails.length !== paymentDetails.length) {
-      setPaymentDetails(validPaymentDetails);
-      const newInputValues: Record<number, string> = {};
-      validPaymentDetails.forEach((_, idx) => {
-        const originalIdx = paymentDetails.findIndex(p => 
-          p.method === validPaymentDetails[idx].method && 
-          Math.abs(p.amount - validPaymentDetails[idx].amount) < 0.01
-        );
-        if (originalIdx >= 0 && paymentInputValues[originalIdx] !== undefined) {
-          newInputValues[idx] = paymentInputValues[originalIdx];
-        }
-      });
-      setPaymentInputValues(newInputValues);
-      toast('Métodos de pagamento com valor zero foram removidos automaticamente.', {
-        icon: 'ℹ️',
-        duration: 3000,
-      });
-      return;
+    // O crédito a usar é o que foi aplicado como desconto
+    const creditToUse = creditToApply;
+
+    // Se crédito cobre tudo, não exigir métodos de pagamento
+    if (creditToUse >= baseTotal - 0.01) {
+      // Permitir venda apenas com crédito - não precisa validar métodos de pagamento
+    } else {
+      // Filtrar métodos com valor zero antes de validar
+      const validPaymentDetails = paymentDetails.filter(p => Number(p.amount) >= 0.01);
+      
+      if (validPaymentDetails.length === 0) {
+        toast.error('Adicione pelo menos um método de pagamento ou use crédito em loja suficiente para cobrir a venda!');
+        return;
+      }
+      
+      if (validPaymentDetails.length !== paymentDetails.length) {
+        setPaymentDetails(validPaymentDetails);
+        const newInputValues: Record<number, string> = {};
+        validPaymentDetails.forEach((_, idx) => {
+          const originalIdx = paymentDetails.findIndex(p => 
+            p.method === validPaymentDetails[idx].method && 
+            Math.abs(p.amount - validPaymentDetails[idx].amount) < 0.01
+          );
+          if (originalIdx >= 0 && paymentInputValues[originalIdx] !== undefined) {
+            newInputValues[idx] = paymentInputValues[originalIdx];
+          }
+        });
+        setPaymentInputValues(newInputValues);
+        toast('Métodos de pagamento com valor zero foram removidos automaticamente.', {
+          icon: 'ℹ️',
+          duration: 3000,
+        });
+        return;
+      }
+
+      // Validar se o valor pago é suficiente (o crédito já foi aplicado como desconto no total)
+      if (remainingAmount > 0.01) {
+        const errorMsg = creditToUse > 0.01
+          ? `Valor total dos pagamentos (${formatCurrency(totalPaid)}) deve ser pelo menos igual ao total da venda (${formatCurrency(total)} = ${formatCurrency(baseTotal)} - crédito ${formatCurrency(creditToUse)})!`
+          : `Valor total dos pagamentos (${formatCurrency(totalPaid)}) deve ser pelo menos igual ao total da venda (${formatCurrency(total)})!`;
+        toast.error(errorMsg);
+        return;
+      }
     }
 
     if (isCompany && !selectedSellerId) {
       toast.error('Selecione um vendedor para realizar a venda!');
-      return;
-    }
-
-    const totalPaid = validPaymentDetails.reduce((sum, payment) => sum + Number(payment.amount), 0);
-    const remainingAmount = total - totalPaid;
-
-    if (remainingAmount > 0.01) {
-      toast.error(`Valor total dos pagamentos (${formatCurrency(totalPaid)}) deve ser pelo menos igual ao total da venda (${formatCurrency(total)})!`);
       return;
     }
 
@@ -611,7 +790,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
           };
         }),
         discount: discount > 0 ? Math.round((discount + Number.EPSILON) * 100) / 100 : undefined,
-        paymentMethods: validPaymentDetails.map((payment) => {
+        paymentMethods: (creditToUse >= baseTotal - 0.01 ? [] : paymentDetails.filter(p => Number(p.amount) >= 0.01)).map((payment) => {
           const amount = Math.max(Number(payment.amount) || 0, 0.01);
           
           const paymentMethod: any = {
@@ -635,8 +814,12 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
             // Verificar quais campos estão faltando para dar mensagem mais específica
             const missingFields: string[] = [];
             if (!payment.acquirerCnpj || payment.acquirerCnpj.replace(/\D/g, '').length !== 14) missingFields.push('CNPJ da Credenciadora');
-            if (!payment.cardBrand) missingFields.push('Bandeira do Cartão');
             if (!payment.cardOperationType) missingFields.push('Tipo de Operação');
+            
+            // Validar installmentCount para crédito parcelado
+            if (payment.cardOperationType === '02' && (!payment.installmentCount || payment.installmentCount < 2 || payment.installmentCount > 24)) {
+              missingFields.push('Número de Parcelas (selecione o tipo de operação novamente)');
+            }
             
             if (missingFields.length > 0) {
               toast.error(
@@ -663,8 +846,13 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
             
             paymentMethod.cardIntegrationType = cardIntegrationType;
             paymentMethod.acquirerCnpj = cnpjCleaned;
-            paymentMethod.cardBrand = payment.cardBrand;
+            // Usar bandeira informada ou padrão '99' (Outras) se não informada
+            paymentMethod.cardBrand = payment.cardBrand || '99';
             paymentMethod.cardOperationType = payment.cardOperationType;
+            // Adicionar installmentCount se for crédito parcelado
+            if (payment.cardOperationType === '02' && payment.installmentCount) {
+              paymentMethod.installmentCount = payment.installmentCount;
+            }
           }
           
           return paymentMethod;
@@ -685,34 +873,30 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       
       // Usar crédito se disponível e solicitado
       let creditUsed = 0;
-      if (useStoreCredit && storeCreditCustomerId && storeCreditBalance > 0) {
-        const currentTotalPaid = validPaymentDetails.reduce((sum, payment) => sum + Number(payment.amount), 0);
-        const remainingAfterPayments = total - currentTotalPaid;
-        const creditToUse = Math.min(storeCreditBalance, Math.max(0, remainingAfterPayments));
-        
-        if (creditToUse > 0.01) {
-          try {
-            await storeCreditApi.use({
-              customerId: storeCreditCustomerId,
-              amount: creditToUse,
-              description: `Crédito utilizado na venda`,
-            });
-            
-            creditUsed = creditToUse;
-            
-            // Adicionar crédito como método de pagamento
-            saleData.paymentMethods.push({
-              method: 'store_credit',
-              amount: Math.round((creditUsed + Number.EPSILON) * 100) / 100,
-              additionalInfo: '',
-            });
-            
-            toast.success(`Crédito de ${formatCurrency(creditUsed)} aplicado na venda`);
-          } catch (error: any) {
-            console.error('[Checkout] Erro ao usar crédito:', error);
-            toast.error(error?.response?.data?.message || 'Erro ao usar crédito. A venda continuará sem crédito.');
-            // Continuar com a venda mesmo se houver erro ao usar crédito
-          }
+      let remainingCreditBalance = 0;
+      if (creditToUse > 0.01) {
+        try {
+          await storeCreditApi.use({
+            customerId: storeCreditCustomerId!,
+            amount: creditToUse,
+            description: `Crédito utilizado na venda`,
+          });
+          
+          creditUsed = creditToUse;
+          remainingCreditBalance = storeCreditBalance - creditUsed;
+          
+          // Adicionar crédito como método de pagamento
+          saleData.paymentMethods.push({
+            method: 'store_credit',
+            amount: Math.round((creditUsed + Number.EPSILON) * 100) / 100,
+            additionalInfo: '',
+          });
+          
+          toast.success(`Crédito de ${formatCurrency(creditUsed)} aplicado como desconto na venda`);
+        } catch (error: any) {
+          console.error('[Checkout] Erro ao usar crédito:', error);
+          toast.error(error?.response?.data?.message || 'Erro ao usar crédito. A venda continuará sem crédito.');
+          // Continuar com a venda mesmo se houver erro ao usar crédito
         }
       }
       
@@ -731,6 +915,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       const saleId = saleData_resp?.id;
       const printContent = saleData_resp?.printContent;
       const printType = saleData_resp?.printType || 'nfce';
+      const billetsPdfBase64 = saleData_resp?.billetsPdf;
       
       if (!saleId) {
         console.error('[Checkout] Venda criada mas ID não foi retornado:', response);
@@ -741,16 +926,65 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       console.log('[Checkout] Venda criada com sucesso:', saleId);
       toast.success('Venda realizada com sucesso!');
       
+      setCreatedSaleId(saleId);
+
+      // Se houver saldo restante de crédito, mostrar modal de confirmação PRIMEIRO
+      if (creditUsed > 0 && remainingCreditBalance > 0.01 && storeCreditCustomerId) {
+        // Armazenar dados de impressão para depois do modal de crédito
+        if (billetsPdfBase64) {
+          setBilletsPdf(billetsPdfBase64);
+          if (printContent) {
+            setPendingPrintContent({
+              content: printContent,
+              type: printType,
+            });
+          }
+        } else if (printContent) {
+          setPendingPrintContent({
+            content: printContent,
+            type: printType,
+          });
+        }
+        
+        // Mostrar modal de crédito primeiro
+        setPendingCreditVoucherData({
+          creditUsed,
+          remainingBalance: remainingCreditBalance,
+          customerId: storeCreditCustomerId,
+        });
+        setShowStoreCreditVoucherConfirmation(true);
+        return; // Retornar para não mostrar outros modais ainda
+      }
+
+      // Se não houver crédito restante, seguir fluxo normal
       // Armazenar conteúdo de impressão em cache para reimpressão posterior
       if (printContent) {
         // Se for objeto, converter para JSON string para armazenar
         const contentToCache = typeof printContent === 'object' ? JSON.stringify(printContent) : printContent;
         cachePrintPayload(contentToCache, printType);
       }
-      
-      // Mostrar modal de confirmação se houver conteúdo
-      if (printContent) {
-        setCreatedSaleId(saleId);
+
+      // Se houver boletos PDF, mostrar modal de confirmação primeiro
+      if (billetsPdfBase64) {
+        setBilletsPdf(billetsPdfBase64);
+        
+        // Se também houver printContent, armazenar para depois dos boletos
+        if (printContent) {
+          setPendingPrintContent({
+            content: printContent,
+            type: printType,
+          });
+        }
+        
+        // Mostrar modal de confirmação de boletos
+        setShowBilletPrintConfirmation(true);
+      } else if (printContent) {
+        // Se não houver boletos mas houver printContent, mostrar modal de confirmação de NFCe/cupom
+        setCachedPrintContent({
+          content: printContent,
+          type: printType,
+        });
+        setCurrentPrintType(printType);
         setShowPrintConfirmation(true);
       } else {
         // Sem conteúdo de impressão - apenas finalizar
@@ -837,7 +1071,7 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
                   </div>
                   {useStoreCredit && (
                     <p className="text-xs text-muted-foreground">
-                      O crédito será aplicado automaticamente no valor restante após os outros pagamentos.
+                      O crédito será aplicado como desconto no total da venda (máximo até o valor total).
                     </p>
                   )}
                 </div>
@@ -917,14 +1151,20 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
                             // Definir valores padrão para os campos do grupo Card
                             // Sistema não tem máquinas integradas, sempre usar "2 - Pagamento Não Integrado"
                             updatePaymentMethod(index, 'cardIntegrationType', '2');
-                            const defaultCardOperationType = value === 'credit_card' ? '01' : '03';
-                            updatePaymentMethod(index, 'cardOperationType', defaultCardOperationType);
+                          const defaultCardOperationType = value === 'credit_card' ? '01' : '03';
+                          updatePaymentMethod(index, 'cardOperationType', defaultCardOperationType);
+                          updatePaymentMethod(index, 'installmentCount', undefined);
+                          // Definir bandeira padrão '99' (Outras) se não estiver definida
+                          if (!paymentDetails[index].cardBrand) {
+                            updatePaymentMethod(index, 'cardBrand', '99');
+                          }
                           } else {
                             // Limpar campos do grupo Card quando método não for cartão
                             updatePaymentMethod(index, 'cardIntegrationType', undefined);
                             updatePaymentMethod(index, 'acquirerCnpj', undefined);
                             updatePaymentMethod(index, 'cardBrand', undefined);
                             updatePaymentMethod(index, 'cardOperationType', undefined);
+                            updatePaymentMethod(index, 'installmentCount', undefined);
                           }
                           
                           const currentAmount = paymentDetails[index].amount;
@@ -957,13 +1197,21 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o método" />
                       </SelectTrigger>
-                      <SelectContent>
-                        {paymentMethods.map((method) => (
-                          <SelectItem key={method.value} value={method.value}>
+                    <SelectContent>
+                      {paymentMethods.map((method) => {
+                        // Desabilitar "A prazo" se maxInstallments for 0
+                        const isDisabled = method.value === 'installment' && (companyConfig.maxInstallments ?? 12) === 0;
+                        return (
+                          <SelectItem 
+                            key={method.value} 
+                            value={method.value}
+                            disabled={isDisabled}
+                          >
                             {method.label}
                           </SelectItem>
-                        ))}
-                      </SelectContent>
+                        );
+                      })}
+                    </SelectContent>
                     </Select>
                   </div>
                   <div className="flex-1">
@@ -987,9 +1235,10 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
                         updatePaymentMethod(index, 'amount', numericValue);
                       }}
                       onBlur={() => {
+                        // Ao perder o foco, formatar o valor se houver; manter vazio se o usuário apagou
                         const currentValue = paymentInputValues[index] || '';
                         const numericValue = currentValue === '' || currentValue === ',' ? 0 : parseFloat(currentValue.replace(',', '.')) || 0;
-                        setPaymentInputValues({ ...paymentInputValues, [index]: numericValue > 0 ? numericValue.toString().replace('.', ',') : '' });
+                        setPaymentInputValues({ ...paymentInputValues, [index]: currentValue === '' || currentValue === ',' ? '' : (numericValue > 0 ? numericValue.toString().replace('.', ',') : '') });
                         updatePaymentMethod(index, 'amount', numericValue);
                       }}
                       disabled={loading}
@@ -1014,64 +1263,65 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
                     <div className="flex items-center gap-2 mb-2">
                       <AlertTriangle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                       <Label className="text-sm font-semibold text-blue-800 dark:text-blue-200">
-                        Dados do Cartão (NT 2025.001 - Obrigatório)
+                        Dados do Cartão (NT 2025.001)
                       </Label>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label htmlFor={`cardBrand-${index}`} className="text-xs">
-                          Bandeira *
-                        </Label>
-                        <Select
-                          value={payment.cardBrand || ''}
-                          onValueChange={(value) => updatePaymentMethod(index, 'cardBrand', value)}
-                          disabled={loading}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="01">01 - Visa</SelectItem>
-                            <SelectItem value="02">02 - Mastercard</SelectItem>
-                            <SelectItem value="03">03 - American Express</SelectItem>
-                            <SelectItem value="04">04 - Elo</SelectItem>
-                            <SelectItem value="05">05 - Hipercard</SelectItem>
-                            <SelectItem value="99">99 - Outras</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    <div className="space-y-3">
+                      <CardBrandSelect
+                        id={`cardBrand-${index}`}
+                        value={(payment.cardBrand as '01' | '02' | '03' | '04' | '05' | '99') || '99'}
+                        onChange={(value) => updatePaymentMethod(index, 'cardBrand', value)}
+                        disabled={loading}
+                      />
                       
-                      <div className="space-y-1">
-                        <Label htmlFor={`acquirerCnpj-${index}`} className="text-xs">
-                          CNPJ da Credenciadora *
-                        </Label>
-                        <AcquirerCnpjSelect
-                          id={`acquirerCnpj-${index}`}
-                          value={payment.acquirerCnpj || ''}
-                          onChange={(value) => updatePaymentMethod(index, 'acquirerCnpj', value)}
-                          disabled={loading}
-                        />
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <Label htmlFor={`cardOperationType-${index}`} className="text-xs">
-                          Tipo de Operação *
-                        </Label>
-                        <Select
-                          value={payment.cardOperationType || (payment.method === 'credit_card' ? '01' : '03')}
-                          onValueChange={(value) => updatePaymentMethod(index, 'cardOperationType', value)}
-                          disabled={loading}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="01">01 - Crédito à Vista</SelectItem>
-                            <SelectItem value="02">02 - Crédito Parcelado</SelectItem>
-                            <SelectItem value="03">03 - Débito</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor={`acquirerCnpj-${index}`} className="text-xs">
+                            CNPJ da Credenciadora *
+                          </Label>
+                          <AcquirerCnpjSelect
+                            id={`acquirerCnpj-${index}`}
+                            value={payment.acquirerCnpj || ''}
+                            onChange={(value) => updatePaymentMethod(index, 'acquirerCnpj', value)}
+                            disabled={loading}
+                          />
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <Label htmlFor={`cardOperationType-${index}`} className="text-xs">
+                            Tipo de Operação *
+                          </Label>
+                          <Select
+                            value={payment.cardOperationType || (payment.method === 'credit_card' ? '01' : '03')}
+                            onValueChange={(value) => {
+                              updatePaymentMethod(index, 'cardOperationType', value);
+                              // Se selecionou crédito parcelado, abrir modal
+                              if (value === '02') {
+                                setCreditCardInstallmentPaymentIndex(index);
+                                setShowCreditCardInstallmentModal(true);
+                              } else {
+                                // Limpar installmentCount se mudou de parcelado
+                                updatePaymentMethod(index, 'installmentCount', undefined);
+                              }
+                            }}
+                            disabled={loading}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="01">01 - Crédito à Vista</SelectItem>
+                              <SelectItem value="02">02 - Crédito Parcelado</SelectItem>
+                              <SelectItem value="03">03 - Débito</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {payment.cardOperationType === '02' && payment.installmentCount && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Parcelado em {payment.installmentCount}x de {formatCurrency(payment.amount / payment.installmentCount)}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1089,6 +1339,12 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
                 <div className="flex justify-between text-green-600 dark:text-green-400">
                   <span>Desconto:</span>
                   <span>-{formatCurrency(discount)}</span>
+                </div>
+              )}
+              {creditToApply > 0 && (
+                <div className="flex justify-between text-green-600 dark:text-green-400">
+                  <span>Crédito em Loja:</span>
+                  <span>-{formatCurrency(creditToApply)}</span>
                 </div>
               )}
               <div className="flex justify-between border-t pt-2">
@@ -1135,8 +1391,44 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
             onConfirm={handleInstallmentConfirm}
             totalAmount={getRemainingAmount()}
           />
+
+          {/* Modal de Parcelas para Crédito Parcelado */}
+          {creditCardInstallmentPaymentIndex !== null && (
+            <CreditCardInstallmentModal
+              open={showCreditCardInstallmentModal}
+              onClose={() => {
+                setShowCreditCardInstallmentModal(false);
+                setCreditCardInstallmentPaymentIndex(null);
+              }}
+              onConfirm={(installmentCount) => {
+                if (creditCardInstallmentPaymentIndex !== null) {
+                  updatePaymentMethod(creditCardInstallmentPaymentIndex, 'installmentCount', installmentCount);
+                }
+              }}
+              totalAmount={paymentDetails[creditCardInstallmentPaymentIndex]?.amount || 0}
+              acquirerCnpj={paymentDetails[creditCardInstallmentPaymentIndex]?.acquirerCnpj}
+            />
+          )}
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de Confirmação de Impressão de Boletos */}
+      <BilletPrintConfirmationDialog
+        open={showBilletPrintConfirmation}
+        onConfirm={handleBilletPrintConfirm}
+        onCancel={handleBilletPrintCancel}
+        loading={loading}
+      />
+
+      {/* Visualizador de Boletos */}
+      {createdSaleId && (
+        <InstallmentBilletViewer
+          open={showBillets}
+          onClose={handleBilletsClose}
+          saleId={createdSaleId}
+          billetsPdfBase64={billetsPdf || undefined}
+        />
+      )}
       
       <PrintConfirmationDialog
         open={showPrintConfirmation}
@@ -1151,6 +1443,18 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
         onCancel={handleCustomerCopyCancel}
         loading={printing}
       />
+
+      {/* Dialog de Confirmação de Comprovante de Crédito */}
+      {pendingCreditVoucherData && (
+        <StoreCreditVoucherConfirmationDialog
+          open={showStoreCreditVoucherConfirmation}
+          onConfirm={handleStoreCreditVoucherConfirm}
+          onCancel={handleStoreCreditVoucherCancel}
+          loading={printing}
+          creditUsed={pendingCreditVoucherData.creditUsed}
+          remainingBalance={pendingCreditVoucherData.remainingBalance}
+        />
+      )}
     </>
   );
 }

@@ -24,6 +24,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatCurrency } from '../../lib/utils';
 import { DollarSign, CreditCard, Banknote, Smartphone } from 'lucide-react';
 import { PaymentReceiptConfirmDialog } from './payment-receipt-confirm-dialog';
+import { InstallmentBilletViewer } from './installment-billet-viewer';
 import { printContent } from '../../lib/print-service';
 import { generatePaymentReceiptContent } from '../../lib/payment-receipt-content';
 
@@ -65,6 +66,8 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
   const [paymentData, setPaymentData] = useState<any>(null);
   const [printing, setPrinting] = useState(false);
   const [customerTotalAfterPayment, setCustomerTotalAfterPayment] = useState<number | null>(null);
+  const [newBilletPdf, setNewBilletPdf] = useState<string | null>(null);
+  const [showNewBillet, setShowNewBillet] = useState(false);
 
   const {
     register,
@@ -119,11 +122,20 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
         date: new Date().toISOString(),
         sellerName: user?.name,
       });
-      
-      toast.success(response.data.message || 'Pagamento registrado com sucesso!');
-      
-      // Mostra o diálogo de confirmação de impressão
-      setShowReceiptConfirm(true);
+
+      // Verificar se há novo boleto (pagamento parcial)
+      if (response.data?.newBilletPdf) {
+        setNewBilletPdf(response.data.newBilletPdf);
+        toast.success('Pagamento registrado! Novo boleto gerado para o valor restante.');
+        // Mostrar o boleto após um breve delay
+        setTimeout(() => {
+          setShowNewBillet(true);
+        }, 500);
+      } else {
+        toast.success(response.data.message || 'Pagamento registrado com sucesso!');
+        // Mostra o diálogo de confirmação de impressão apenas se não houver novo boleto
+        setShowReceiptConfirm(true);
+      }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Erro ao registrar pagamento');
@@ -239,7 +251,21 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
   const handleSkipReceipt = () => {
     setShowReceiptConfirm(false);
     reset();
+    setNewBilletPdf(null);
+    setShowNewBillet(false);
     onClose();
+  };
+
+  const handleNewBilletClose = () => {
+    setShowNewBillet(false);
+    setNewBilletPdf(null);
+    // Após fechar o boleto, mostrar confirmação de comprovante se necessário
+    if (paymentData) {
+      setShowReceiptConfirm(true);
+    } else {
+      reset();
+      onClose();
+    }
   };
 
   if (!installment) return null;
@@ -323,7 +349,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
                 max={remainingAmount}
                 placeholder="0,00"
                 style={{ paddingLeft: '2.75rem' }}
-                className="pr-3 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="pr-3"
                 {...register('amount', {
                   required: 'Valor é obrigatório',
                   min: { value: 0.01, message: 'Valor mínimo é R$ 0,01' },
@@ -417,6 +443,16 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
         onConfirm={handlePrintReceipt}
         onCancel={handleSkipReceipt}
       />
+
+      {/* Visualizador de novo boleto (pagamento parcial) */}
+      {newBilletPdf && installment && (
+        <InstallmentBilletViewer
+          open={showNewBillet}
+          onClose={handleNewBilletClose}
+          saleId={installment.saleId}
+          billetsPdfBase64={newBilletPdf}
+        />
+      )}
     </Dialog>
   );
 }

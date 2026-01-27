@@ -264,7 +264,7 @@ export function SellerDialog({ isOpen, onClose, onSuccess, seller }: SellerDialo
                     e.target.value = '';
                   }
                 }}
-                className={`text-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${errors.commissionRate ? 'border-destructive' : ''}`}
+                className={`text-foreground ${errors.commissionRate ? 'border-destructive' : ''}`}
               />
               {errors.commissionRate && (
                 <p className="text-sm text-destructive mt-1">{(errors.commissionRate as any)?.message}</p>

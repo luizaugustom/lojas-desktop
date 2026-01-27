@@ -60,6 +60,10 @@ export function InstallmentSaleModal({
   const [minSearchLength] = useState(3);
   const [lastSearchTerm, setLastSearchTerm] = useState('');
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [companyConfig, setCompanyConfig] = useState<{ installmentInterestRates?: Record<string, number>; maxInstallments?: number }>({
+    installmentInterestRates: {},
+    maxInstallments: 12,
+  });
 
   const {
     register,
@@ -72,6 +76,7 @@ export function InstallmentSaleModal({
 
   useEffect(() => {
     if (open && isAuthenticated && isInitialLoad) {
+      loadCompanyConfig();
       loadCustomers();
       const now = new Date();
       const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
@@ -79,6 +84,25 @@ export function InstallmentSaleModal({
       setFirstDueDate(utcDate);
     }
   }, [open, isAuthenticated, isInitialLoad]);
+
+  // Carregar configurações da empresa
+  const loadCompanyConfig = async () => {
+    try {
+      const response = await api.get('/company/my-company');
+      const rates = response.data?.installmentInterestRates || {};
+      setCompanyConfig({
+        installmentInterestRates: rates,
+        maxInstallments: response.data?.maxInstallments ?? 12,
+      });
+    } catch (error) {
+      console.error('Erro ao carregar configurações da empresa:', error);
+      // Usar valores padrão em caso de erro
+      setCompanyConfig({
+        installmentInterestRates: {},
+        maxInstallments: 12,
+      });
+    }
+  };
 
   const debouncedSearch = useCallback(
     debounce(async (term: string) => {
@@ -215,8 +239,31 @@ export function InstallmentSaleModal({
     }
   };
 
-  const calculateInstallmentValue = () => {
-    return totalAmount / installments;
+  const calculateInstallmentValue = (parcelaNumber: number = 1) => {
+    const interestRates = companyConfig?.installmentInterestRates || {};
+    const interestRate = interestRates[parcelaNumber.toString()] ?? 0;
+    const baseAmount = totalAmount / installments;
+    const installmentAmountRaw = baseAmount * (1 + interestRate / 100);
+    // Arredondar para 2 casas decimais
+    return Math.round(installmentAmountRaw * 100) / 100;
+  };
+
+  const calculateTotalWithInterest = () => {
+    const interestRates = companyConfig?.installmentInterestRates || {};
+    let total = 0;
+    for (let i = 1; i <= installments; i++) {
+      const interestRate = interestRates[i.toString()] ?? 0;
+      const baseAmount = totalAmount / installments;
+      const installmentAmountRaw = baseAmount * (1 + interestRate / 100);
+      // Arredondar cada parcela para 2 casas decimais
+      total += Math.round(installmentAmountRaw * 100) / 100;
+    }
+    // Arredondar o total final para 2 casas decimais
+    return Math.round(total * 100) / 100;
+  };
+
+  const calculateTotalInterest = () => {
+    return calculateTotalWithInterest() - totalAmount;
   };
 
   const onSubmit = (data: { description?: string }) => {
@@ -225,8 +272,14 @@ export function InstallmentSaleModal({
       return;
     }
 
-    if (installments < 1 || installments > 24) {
-      toast.error('Número de parcelas deve ser entre 1 e 24!');
+    // Validar limite de parcelas
+    const maxInstallments = companyConfig.maxInstallments ?? 12;
+    if (maxInstallments === 0) {
+      toast.error('Vendas a prazo estão desabilitadas para esta empresa (limite de parcelas = 0)');
+      return;
+    }
+    if (installments < 1 || installments > maxInstallments) {
+      toast.error(`Número de parcelas deve estar entre 1 e ${maxInstallments}`);
       return;
     }
 
@@ -237,7 +290,7 @@ export function InstallmentSaleModal({
 
     const installmentData: InstallmentData = {
       installments,
-      installmentValue: calculateInstallmentValue(),
+      installmentValue: calculateInstallmentValue(1), // Valor da primeira parcela (usado como referência)
       firstDueDate: firstDueDate!,
       description: data.description,
     };
@@ -415,7 +468,7 @@ export function InstallmentSaleModal({
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      {Array.from({ length: 24 }, (_, i) => i + 1).map((num) => (
+                      {Array.from({ length: Math.max(0, companyConfig?.maxInstallments ?? 12) }, (_, i) => i + 1).map((num) => (
                         <SelectItem key={num} value={num.toString()}>
                           {num}x
                         </SelectItem>
@@ -461,9 +514,26 @@ export function InstallmentSaleModal({
                     <p className="font-medium">{selectedCustomer.name}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Total:</span>
+                    <span className="text-muted-foreground">Valor Original:</span>
                     <p className="font-medium">{formatCurrency(totalAmount)}</p>
                   </div>
+                  {(() => {
+                    const interestRates = companyConfig?.installmentInterestRates || {};
+                    const hasAnyInterest = Object.values(interestRates).some(rate => rate > 0);
+                    const totalInterest = calculateTotalInterest();
+                    return hasAnyInterest && totalInterest > 0 ? (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground">Total de Juros:</span>
+                          <p className="font-medium text-green-600 dark:text-green-400">+{formatCurrency(totalInterest)}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Total com Juros:</span>
+                          <p className="font-medium text-primary">{formatCurrency(calculateTotalWithInterest())}</p>
+                        </div>
+                      </>
+                    ) : null;
+                  })()}
                   <div>
                     <span className="text-muted-foreground">Parcelas:</span>
                     <p className="font-medium">{installments}x de {formatCurrency(calculateInstallmentValue())}</p>

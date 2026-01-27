@@ -195,6 +195,9 @@ export default function SalesHistoryPage() {
     totalCostOfGoods: statsData?.totalCostOfGoods || 0,
   };
 
+  const totalInstallmentInterest = Number(statsData?.totalInstallmentInterest || 0);
+  const netProfit = (stats.totalRevenue || 0) - (stats.totalCostOfGoods || 0) - paidBillsAmount - totalLosses - totalInstallmentInterest;
+
   // Debug: log stats data
   if (statsData) {
     console.log('[Sales History] Stats from API:', statsData);
@@ -205,11 +208,10 @@ export default function SalesHistoryPage() {
       cogs: stats.totalCostOfGoods,
       bills: paidBillsAmount,
       losses: totalLosses,
-      netProfit: (stats.totalRevenue || 0) - (stats.totalCostOfGoods || 0) - paidBillsAmount - totalLosses,
+      installmentInterest: totalInstallmentInterest,
+      netProfit: (stats.totalRevenue || 0) - (stats.totalCostOfGoods || 0) - paidBillsAmount - totalLosses - totalInstallmentInterest,
     });
   }
-
-  const netProfit = (stats.totalRevenue || 0) - (stats.totalCostOfGoods || 0) - paidBillsAmount - totalLosses;
 
   const filteredSales = useMemo(() => {
     let list = sales as any[];
@@ -511,7 +513,7 @@ export default function SalesHistoryPage() {
               <p className={`text-2xl font-bold mt-2 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {formatCurrency(netProfit)}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Receita - COGS - Contas - Perdas</p>
+              <p className="text-xs text-muted-foreground mt-1">Receita - COGS - Contas - Perdas - Juros</p>
             </div>
             <div className={`h-12 w-12 rounded-full flex items-center justify-center ${netProfit >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
               <Wallet className={`h-6 w-6 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />

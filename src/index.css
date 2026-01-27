@@ -56,6 +56,18 @@ html {
   scrollbar-color: hsl(var(--scrollbar-color, 221.2 83.2% 53.3%)) transparent;
 }
 
+/* Inputs number: sem setas (spinners) */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

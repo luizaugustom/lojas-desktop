@@ -19,6 +19,7 @@ import DevicesPage from '../pages/DevicesPage';
 import SettingsPage from '../pages/SettingsPage';
 import BudgetsPage from '../pages/BudgetsPage';
 import SellerProfilePage from '../pages/SellerProfilePage';
+import CardRatesPage from '../pages/CardRatesPage';
 
 export default function AppRouter() {
   const { isAuthenticated, loading, user } = useAuth();
@@ -104,6 +105,8 @@ export default function AppRouter() {
         return <BudgetsPage />;
       case 'seller-profile':
         return <SellerProfilePage />;
+      case 'card-rates':
+        return <CardRatesPage />;
       default:
         return <DashboardPage />;
     }

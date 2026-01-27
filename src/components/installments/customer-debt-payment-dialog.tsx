@@ -26,10 +26,11 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { useAuth } from '../../hooks/useAuth';
 import { formatCurrency, formatDate } from '../../lib/utils';
-import { Loader2, Square, CheckSquare } from 'lucide-react';
+import { Loader2, Square, CheckSquare, Eye } from 'lucide-react';
 import { PaymentReceiptConfirmDialog } from './payment-receipt-confirm-dialog';
 import { printContent } from '../../lib/print-service';
 import { generateBulkPaymentReceiptContent } from '../../lib/payment-receipt-content';
+import { InstallmentProductsDialog } from './installment-products-dialog';
 
 interface CustomerDebtPaymentDialogProps {
   open: boolean;
@@ -54,6 +55,7 @@ interface CustomerDebtSummary {
     dueDate: string;
     installmentNumber: number;
     totalInstallments: number;
+    saleId?: string;
   }>;
 }
 
@@ -104,6 +106,7 @@ export function CustomerDebtPaymentDialog({
   const [showReceiptConfirm, setShowReceiptConfirm] = useState(false);
   const [paymentData, setPaymentData] = useState<any>(null);
   const [printing, setPrinting] = useState(false);
+  const [selectedInstallmentId, setSelectedInstallmentId] = useState<string | null>(null);
   const [company, setCompany] = useState<any>(null);
   const [remainingDebts, setRemainingDebts] = useState<Array<{
     id: string;
@@ -174,6 +177,7 @@ export function CustomerDebtPaymentDialog({
       setPaymentData(null);
       setRemainingDebts([]);
       setTotalRemainingDebt(null);
+      setSelectedInstallmentId(null);
     }
   }, [open]);
 
@@ -564,6 +568,7 @@ export function CustomerDebtPaymentDialog({
                     <TableHead>Vencimento</TableHead>
                     <TableHead>Restante</TableHead>
                     <TableHead>Valor a pagar</TableHead>
+                    <TableHead className="w-20">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -611,7 +616,7 @@ export function CustomerDebtPaymentDialog({
                             onChange={(event) => updateAmount(inst.id, event.target.value)}
                             disabled={!isSelected}
                             inputMode="decimal"
-                            className="appearance-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            className="appearance-none"
                             onFocus={(event) => {
                               if (event.target.value === '0') {
                                 updateAmount(inst.id, '');
@@ -642,6 +647,18 @@ export function CustomerDebtPaymentDialog({
                               }
                             }}
                           />
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedInstallmentId(inst.id)}
+                            className="h-8 w-8 p-0"
+                            title="Ver detalhes dos produtos"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -715,6 +732,15 @@ export function CustomerDebtPaymentDialog({
         onConfirm={handlePrintReceipt}
         onCancel={handleSkipReceipt}
       />
+
+      {/* Modal de detalhes dos produtos */}
+      {selectedInstallmentId && (
+        <InstallmentProductsDialog
+          open={!!selectedInstallmentId}
+          onClose={() => setSelectedInstallmentId(null)}
+          installmentId={selectedInstallmentId}
+        />
+      )}
     </Dialog>
   );
 }

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, onWheel, ...props }, ref) => {
     return (
       <input
         type={type}
@@ -14,6 +14,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         )}
         ref={ref}
         {...props}
+        onWheel={type === 'number' ? (e) => { e.preventDefault(); onWheel?.(e); } : onWheel}
       />
     );
   }
@@ -26,7 +27,7 @@ export interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputE
 }
 
 const InputWithIcon = React.forwardRef<HTMLInputElement, InputWithIconProps>(
-  ({ className, type, icon, iconPosition = 'left', ...props }, ref) => {
+  ({ className, type, icon, iconPosition = 'left', onWheel, ...props }, ref) => {
     return (
       <div className="relative">
         {icon && iconPosition === 'left' && (
@@ -43,6 +44,7 @@ const InputWithIcon = React.forwardRef<HTMLInputElement, InputWithIconProps>(
           )}
           ref={ref}
           {...props}
+          onWheel={type === 'number' ? (e) => { e.preventDefault(); onWheel?.(e); } : onWheel}
         />
         {icon && iconPosition === 'right' && (
           <div className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none">
