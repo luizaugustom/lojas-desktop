@@ -81,6 +81,23 @@ const isValidDecimalInput = (value: string) => {
   return /^\d*(?:[.,]\d*)?$/.test(value);
 };
 
+type DebtFilter = 'default' | 'overdue' | 'all';
+
+const filterInstallmentsByDueDate = (
+  installments: CustomerDebtSummary['installments'],
+  filter: DebtFilter,
+) => {
+  if (filter === 'all') return installments;
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  return installments.filter((inst) => {
+    const d = new Date(inst.dueDate);
+    if (filter === 'overdue') return d < now;
+    return d < now || (d >= startOfMonth && d <= endOfMonth);
+  });
+};
+
 export function CustomerDebtPaymentDialog({
   open,
   onClose,
@@ -117,6 +134,7 @@ export function CustomerDebtPaymentDialog({
     dueDate: string;
   }>>([]);
   const [totalRemainingDebt, setTotalRemainingDebt] = useState<number | null>(null);
+  const [debtFilter, setDebtFilter] = useState<DebtFilter>('default');
 
   const companyInfo = useMemo(() => {
     if (!company) return null;
@@ -178,6 +196,7 @@ export function CustomerDebtPaymentDialog({
       setRemainingDebts([]);
       setTotalRemainingDebt(null);
       setSelectedInstallmentId(null);
+      setDebtFilter('default');
     }
   }, [open]);
 
@@ -205,9 +224,13 @@ export function CustomerDebtPaymentDialog({
 
   const installments = data?.installments ?? [];
 
+  const filteredInstallments = useMemo(() => {
+    return filterInstallmentsByDueDate(installments, debtFilter);
+  }, [installments, debtFilter]);
+
   const selectedInstallments = useMemo(() => {
-    return installments.filter((inst) => selection[inst.id]?.selected);
-  }, [installments, selection]);
+    return filteredInstallments.filter((inst) => selection[inst.id]?.selected);
+  }, [filteredInstallments, selection]);
 
   const totalToPay = useMemo(() => {
     return selectedInstallments.reduce((sum, inst) => {
@@ -217,12 +240,16 @@ export function CustomerDebtPaymentDialog({
   }, [selectedInstallments, selection]);
 
   const totalRemaining = useMemo(() => {
-    return installments.reduce((sum, inst) => {
+    return filteredInstallments.reduce((sum, inst) => {
       return Math.round((sum + toNumber(inst.remainingAmount)) * 100) / 100;
     }, 0);
-  }, [installments]);
+  }, [filteredInstallments]);
 
-  const hasPendingInstallments = installments.some(
+  const hasAnyPendingInstallments = installments.some(
+    (inst) => toNumber(inst.remainingAmount) > 0,
+  );
+
+  const hasFilteredPendingInstallments = filteredInstallments.some(
     (inst) => toNumber(inst.remainingAmount) > 0,
   );
 
@@ -283,30 +310,39 @@ export function CustomerDebtPaymentDialog({
   };
 
   const selectAll = () => {
+    const filteredIds = new Set(
+      filteredInstallments
+        .filter((inst) => toNumber(inst.remainingAmount) > 0)
+        .map((inst) => inst.id),
+    );
     setSelection((prev) => {
       const updates: typeof prev = {};
       Object.entries(prev).forEach(([key, value]) => {
-        updates[key] = {
-          ...value,
-          selected: true,
-          amount: Math.round(value.remaining * 100) / 100,
-          inputValue: formatInputValue(value.remaining),
-        };
+        updates[key] = filteredIds.has(key)
+          ? {
+              ...value,
+              selected: true,
+              amount: Math.round(value.remaining * 100) / 100,
+              inputValue: formatInputValue(value.remaining),
+            }
+          : value;
       });
       return updates;
     });
   };
 
   const clearSelection = () => {
+    const filteredIds = new Set(
+      filteredInstallments
+        .filter((inst) => toNumber(inst.remainingAmount) > 0)
+        .map((inst) => inst.id),
+    );
     setSelection((prev) => {
       const updates: typeof prev = {};
       Object.entries(prev).forEach(([key, value]) => {
-        updates[key] = {
-          ...value,
-          selected: false,
-          amount: 0,
-          inputValue: '',
-        };
+        updates[key] = filteredIds.has(key)
+          ? { ...value, selected: false, amount: 0, inputValue: '' }
+          : value;
       });
       return updates;
     });
@@ -419,7 +455,7 @@ export function CustomerDebtPaymentDialog({
 
   const handlePayAll = () => {
     if (!customerId) return;
-    if (!hasPendingInstallments) {
+    if (!hasAnyPendingInstallments) {
       toast.error('Não há dívidas pendentes para este cliente.');
       return;
     }
@@ -532,12 +568,34 @@ export function CustomerDebtPaymentDialog({
           <div className="flex min-h-[200px] items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
-        ) : !hasPendingInstallments ? (
+        ) : !hasAnyPendingInstallments ? (
           <div className="py-10 text-center text-muted-foreground">
             Nenhuma dívida pendente foi encontrada para este cliente.
           </div>
+        ) : !hasFilteredPendingInstallments ? (
+          <div className="py-10 text-center text-muted-foreground">
+            Nenhuma dívida encontrada para este filtro. Tente &quot;Todas as dívidas&quot;.
+          </div>
         ) : (
           <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-2">
+                <Label>Filtrar dívidas</Label>
+                <Select
+                  value={debtFilter}
+                  onValueChange={(value) => setDebtFilter(value as DebtFilter)}
+                >
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Filtrar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Vencidas ou este mês</SelectItem>
+                    <SelectItem value="overdue">Somente atrasadas</SelectItem>
+                    <SelectItem value="all">Todas as dívidas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-lg border p-4">
                 <p className="text-sm text-muted-foreground">Total em aberto</p>
@@ -575,7 +633,7 @@ export function CustomerDebtPaymentDialog({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {installments.map((inst) => {
+                  {filteredInstallments.map((inst) => {
                     const remaining = selection[inst.id]?.remaining ?? toNumber(inst.remainingAmount);
                     const isSelected = selection[inst.id]?.selected ?? false;
                     const inputValue = selection[inst.id]?.inputValue ?? '';
@@ -722,7 +780,7 @@ export function CustomerDebtPaymentDialog({
           <Button
             type="button"
             onClick={handlePayAll}
-            disabled={bulkPaymentMutation.isPending || !hasPendingInstallments}
+            disabled={bulkPaymentMutation.isPending || !hasAnyPendingInstallments}
           >
             {bulkPaymentMutation.isPending ? 'Processando...' : 'Pagar todas as dívidas'}
           </Button>

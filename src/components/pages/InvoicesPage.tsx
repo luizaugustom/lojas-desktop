@@ -132,21 +132,22 @@ export default function InvoicesPage() {
     enabled: productSearchOpen,
   });
 
-  // Protege rota: apenas empresa deve ver
+  // Protege rota: empresa ou vendedor com nfeEmissionEnabled
+  const canAccessInvoices = user?.role === 'empresa' || (user?.role === 'vendedor' && user?.nfeEmissionEnabled === true);
   useEffect(() => {
-    if (user && user.role !== 'empresa') {
-      toast.error('Apenas empresas podem acessar esta página');
+    if (user && !canAccessInvoices) {
+      toast.error('Apenas empresas ou vendedores autorizados podem acessar esta página');
     }
-  }, [user]);
+  }, [user, canAccessInvoices]);
 
   // Verificar configuração fiscal quando componente carrega ou quando abre diálogo de emissão
   useEffect(() => {
-    if (user?.role === 'empresa' && emitOpen) {
+    if (canAccessInvoices && emitOpen) {
       const checkFiscalConfig = async () => {
         try {
           setCheckingFiscalConfig(true);
           const response = await api.get('/company/my-company/fiscal-config/valid');
-          setHasValidFiscalConfig(response.data === true);
+          setHasValidFiscalConfig(response.data?.hasValidConfig === true || response.data === true);
         } catch (error) {
           console.error('Erro ao verificar configuração fiscal:', error);
           setHasValidFiscalConfig(false);
@@ -156,7 +157,7 @@ export default function InvoicesPage() {
       };
       checkFiscalConfig();
     }
-  }, [user, emitOpen, api]);
+  }, [canAccessInvoices, emitOpen, api]);
 
   // Tenta normalizar possíveis formatos de resposta
   const raw = data as any;
@@ -483,7 +484,7 @@ export default function InvoicesPage() {
           <p className="text-muted-foreground">Visualize e baixe suas NF-e</p>
         </div>
         <div className="flex gap-2">
-          {user?.role === 'empresa' && (
+          {(user?.role === 'empresa' || (user?.role === 'vendedor' && user?.nfeEmissionEnabled)) && (
             <Button onClick={() => openEmitDialog('nfe')}>
               <PlusCircle className="mr-2 h-4 w-4" /> Emitir NF-e
             </Button>

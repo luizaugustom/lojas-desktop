@@ -28,7 +28,8 @@ export function applyProductFilters(products: Product[], filters: ProductFilters
 
     if (filters.lowStock) {
       const stockNum = Number(product.stockQuantity ?? 0);
-      const isLowStock = !Number.isNaN(stockNum) && stockNum <= 3;
+      const threshold = product.lowStockAlertThreshold ?? 3;
+      const isLowStock = !Number.isNaN(stockNum) && stockNum <= threshold;
       matches = matches && isLowStock;
     }
 

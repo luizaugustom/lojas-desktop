@@ -66,6 +66,7 @@ interface Product {
   barcode: string;
   price: number;
   stockQuantity?: number;
+  lowStockAlertThreshold?: number;
   expirationDate?: string;
   photos?: string[];
   companyId: string;
@@ -269,11 +270,12 @@ export default function DashboardPage() {
       return da - db;
     });
 
-  // Estoque baixo (stockQuantity <= 3 unidades)
+  // Estoque baixo (stockQuantity <= lowStockAlertThreshold do produto, default 3)
   const lowStockList: Product[] = (products || []).filter((p) => {
     const stock = Number(p.stockQuantity ?? 0);
     if (Number.isNaN(stock)) return false;
-    return stock <= 3;
+    const threshold = p.lowStockAlertThreshold ?? 3;
+    return stock <= threshold;
   });
   const lowStockCount = lowStockList.length;
   const lowStockPreview = lowStockList.slice(0, 5);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Barcode } from 'lucide-react';
+import { Search, Barcode, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Label } from '../ui/label';
@@ -14,10 +14,13 @@ import { Cart } from '../sales/cart';
 import { BarcodeScanner } from '../sales/barcode-scanner';
 import { CheckoutDialog } from '../sales/checkout-dialog';
 import { BudgetDialog } from '../sales/budget-dialog';
+import { KeyboardShortcutsHelpDialog } from '../sales/keyboard-shortcuts-help-dialog';
 import { handleNumberInputChange, isValidId } from '../../lib/utils-clean';
 import { useDeviceStore } from '../../store/device-store';
 import { parseScaleBarcode } from '../../lib/scale-barcode';
 import { checkPrinterStatus } from '../../lib/printer-check';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useRef } from 'react';
 
 interface Product {
   id: string;
@@ -35,8 +38,12 @@ export default function SalesPage() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [budgetOpen, setBudgetOpen] = useState(false);
-  const { addItem, items } = useCartStore();
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  const { addItem, items, clearCart } = useCartStore();
   const [lastScanned, setLastScanned] = useState(0);
+  const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(null);
+  const [keyboardFocusArea, setKeyboardFocusArea] = useState<'products' | 'cart'>('products');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const {
     barcodeBuffer,
@@ -198,6 +205,86 @@ export default function SalesPage() {
     toast.success('Orçamento criado com sucesso!');
   };
 
+  // Quando qualquer modal está aberto, atalhos da página não devem interferir (apenas o modal responde)
+  const anyModalOpen = checkoutOpen || budgetOpen || openingDialogOpen || helpDialogOpen || scannerOpen;
+
+  // Atalhos de teclado para página de vendas (desabilitados quando há modal aberto)
+  useKeyboardShortcuts({
+    shortcuts: [
+      {
+        key: 'F6',
+        handler: () => {
+          if (items.length > 0 && !checkoutOpen && !budgetOpen && !openingDialogOpen) {
+            handleCheckout();
+          }
+        },
+        context: ['sales'],
+      },
+      {
+        key: 'Enter',
+        ctrl: true,
+        handler: () => {
+          if (items.length > 0 && !checkoutOpen && !budgetOpen && !openingDialogOpen) {
+            handleCheckout();
+          }
+        },
+        context: ['sales'],
+      },
+      {
+        key: 'b',
+        ctrl: true,
+        handler: () => {
+          if (!checkoutOpen && !budgetOpen && !openingDialogOpen) {
+            searchInputRef.current?.focus();
+            searchInputRef.current?.select();
+          }
+        },
+        context: ['sales'],
+      },
+      {
+        key: 'l',
+        ctrl: true,
+        handler: () => {
+          if (items.length > 0 && !checkoutOpen && !budgetOpen && !openingDialogOpen) {
+            clearCart();
+            toast.success('Carrinho limpo');
+          }
+        },
+        context: ['sales'],
+      },
+      {
+        key: 'Escape',
+        handler: () => {
+          if (checkoutOpen) {
+            setCheckoutOpen(false);
+          } else if (budgetOpen) {
+            setBudgetOpen(false);
+          } else if (scannerOpen) {
+            setScannerOpen(false);
+          }
+        },
+        context: ['sales'],
+      },
+      {
+        key: 'ArrowLeft',
+        handler: () => {
+          setKeyboardFocusArea('products');
+        },
+        context: ['sales'],
+      },
+      {
+        key: 'ArrowRight',
+        handler: () => {
+          setKeyboardFocusArea('cart');
+        },
+        context: ['sales'],
+      },
+    ],
+    enabled: !anyModalOpen,
+    context: 'sales',
+    ignoreInputs: true,
+  });
+
   const submitOpening = async () => {
     const value = Number(openingBalance.replace(',', '.'));
     if (isNaN(value) || value < 0) {
@@ -218,12 +305,28 @@ export default function SalesPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4 relative">
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div
+        className={`flex-1 flex flex-col overflow-hidden rounded-lg transition-all ${
+          keyboardFocusArea === 'products' ? 'ring-1 ring-primary/20 ring-offset-1 ring-offset-background' : ''
+        }`}
+      >
         <div className="mb-4">
-          <h1 className="text-2xl font-bold tracking-tight mb-2">Vendas</h1>
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="text-2xl font-bold tracking-tight">Vendas</h1>
+            <button
+              type="button"
+              onClick={() => setHelpDialogOpen(true)}
+              className="inline-flex items-center justify-center rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              aria-label="Ver atalhos de teclado"
+              title="Ver atalhos de teclado"
+            >
+              <Info className="h-5 w-5" />
+            </button>
+          </div>
           <div className="flex gap-2">
             <InputWithIcon
-              placeholder="Buscar produtos..."
+              ref={searchInputRef}
+              placeholder="Buscar produtos... (Ctrl+B)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               icon={<Search className="h-4 w-4" />}
@@ -241,6 +344,10 @@ export default function SalesPage() {
           <ProductList
             products={products || []}
             isLoading={isLoading}
+            keyboardFocusArea={keyboardFocusArea}
+            keyboardShortcutsEnabled={!anyModalOpen}
+            selectedProductIndex={selectedProductIndex ?? undefined}
+            onProductSelect={setSelectedProductIndex}
             onAddToCart={(product) => {
               try {
                 addItem(product);
@@ -252,8 +359,17 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="w-96 flex flex-col">
-        <Cart onCheckout={handleCheckout} onBudget={handleBudget} />
+      <div
+        className={`w-96 flex flex-col rounded-lg transition-all ${
+          keyboardFocusArea === 'cart' ? 'ring-1 ring-primary/20 ring-offset-1 ring-offset-background' : ''
+        }`}
+      >
+        <Cart
+          keyboardFocusArea={keyboardFocusArea}
+          keyboardShortcutsEnabled={!anyModalOpen}
+          onCheckout={handleCheckout}
+          onBudget={handleBudget}
+        />
       </div>
 
       <BarcodeScanner
@@ -271,6 +387,11 @@ export default function SalesPage() {
         open={budgetOpen}
         onClose={() => setBudgetOpen(false)}
         onSuccess={handleBudgetSuccess}
+      />
+
+      <KeyboardShortcutsHelpDialog
+        open={helpDialogOpen}
+        onClose={() => setHelpDialogOpen(false)}
       />
 
       <Dialog open={openingDialogOpen} onOpenChange={setOpeningDialogOpen}>

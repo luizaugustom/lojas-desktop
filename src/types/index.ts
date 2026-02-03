@@ -59,6 +59,7 @@ export interface User {
   companyId?: string | null;
   plan?: PlanType;
   dataPeriod?: DataPeriodFilter | null;
+  nfeEmissionEnabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -119,6 +120,7 @@ export interface Product {
   costPrice?: number;
   stockQuantity: number;
   minStockQuantity?: number;
+  lowStockAlertThreshold?: number;
   category?: string;
   description?: string;
   photos?: string[];
@@ -280,6 +282,7 @@ export interface Seller {
   phone?: string;
   commissionRate?: number;
   hasIndividualCash?: boolean;
+  nfeEmissionEnabled?: boolean;
   companyId: string;
   createdAt: string;
   updatedAt: string;
@@ -470,6 +473,7 @@ export interface CreateProductDto {
   cfop?: string;
   costPrice?: number;
   minStockQuantity?: number;
+  lowStockAlertThreshold?: number;
 }
 
 export interface InstallmentData {
@@ -528,6 +532,7 @@ export interface CreateSellerDto {
   phone?: string;
   commissionRate?: number;
   hasIndividualCash?: boolean;
+  nfeEmissionEnabled?: boolean;
 }
 
 export interface UpdateSellerDto {
@@ -538,6 +543,7 @@ export interface UpdateSellerDto {
   phone?: string;
   commissionRate?: number;
   hasIndividualCash?: boolean;
+  nfeEmissionEnabled?: boolean;
   activityId?: string;
 }
 

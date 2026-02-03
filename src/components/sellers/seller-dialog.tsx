@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'react-hot-toast';
-import { X, User, Mail, Phone, Calendar, CreditCard, Wallet, Lock } from 'lucide-react';
+import { X, User, Mail, Phone, Calendar, CreditCard, Wallet, Lock, Receipt } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -48,6 +48,7 @@ export function SellerDialog({ isOpen, onClose, onSuccess, seller }: SellerDialo
       phone: '',
       commissionRate: 0,
       hasIndividualCash: false,
+      nfeEmissionEnabled: false,
     },
   });
 
@@ -62,6 +63,7 @@ export function SellerDialog({ isOpen, onClose, onSuccess, seller }: SellerDialo
         phone: seller.phone || '',
         commissionRate: seller.commissionRate || 0,
         hasIndividualCash: seller.hasIndividualCash || false,
+        nfeEmissionEnabled: seller.nfeEmissionEnabled || false,
       });
     } else if (!seller && isOpen) {
       reset({
@@ -74,6 +76,7 @@ export function SellerDialog({ isOpen, onClose, onSuccess, seller }: SellerDialo
         phone: '',
         commissionRate: 0,
         hasIndividualCash: false,
+        nfeEmissionEnabled: false,
       });
     }
   }, [seller, isOpen, reset]);
@@ -355,6 +358,32 @@ export function SellerDialog({ isOpen, onClose, onSuccess, seller }: SellerDialo
                   render={({ field }) => (
                     <Switch
                       id="hasIndividualCash"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  )}
+                />
+              </div>
+
+              {/* Liberar emissão de NFe */}
+              <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-border bg-muted/30">
+                <div className="flex gap-3">
+                  <Receipt className="h-5 w-5 text-primary mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor="nfeEmissionEnabled" className="text-foreground font-medium cursor-pointer">
+                      Liberar emissão de NFe
+                    </Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Permite que este vendedor emita notas fiscais de saída.
+                    </p>
+                  </div>
+                </div>
+                <Controller
+                  name="nfeEmissionEnabled"
+                  control={control}
+                  render={({ field }) => (
+                    <Switch
+                      id="nfeEmissionEnabled"
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />

@@ -190,9 +190,7 @@ export async function authRefresh(): Promise<{ access_token: string; user: any }
 export interface DeviceInfo {
   deviceId?: string;
   deviceName?: string;
-}
-
-export interface ActiveSession {
+}export interface ActiveSession {
   id: string;
   deviceId?: string;
   ipAddress?: string;
@@ -201,9 +199,7 @@ export interface ActiveSession {
   createdAt: string;
   expiresAt: string;
   isCurrent: boolean;
-}
-
-export async function authLogin(
+}export async function authLogin(
   login: string, 
   password: string, 
   deviceInfo?: DeviceInfo
@@ -233,9 +229,7 @@ export async function getActiveSessions(): Promise<ActiveSession[]> {
 export async function revokeSession(sessionId: string): Promise<{ message: string }> {
   const res = await instance.post(`/auth/sessions/${sessionId}/revoke`);
   return res.data;
-}
-
-/**
+}/**
  * POST /auth/sessions/revoke-others
  * Invalidar todas as outras sessões (exceto a atual)
  */
@@ -243,4 +237,3 @@ export async function revokeOtherSessions(): Promise<{ message: string; revokedC
   const res = await instance.post('/auth/sessions/revoke-others');
   return res.data;
 }
-

@@ -1,4 +1,4 @@
-import { Menu, Moon, Sun, LogOut, Megaphone, RefreshCw, Calendar } from 'lucide-react';
+import { Menu, Moon, Sun, LogOut, Megaphone, RefreshCw, CalendarRange } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useUIStore } from '@/store/ui-store';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,6 +6,9 @@ import { useDeviceStore } from '@/store/device-store';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { AdminBroadcastDialog } from '../admin-broadcast-dialog';
 import { DateRangeModal } from '../date-range/DateRangeModal';
+import { NotesButton } from '../notes/NotesButton';
+import { ContactsButton } from '../contacts/ContactsButton';
+import { CalendarButton } from '../calendar/CalendarButton';
 import { checkPrinterStatus } from '@/lib/printer-check';
 import { companyApi } from '@/lib/api-endpoints';
 import { getImageUrl } from '@/lib/image-utils';
@@ -101,18 +104,28 @@ export function Header({ onLogout }: HeaderProps) {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-16 items-center gap-2 sm:gap-4 border-b bg-background px-2 sm:px-4 lg:px-6"
+      className="sticky top-0 z-30 flex h-16 items-center gap-2 sm:gap-4 border-b bg-background"
       role="banner"
     >
-      <Button
-        variant="ghost"
-        size="icon"
-        className="lg:hidden"
-        onClick={toggleSidebar}
-        aria-label="Abrir menu"
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
+      {/* Container dos botões do lado esquerdo com padding igual ao lado direito */}
+      <div className="flex items-center gap-2 sm:gap-4 px-2 sm:px-4 lg:px-6">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="lg:hidden"
+          onClick={toggleSidebar}
+          aria-label="Abrir menu"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+
+        {/* Botão de contatos (lado esquerdo) - empresa e vendedor */}
+        <ContactsButton />
+        {/* Botão de anotações (lado esquerdo) - empresa e vendedor */}
+        <NotesButton />
+        {/* Botão de agenda (lado esquerdo) - empresa e vendedor */}
+        <CalendarButton />
+      </div>
 
       <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 justify-center">
         {/* Logomarca centralizada se existir */}
@@ -168,7 +181,7 @@ export function Header({ onLogout }: HeaderProps) {
         </Button>
       </div>
 
-      <div className="flex items-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 lg:px-6">
         <NotificationBell />
         
         {user?.role === 'admin' && (
@@ -194,7 +207,7 @@ export function Header({ onLogout }: HeaderProps) {
           aria-label="Filtrar por período de datas"
           title="Filtrar dados por período"
         >
-          <Calendar className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
+          <CalendarRange className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
         </Button>
 
         <Button

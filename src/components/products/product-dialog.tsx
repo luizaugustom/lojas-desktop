@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'react-hot-toast';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Search } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { DatePicker } from '../ui/date-picker';
 import { ConfirmationModal } from '../ui/confirmation-modal';
+import { NCMSearchModal } from './ncm-search-modal';
 import {
   Select,
   SelectContent,
@@ -55,6 +56,11 @@ function sanitizeProductData(data: any) {
   // Quantidade mínima também deve ser enviada quando informada
   if (data.minStockQuantity !== undefined && data.minStockQuantity !== null && String(data.minStockQuantity).trim() !== '') {
     sanitized.minStockQuantity = Number(data.minStockQuantity);
+  }
+
+  // Alerta de estoque baixo (default 3 no backend se não informado)
+  if (data.lowStockAlertThreshold !== undefined && data.lowStockAlertThreshold !== null && String(data.lowStockAlertThreshold).trim() !== '') {
+    sanitized.lowStockAlertThreshold = Number(data.lowStockAlertThreshold);
   }
   
   // Adicionar campos opcionais apenas se tiverem valor
@@ -110,6 +116,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
     description: '',
     onConfirm: () => {},
   });
+  const [ncmModalOpen, setNcmModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!product;
   const { api, user } = useAuth();
@@ -172,6 +179,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
         ncm: product.ncm || '',
         cfop: product.cfop || '',
         costPrice: product.costPrice ? Number(product.costPrice) : undefined,
+        lowStockAlertThreshold: product.lowStockAlertThreshold ?? 3,
       });
     } else {
       // Ao criar novo produto, manter apenas a categoria, limpar todo o resto
@@ -185,6 +193,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
         unitOfMeasure: 'un',
         ncm: '', // Será preenchido com padrão pelo backend se vazio
         cfop: '', // Será preenchido com padrão pelo backend se vazio
+        lowStockAlertThreshold: 3,
       });
       setSelectedPhotos([]);
       setPhotoPreviewUrls([]);
@@ -477,6 +486,9 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
             if (data.minStockQuantity !== undefined && data.minStockQuantity !== null) {
               formData.append('minStockQuantity', Number(data.minStockQuantity || 0).toString());
             }
+            if (data.lowStockAlertThreshold !== undefined && data.lowStockAlertThreshold !== null) {
+              formData.append('lowStockAlertThreshold', Number(data.lowStockAlertThreshold ?? 3).toString());
+            }
             
             // Adicionar fotos novas
             selectedPhotos.forEach((photo) => {
@@ -528,6 +540,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
           if (sanitizedData.expirationDate) formData.append('expirationDate', sanitizedData.expirationDate);
           if (data.costPrice !== undefined && data.costPrice !== null) formData.append('costPrice', Number(data.costPrice || 0).toString());
           if (data.minStockQuantity !== undefined && data.minStockQuantity !== null) formData.append('minStockQuantity', Number(data.minStockQuantity || 0).toString());
+          if (data.lowStockAlertThreshold !== undefined && data.lowStockAlertThreshold !== null) formData.append('lowStockAlertThreshold', Number(data.lowStockAlertThreshold ?? 3).toString());
           if (sanitizedData.unitOfMeasure) formData.append('unitOfMeasure', sanitizedData.unitOfMeasure);
           if (sanitizedData.cfop) formData.append('cfop', sanitizedData.cfop);
           if (sanitizedData.ncm) formData.append('ncm', sanitizedData.ncm);
@@ -676,6 +689,28 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="lowStockAlertThreshold" className="text-foreground">Alerta de estoque baixo</Label>
+              <Input
+                id="lowStockAlertThreshold"
+                type="number"
+                min="0"
+                placeholder="3"
+                {...register('lowStockAlertThreshold', {
+                  setValueAs: (v) =>
+                    v === '' || v === undefined
+                      ? undefined
+                      : (isNaN(Number(v)) ? undefined : Number(v)),
+                })}
+                disabled={loading}
+                className="text-foreground"
+              />
+              <p className="text-xs text-muted-foreground">Avisar quando estoque for menor ou igual a esta quantidade (padrão: 3)</p>
+              {errors.lowStockAlertThreshold && (
+                <p className="text-sm text-destructive">{errors.lowStockAlertThreshold.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="unitOfMeasure" className="text-foreground">Unidade de Medida</Label>
               <Controller
                 name="unitOfMeasure"
@@ -768,19 +803,32 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
                   NCM
                   <span className="text-xs text-amber-600 dark:text-amber-400 ml-1">(Necessário para NF-e)</span>
                 </Label>
-                <Input
-                  id="ncm"
-                  placeholder="85171231"
-                  maxLength={8}
-                  {...register('ncm', {
-                    onChange: (e) => {
-                      // Permite apenas números
-                      e.target.value = e.target.value.replace(/\D/g, '');
-                    }
-                  })}
-                  disabled={loading}
-                  className="text-foreground"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="ncm"
+                    placeholder="85171231"
+                    maxLength={8}
+                    {...register('ncm', {
+                      onChange: (e) => {
+                        // Permite apenas números
+                        e.target.value = e.target.value.replace(/\D/g, '');
+                      }
+                    })}
+                    disabled={loading}
+                    className="text-foreground flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setNcmModalOpen(true)}
+                    disabled={loading}
+                    title="Buscar NCM"
+                    className="shrink-0"
+                  >
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </div>
                 {errors.ncm && (
                   <p className="text-sm text-destructive">{errors.ncm.message}</p>
                 )}
@@ -1049,6 +1097,16 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
         variant={confirmationModal.variant}
         confirmText={confirmationModal.variant === 'destructive' ? 'Excluir' : 'Confirmar'}
         cancelText="Cancelar"
+      />
+
+      {/* Modal de Busca NCM */}
+      <NCMSearchModal
+        open={ncmModalOpen}
+        onClose={() => setNcmModalOpen(false)}
+        onSelect={(code: string) => {
+          setValue('ncm', code, { shouldValidate: true, shouldDirty: true });
+          setNcmModalOpen(false);
+        }}
       />
     </Dialog>
   );

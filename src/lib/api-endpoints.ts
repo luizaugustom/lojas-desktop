@@ -1,6 +1,11 @@
 import { api } from './apiClient';
 import type { DataPeriodFilter } from '../types';
 
+/** GET /ncm - Lista códigos NCM (proxy da API Receita Federal, evita CORS) */
+export const ncmApi = {
+  list: () => api.get('/ncm'),
+};
+
 export const productApi = {
   create: (data: any) => api.post('/product', data),
   createWithPhotos: (formData: FormData) => api.post('/product/upload-and-create', formData, {
@@ -107,6 +112,9 @@ export const companyApi = {
 
 export const fiscalApi = {
   generateNFe: (data: any) => api.post('/fiscal/nfe', data),
+  generateReturnNFe: (inboundDocumentId: string) =>
+    api.post('/fiscal/nfe-devolucao', { inboundDocumentId }),
+  parseInboundXml: (xml: string) => api.post('/fiscal/parse-inbound-xml', { xml }),
   uploadXml: (file: File) => {
     const formData = new FormData();
     formData.append('xmlFile', file);
@@ -225,6 +233,62 @@ export const billApi = {
   update: (id: string, data: any) => api.patch(`/bill-to-pay/${id}`, data),
   markPaid: (id: string) => api.patch(`/bill-to-pay/${id}/mark-paid`),
   delete: (id: string, data?: any) => api.delete(`/bill-to-pay/${id}`, { data }),
+};
+
+export const notesApi = {
+  list: (params?: { search?: string; authorFilter?: string }) =>
+    api.get('/note', { params }),
+  create: (data: { title?: string; content: string; visibleToSellers?: boolean }) =>
+    api.post('/note', data),
+  update: (id: string, data: { title?: string; content?: string; visibleToSellers?: boolean }) =>
+    api.patch(`/note/${id}`, data),
+  delete: (id: string) => api.delete(`/note/${id}`),
+};
+
+export const contactsApi = {
+  list: (params?: { search?: string; authorFilter?: string }) =>
+    api.get('/contact', { params }),
+  create: (data: FormData) =>
+    api.post('/contact', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  update: (id: string, data: FormData) =>
+    api.patch(`/contact/${id}`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  delete: (id: string) => api.delete(`/contact/${id}`),
+};
+
+export const taskApi = {
+  create: (data: {
+    title: string;
+    description?: string;
+    dueDate: string;
+    type: 'PERSONAL' | 'WORK';
+    assignedToId?: string;
+  }) => api.post('/task', data),
+  list: (params?: {
+    startDate?: string;
+    endDate?: string;
+    type?: 'PERSONAL' | 'WORK';
+    isCompleted?: boolean;
+    assignedToId?: string;
+    search?: string;
+  }) => api.get('/task', { params }),
+  get: (id: string) => api.get(`/task/${id}`),
+  update: (
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      dueDate?: string;
+      type?: 'PERSONAL' | 'WORK';
+      assignedToId?: string;
+    },
+  ) => api.patch(`/task/${id}`, data),
+  delete: (id: string) => api.delete(`/task/${id}`),
+  markComplete: (id: string) => api.patch(`/task/${id}/complete`),
+  markIncomplete: (id: string) => api.patch(`/task/${id}/incomplete`),
 };
 
 export const notificationApi = {

@@ -131,7 +131,8 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
         <TableBody>
           {products.map((product) => {
             const stockNum = Number(product.stockQuantity ?? 0);
-            const isLowStock = !Number.isNaN(stockNum) && stockNum <= 3;
+            const threshold = product.lowStockAlertThreshold ?? 3;
+            const isLowStock = !Number.isNaN(stockNum) && stockNum <= threshold;
             const isExpiringSoon =
               product.expirationDate && new Date(product.expirationDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 

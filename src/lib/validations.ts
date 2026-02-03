@@ -127,6 +127,7 @@ export const productFormSchema = z.object({
   costPrice: z.number().positive('Preço de custo deve ser positivo').optional(),
   stockQuantity: z.number().min(0, 'Quantidade não pode ser negativa'),
   minStockQuantity: z.number().min(0, 'Quantidade mínima não pode ser negativa').optional(),
+  lowStockAlertThreshold: z.number().int().min(0, 'Alerta de estoque baixo deve ser >= 0').optional(),
   category: z.string().optional(),
   description: z.string().optional(),
   expirationDate: z.string().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
@@ -266,6 +267,7 @@ export const createSellerSchema = z.object({
     .optional(),
   commissionRate: z.number().min(0).max(100).optional(),
   hasIndividualCash: z.boolean().optional(),
+  nfeEmissionEnabled: z.boolean().optional(),
 });
 
 export const updateSellerSchema = z.object({
@@ -306,6 +308,7 @@ export const updateSellerSchema = z.object({
   confirmPassword: z.string().optional(),
   commissionRate: z.number().min(0).max(100).optional(),
   hasIndividualCash: z.boolean().optional(),
+  nfeEmissionEnabled: z.boolean().optional(),
 }).refine((data) => {
   if (data.password && data.password !== '') {
     return data.password === data.confirmPassword;

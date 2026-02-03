@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
@@ -7,6 +7,7 @@ import { ImageViewer } from '../ui/image-viewer';
 import { formatCurrency } from '../../lib/utils';
 import { getImageUrl } from '../../lib/image-utils';
 import { Tag } from 'lucide-react';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 interface Product {
   id: string;
@@ -22,10 +23,19 @@ interface ProductListProps {
   products: Product[];
   isLoading: boolean;
   onAddToCart: (product: Product, quantity?: number) => void;
+  keyboardFocusArea?: 'products' | 'cart';
+  keyboardShortcutsEnabled?: boolean;
+  selectedProductIndex?: number;
+  onProductSelect?: (index: number) => void;
 }
 
-export function ProductList({ products, isLoading, onAddToCart }: ProductListProps) {
+export function ProductList({ products, isLoading, onAddToCart, keyboardFocusArea = 'products', keyboardShortcutsEnabled = true, selectedProductIndex, onProductSelect }: ProductListProps) {
   const [selectedImage, setSelectedImage] = useState<{ images: string[]; index: number } | null>(null);
+  const [internalSelectedIndex, setInternalSelectedIndex] = useState<number | null>(null);
+  const productRefs = useRef<(HTMLDivElement | null)[]>([]);
+  
+  // Usar índice selecionado externo ou interno
+  const currentSelectedIndex = selectedProductIndex !== undefined ? selectedProductIndex : internalSelectedIndex;
 
   const handleImageClick = (product: Product) => {
     if (product.photos && product.photos.length > 0) {
@@ -38,6 +48,74 @@ export function ProductList({ products, isLoading, onAddToCart }: ProductListPro
       }
     }
   };
+
+  // Navegação por teclado (somente quando o foco está na lista de produtos e nenhum modal aberto)
+  const hasKeyboardFocus = keyboardFocusArea === 'products' && keyboardShortcutsEnabled;
+  useKeyboardShortcuts({
+    shortcuts: [
+      {
+        key: 'ArrowDown',
+        handler: () => {
+          const maxIndex = products.length - 1;
+          const current = currentSelectedIndex ?? -1;
+          const nextIndex = current < maxIndex ? current + 1 : 0;
+          const newIndex = nextIndex;
+          if (onProductSelect) {
+            onProductSelect(newIndex);
+          } else {
+            setInternalSelectedIndex(newIndex);
+          }
+          setTimeout(() => {
+            productRefs.current[newIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }, 0);
+        },
+        context: ['sales'],
+      },
+      {
+        key: 'ArrowUp',
+        handler: () => {
+          const maxIndex = products.length - 1;
+          const current = currentSelectedIndex ?? maxIndex + 1;
+          const prevIndex = current > 0 ? current - 1 : maxIndex;
+          const newIndex = prevIndex;
+          if (onProductSelect) {
+            onProductSelect(newIndex);
+          } else {
+            setInternalSelectedIndex(newIndex);
+          }
+          setTimeout(() => {
+            productRefs.current[newIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }, 0);
+        },
+        context: ['sales'],
+      },
+      {
+        key: 'Enter',
+        handler: () => {
+          if (currentSelectedIndex !== null && currentSelectedIndex >= 0 && currentSelectedIndex < products.length) {
+            const product = products[currentSelectedIndex];
+            if (product && (product.stockQuantity ?? 0) > 0) {
+              onAddToCart(product, 1);
+            }
+          }
+        },
+        context: ['sales'],
+        preventDefault: false,
+      },
+    ],
+    enabled: hasKeyboardFocus && !isLoading && products.length > 0,
+    context: 'sales',
+    ignoreInputs: true,
+  });
+
+  // Scroll para produto selecionado quando mudar
+  useEffect(() => {
+    if (currentSelectedIndex !== null && currentSelectedIndex >= 0 && currentSelectedIndex < products.length) {
+      setTimeout(() => {
+        productRefs.current[currentSelectedIndex]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    }
+  }, [currentSelectedIndex, products.length]);
 
   if (isLoading) {
     return (
@@ -73,9 +151,15 @@ export function ProductList({ products, isLoading, onAddToCart }: ProductListPro
   return (
     <>
       <div className="space-y-1">
-        {products.map((product) => (
-          <Card key={product.id} className="p-1">
-            <CardContent className="flex items-center gap-3 py-2">
+        {products.map((product, index) => {
+          const isSelected = currentSelectedIndex === index;
+          return (
+            <Card 
+              key={product.id} 
+              ref={(el) => { productRefs.current[index] = el; }}
+              className={`p-1 transition-all ${isSelected ? 'ring-2 ring-primary shadow-md' : ''}`}
+            >
+              <CardContent className={`flex items-center gap-3 py-2 ${isSelected ? 'bg-primary/5' : ''}`}>
               <ProductImage
                 photos={product.photos}
                 name={product.name}
@@ -131,7 +215,8 @@ export function ProductList({ products, isLoading, onAddToCart }: ProductListPro
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {selectedImage && (

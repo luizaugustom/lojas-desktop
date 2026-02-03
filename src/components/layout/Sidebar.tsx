@@ -87,6 +87,11 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
       return false;
     }
 
+    // Notas Fiscais: empresa sempre; vendedor apenas se nfeEmissionEnabled
+    if (item.name === 'Notas Fiscais') {
+      return normalizedRole === 'empresa' || (normalizedRole === 'vendedor' && user.nfeEmissionEnabled === true);
+    }
+
     const shouldInclude = item.roles.includes(normalizedRole);
     console.log('[Sidebar] Item', item.name, shouldInclude ? 'INCLUÍDO' : 'EXCLUÍDO');
     

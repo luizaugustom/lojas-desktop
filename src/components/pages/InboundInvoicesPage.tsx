@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, RefreshCw, Search, Download, Upload, PlusCircle, Trash2, Pencil, Loader2 } from 'lucide-react';
+import { FileText, RefreshCw, Search, Download, Upload, PlusCircle, Trash2, Pencil, Loader2, RotateCcw, FileCode2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
@@ -9,8 +9,10 @@ import { Card } from '../ui/card';
 import { Input, InputWithIcon } from '../ui/input';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Textarea } from '../ui/textarea';
 import { formatCurrency, formatDateTime, downloadFile } from '@/lib/utils';
-import { fiscalApi } from '@/lib/api-endpoints';
+import { fiscalApi, productApi, billApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
 
 interface InboundDoc {
@@ -39,6 +41,12 @@ interface DownloadFormatOption {
   isGenerated?: boolean;
 }
 
+type ParsedForm = { accessKey: string; supplierName: string; totalValue: number; documentNumber?: string };
+type ParsedItem = { description: string; quantity: number; unitPrice: number; ncm?: string; cfop: string; unitOfMeasure: string; barcode?: string };
+type ParsedDup = { nDup: string; dVenc: string; vDup: number };
+type ItemDecision = 'skip' | 'link' | 'create';
+type ParsedData = { form: ParsedForm; items: ParsedItem[]; duplicatas: ParsedDup[] };
+
 export default function InboundInvoicesPage() {
   const { api, user } = useAuth();
   const { queryKeyPart } = useDateRange();
@@ -47,6 +55,7 @@ export default function InboundInvoicesPage() {
   const [uploading, setUploading] = useState(false);
   const [editingDoc, setEditingDoc] = useState<InboundDoc | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [emittingReturnId, setEmittingReturnId] = useState<string | null>(null);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState<InboundDoc | null>(null);
@@ -56,6 +65,15 @@ export default function InboundInvoicesPage() {
   const [supplierName, setSupplierName] = useState('');
   const [totalValue, setTotalValue] = useState('');
   const [manualAttachment, setManualAttachment] = useState<File | null>(null);
+
+  const [parsedData, setParsedData] = useState<ParsedData | null>(null);
+  const [xmlPasted, setXmlPasted] = useState('');
+  const [parsingXml, setParsingXml] = useState(false);
+  const [xmlStringForSubmit, setXmlStringForSubmit] = useState<string | null>(null);
+  const [itemDecisions, setItemDecisions] = useState<ItemDecision[]>([]);
+  const [itemLinkedIds, setItemLinkedIds] = useState<string[]>([]);
+  const [itemNewProductData, setItemNewProductData] = useState<Record<number, { name: string; barcode: string; costPrice: number; stockQuantity: number; ncm: string; cfop: string; unitOfMeasure: string; price: number }>>({});
+  const [registerBillsFromXml, setRegisterBillsFromXml] = useState(false);
 
   useEffect(() => {
     if (user && user.role !== 'empresa') {
@@ -67,6 +85,17 @@ export default function InboundInvoicesPage() {
     queryKey: ['inbound-fiscal', search],
     queryFn: async () => (await api.get('/fiscal', { params: { search, documentType: 'inbound' } })).data,
   });
+
+  const { data: productsData } = useQuery({
+    queryKey: ['products-for-link', addOpen, !!parsedData?.items?.length],
+    queryFn: async () => (await productApi.list({ limit: 500 })).data,
+    enabled: !!addOpen && !!parsedData?.items?.length,
+  });
+  const productsList: { id: string; name: string; barcode?: string; stockQuantity?: number }[] = useMemo(() => {
+    const raw: any = productsData;
+    const list = Array.isArray(raw) ? raw : raw?.data || raw?.items || [];
+    return list.map((p: any) => ({ id: p.id, name: p.name || p.barcode || p.id, barcode: p.barcode, stockQuantity: p.stockQuantity }));
+  }, [productsData]);
 
   const docs: InboundDoc[] = useMemo(() => {
     const raw: any = data;
@@ -179,6 +208,21 @@ export default function InboundInvoicesPage() {
     }
   };
 
+  const handleEmitReturn = async (doc: InboundDoc) => {
+    if (!doc.hasXml || !doc.accessKey) return;
+    setEmittingReturnId(doc.id);
+    try {
+      await fiscalApi.generateReturnNFe(doc.id);
+      toast.success('NFe de devolução emitida com sucesso');
+      refetch();
+    } catch (error: any) {
+      const msg = error.response?.data?.message || error.message || 'Falha ao emitir NFe de devolução';
+      toast.error(msg);
+    } finally {
+      setEmittingReturnId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -269,6 +313,26 @@ export default function InboundInvoicesPage() {
                           </>
                         )}
                       </Button>
+                      {user?.role === 'empresa' && doc.hasXml && doc.accessKey && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEmitReturn(doc)}
+                          disabled={emittingReturnId === doc.id}
+                          title="Emitir NFe de devolução referenciando esta nota de entrada"
+                        >
+                          {emittingReturnId === doc.id ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Emitindo...
+                            </>
+                          ) : (
+                            <>
+                              <RotateCcw className="mr-2 h-4 w-4" /> Emitir Devolução
+                            </>
+                          )}
+                        </Button>
+                      )}
                       {user?.role === 'empresa' && (
                         <Button
                           size="sm"
@@ -400,18 +464,116 @@ export default function InboundInvoicesPage() {
             setTotalValue('');
             setManualAttachment(null);
             setEditingDoc(null);
+            setParsedData(null);
+            setXmlPasted('');
+            setParsingXml(false);
+            setXmlStringForSubmit(null);
+            setItemDecisions([]);
+            setItemLinkedIds([]);
+            setItemNewProductData({});
+            setRegisterBillsFromXml(false);
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingDoc ? 'Editar Nota de Entrada' : 'Adicionar Nota de Entrada'}</DialogTitle>
             <DialogDescription>
               {editingDoc
                 ? 'Atualize as informações da nota fiscal de entrada.'
-                : 'Preencha as informações da nota fiscal de entrada manualmente e, se quiser, anexe o PDF ou XML.'}
+                : 'Preencha pelo XML ou manualmente. Em seguida escolha o que fazer com os produtos e parcelas.'}
             </DialogDescription>
           </DialogHeader>
+
+          {!editingDoc && (
+            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+              <div className="flex items-center gap-2 font-medium text-foreground">
+                <FileCode2 className="h-4 w-4" />
+                Preencher automaticamente pelo XML
+              </div>
+              <div className="grid gap-2">
+                <Textarea
+                  placeholder="Cole o XML da NFe aqui ou use o botão abaixo para selecionar arquivo"
+                  value={xmlPasted}
+                  onChange={(e) => setXmlPasted(e.target.value)}
+                  rows={3}
+                  className="font-mono text-xs"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="file"
+                    accept=".xml,application/xml,text/xml"
+                    className="max-w-[220px]"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      try {
+                        const text = await new Promise<string>((res, rej) => {
+                          const r = new FileReader();
+                          r.onload = () => res(String(r.result ?? ''));
+                          r.onerror = rej;
+                          r.readAsText(f);
+                        });
+                        setXmlPasted(text);
+                      } catch {
+                        toast.error('Erro ao ler o arquivo');
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={parsingXml || !xmlPasted.trim()}
+                    onClick={async () => {
+                      const xml = xmlPasted.trim();
+                      if (!xml) return;
+                      setParsingXml(true);
+                      try {
+                        const { data: res } = await fiscalApi.parseInboundXml(xml);
+                        setParsedData(res);
+                        setXmlStringForSubmit(xml);
+                        setAccessKey(res.form.accessKey ?? '');
+                        setSupplierName(res.form.supplierName ?? '');
+                        setTotalValue(String(res.form.totalValue ?? '').replace('.', ','));
+                        setItemDecisions(res.items?.length ? res.items.map(() => 'skip') : []);
+                        setItemLinkedIds(res.items?.length ? res.items.map(() => '') : []);
+                        setItemNewProductData({});
+                        const defaultData: Record<number, { name: string; barcode: string; costPrice: number; stockQuantity: number; ncm: string; cfop: string; unitOfMeasure: string; price: number }> = {};
+                        (res.items ?? []).forEach((it: ParsedItem, i: number) => {
+                          const barcode = (it.barcode && it.barcode.length >= 8 && it.barcode.length <= 20)
+                            ? it.barcode
+                            : `NFe-${Date.now().toString(36)}-${i}`;
+                          defaultData[i] = {
+                            name: it.description || `Item ${i + 1}`,
+                            barcode: barcode.substring(0, 20),
+                            costPrice: it.unitPrice ?? 0,
+                            stockQuantity: it.quantity ?? 0,
+                            ncm: (it.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
+                            cfop: (it.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102',
+                            unitOfMeasure: (it.unitOfMeasure ?? 'UN').slice(0, 6) || 'UN',
+                            price: Math.max(it.unitPrice ?? 0, 0.01),
+                          };
+                        });
+                        setItemNewProductData(defaultData);
+                        setRegisterBillsFromXml((res.duplicatas?.length ?? 0) > 0);
+                        toast.success('XML lido. Revise os dados e defina o que fazer com os produtos.');
+                      } catch (err: any) {
+                        const msg = err?.response?.data?.message || err?.message || 'XML inválido ou não é NFe de entrada';
+                        toast.error(msg);
+                      } finally {
+                        setParsingXml(false);
+                      }
+                    }}
+                  >
+                    {parsingXml ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCode2 className="h-4 w-4" />}
+                    {' '}Ler XML e preencher
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-3">
             <div className="space-y-1">
@@ -489,6 +651,130 @@ export default function InboundInvoicesPage() {
                 <p className="text-xs text-muted-foreground">Arquivo atual disponível no anexo.</p>
               )}
             </div>
+
+            {!editingDoc && parsedData?.items && parsedData.items.length > 0 && (
+              <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                <div className="font-medium text-foreground">Produtos da nota</div>
+                <p className="text-xs text-muted-foreground">Para cada item, escolha: não adicionar, vincular a um produto existente ou criar novo produto.</p>
+                <div className="space-y-3 max-h-[240px] overflow-y-auto pr-1">
+                  {parsedData.items.map((item, i) => (
+                    <div key={i} className="rounded border p-2 bg-background space-y-2">
+                      <div className="text-sm font-medium text-foreground truncate">{item.description}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Qtd: {item.quantity} · Valor un.: {formatCurrency(item.unitPrice)}
+                        {item.ncm && ` · NCM: ${item.ncm}`}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Select
+                          value={itemDecisions[i] ?? 'skip'}
+                          onValueChange={(v) => {
+                            const next = [...(itemDecisions.slice(0, i)), v as ItemDecision, ...itemDecisions.slice(i + 1)];
+                            setItemDecisions(next.length > parsedData.items.length ? next.slice(0, parsedData.items.length) : next);
+                            if (v === 'link') {
+                              const ids = [...itemLinkedIds];
+                              ids[i] = ids[i] ?? '';
+                              setItemLinkedIds(ids.length > parsedData.items.length ? ids.slice(0, parsedData.items.length) : ids);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Ação" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="skip">Não adicionar ao estoque</SelectItem>
+                            <SelectItem value="link">Vincular a produto existente</SelectItem>
+                            <SelectItem value="create">Criar novo produto</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {itemDecisions[i] === 'link' && (
+                          <Select
+                            value={itemLinkedIds[i] ?? ''}
+                            onValueChange={(id) => {
+                              const next = [...itemLinkedIds];
+                              next[i] = id;
+                              setItemLinkedIds(next);
+                            }}
+                          >
+                            <SelectTrigger className="w-[220px]">
+                              <SelectValue placeholder="Selecione o produto" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {productsList.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.name} {p.barcode ? `(${p.barcode})` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                      {itemDecisions[i] === 'create' && itemNewProductData[i] != null && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t text-xs">
+                          <div>
+                            <Label className="text-xs">Nome</Label>
+                            <Input
+                              value={itemNewProductData[i].name}
+                              onChange={(e) => setItemNewProductData({ ...itemNewProductData, [i]: { ...itemNewProductData[i], name: e.target.value } })}
+                              placeholder="Nome"
+                              className="h-8"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Cód. barras (8–20)</Label>
+                            <Input
+                              value={itemNewProductData[i].barcode}
+                              onChange={(e) => setItemNewProductData({ ...itemNewProductData, [i]: { ...itemNewProductData[i], barcode: e.target.value.slice(0, 20) } })}
+                              placeholder="8–20 caracteres"
+                              className="h-8"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Custo / Preço venda</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={itemNewProductData[i].costPrice}
+                              onChange={(e) => {
+                                const v = parseFloat(e.target.value) || 0;
+                                setItemNewProductData({ ...itemNewProductData, [i]: { ...itemNewProductData[i], costPrice: v, price: Math.max(itemNewProductData[i].price, v) } });
+                              }}
+                              className="h-8"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Preço venda</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={itemNewProductData[i].price}
+                              onChange={(e) => setItemNewProductData({ ...itemNewProductData, [i]: { ...itemNewProductData[i], price: parseFloat(e.target.value) || 0 } })}
+                              className="h-8"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!editingDoc && parsedData?.duplicatas && parsedData.duplicatas.length > 0 && (
+              <div className="flex items-center gap-2 rounded-md border bg-muted/30 p-3">
+                <input
+                  type="checkbox"
+                  id="registerBills"
+                  checked={registerBillsFromXml}
+                  onChange={(e) => setRegisterBillsFromXml(e.target.checked)}
+                  className="h-4 w-4 rounded border-input"
+                />
+                <Label htmlFor="registerBills" className="text-sm cursor-pointer">
+                  Cadastrar parcelas desta nota nas contas a pagar?
+                </Label>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -509,50 +795,118 @@ export default function InboundInvoicesPage() {
                   toast.error('Valor total é obrigatório');
                   return;
                 }
-
+                const totalValueNumber = parseFloat(totalValue.replace(',', '.'));
+                if (isNaN(totalValueNumber) || totalValueNumber < 0) {
+                  toast.error('Valor total inválido');
+                  return;
+                }
+                if (!editingDoc && parsedData?.items?.length) {
+                  for (let i = 0; i < parsedData.items.length; i++) {
+                    if (itemDecisions[i] === 'link' && !(itemLinkedIds[i] ?? '').trim()) {
+                      toast.error(`Item "${parsedData.items[i].description?.slice(0, 30)}...": selecione um produto para vincular.`);
+                      return;
+                    }
+                    if (itemDecisions[i] === 'create') {
+                      const d = itemNewProductData[i];
+                      if (!d?.name?.trim()) {
+                        toast.error(`Item ${i + 1}: informe o nome do novo produto.`);
+                        return;
+                      }
+                      const bc = (d.barcode ?? '').trim();
+                      if (bc.length < 8 || bc.length > 20) {
+                        toast.error(`Item ${i + 1}: código de barras deve ter entre 8 e 20 caracteres.`);
+                        return;
+                      }
+                    }
+                  }
+                }
                 try {
                   setUploading(true);
-
-                  const totalValueNumber = parseFloat(totalValue.replace(',', '.'));
-                  if (isNaN(totalValueNumber) || totalValueNumber < 0) {
-                    toast.error('Valor total inválido');
-                    return;
-                  }
-
                   const formData = new FormData();
                   formData.append('supplierName', supplierName);
                   formData.append('totalValue', totalValueNumber.toString());
-
-                  if (accessKey) {
-                    formData.append('accessKey', accessKey);
-                  } else if (editingDoc) {
-                    formData.append('accessKey', '');
-                  }
-
+                  formData.append('accessKey', accessKey || '');
                   if (manualAttachment) {
                     formData.append('file', manualAttachment);
+                  } else if (!editingDoc && xmlStringForSubmit && parsedData) {
+                    formData.append('file', new File([xmlStringForSubmit], 'nfe.xml', { type: 'application/xml' }));
                   }
-
                   if (editingDoc) {
-                    await api.patch(
-                      `/fiscal/inbound-invoice/${editingDoc.id}`,
-                      formData,
-                      {
-                        headers: { 'Content-Type': 'multipart/form-data' },
-                      }
-                    );
-                  } else {
-                    await api.post('/fiscal/inbound-invoice', formData, {
-                      headers: { 'Content-Type': 'multipart/form-data' },
-                    });
+                    await api.patch(`/fiscal/inbound-invoice/${editingDoc.id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                    toast.success('Nota fiscal de entrada atualizada com sucesso');
+                    setAddOpen(false);
+                    setAccessKey('');
+                    setSupplierName('');
+                    setTotalValue('');
+                    setManualAttachment(null);
+                    setEditingDoc(null);
+                    refetch();
+                    return;
                   }
-
-                  toast.success(editingDoc ? 'Nota fiscal de entrada atualizada com sucesso' : 'Nota fiscal de entrada registrada com sucesso');
+                  await api.post('/fiscal/inbound-invoice', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                  if (parsedData?.items?.length) {
+                    for (let i = 0; i < parsedData.items.length; i++) {
+                      const item = parsedData.items[i];
+                      if (itemDecisions[i] === 'link') {
+                        const pid = itemLinkedIds[i];
+                        if (!pid) continue;
+                        try {
+                          const { data: prod } = await productApi.get(pid);
+                          const current = (prod as any)?.stockQuantity ?? 0;
+                          await productApi.updateStock(pid, { stockQuantity: current + item.quantity });
+                        } catch (e: any) {
+                          toast.error(`Falha ao atualizar estoque do produto vinculado ao item "${item.description?.slice(0, 30)}...": ${e?.response?.data?.message || e?.message || 'Erro'}`);
+                        }
+                      }
+                      if (itemDecisions[i] === 'create') {
+                        const d = itemNewProductData[i];
+                        if (!d) continue;
+                        try {
+                          await productApi.create({
+                            name: d.name.trim(),
+                            barcode: d.barcode.trim().slice(0, 20),
+                            stockQuantity: d.stockQuantity,
+                            price: Math.max(d.price, 0.01),
+                            costPrice: d.costPrice,
+                            ncm: (d.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
+                            cfop: (d.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102',
+                            unitOfMeasure: (d.unitOfMeasure ?? 'UN').slice(0, 6) || 'UN',
+                          });
+                        } catch (e: any) {
+                          toast.error(`Falha ao criar produto do item "${item.description?.slice(0, 30)}...": ${e?.response?.data?.message || e?.message || 'Erro'}`);
+                        }
+                      }
+                    }
+                  }
+                  if (registerBillsFromXml && parsedData?.duplicatas?.length) {
+                    const docRef = parsedData.form.documentNumber ?? parsedData.form.accessKey?.slice(-8) ?? 'NFe';
+                    const supplier = parsedData.form.supplierName ?? 'Fornecedor';
+                    for (const dup of parsedData.duplicatas) {
+                      try {
+                        await billApi.create({
+                          title: `NFe ${docRef} - ${supplier} - Parcela ${dup.nDup}`,
+                          dueDate: dup.dVenc,
+                          amount: dup.vDup,
+                          paymentInfo: `Fornecedor: ${supplier}`,
+                        });
+                      } catch (e: any) {
+                        toast.error(`Falha ao cadastrar parcela ${dup.nDup}: ${e?.response?.data?.message || e?.message || 'Erro'}`);
+                      }
+                    }
+                  }
+                  toast.success('Nota fiscal de entrada registrada com sucesso');
                   setAddOpen(false);
                   setAccessKey('');
                   setSupplierName('');
                   setTotalValue('');
                   setManualAttachment(null);
+                  setParsedData(null);
+                  setXmlPasted('');
+                  setXmlStringForSubmit(null);
+                  setItemDecisions([]);
+                  setItemLinkedIds([]);
+                  setItemNewProductData({});
+                  setRegisterBillsFromXml(false);
                   setEditingDoc(null);
                   refetch();
                 } catch (error: any) {
