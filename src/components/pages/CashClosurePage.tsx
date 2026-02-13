@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Eye,
   Loader2,
+  ArrowDownCircle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '../ui/button';
@@ -39,6 +40,14 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 import { Switch } from '../ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
+import { Textarea } from '../ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
 import { printContent } from '@/lib/print-service';
@@ -105,6 +114,12 @@ interface CashClosureReportData {
     byMethod: PaymentSummaryEntry[];
     count: number;
   };
+  withdrawals?: Array<{
+    id?: string;
+    amount: number;
+    reason: string;
+    createdAt: string;
+  }>;
   metadata?: {
     clientTimeInfo?: {
       timeZone?: string;
@@ -174,6 +189,13 @@ interface CashStats {
   salesBySeller?: Record<string, number>;
   totalInstallmentPayments?: number;
   installmentPaymentsByMethod?: Record<string, number>;
+  totalWithdrawals?: number;
+  withdrawals?: Array<{
+    id: string;
+    amount: number;
+    reason: string;
+    createdAt: string;
+  }>;
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -186,18 +208,28 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 
 const getPaymentMethodLabel = (method: string) => PAYMENT_METHOD_LABELS[method] ?? method;
 
+const WITHDRAWAL_REASONS = [
+  'Troco para clientes',
+  'Depósito bancário',
+  'Despesas operacionais',
+  'Outro',
+] as const;
+
 export default function CashClosurePage() {
   const { api } = useAuth();
   const { queryParams, queryKeyPart } = useDateRange();
   const [openingAmount, setOpeningAmount] = useState<number | undefined>(0);
   const [closingAmount, setClosingAmount] = useState<number | undefined>(0);
-  const [withdrawals, setWithdrawals] = useState<number | undefined>(0);
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [closeConfirmationOpen, setCloseConfirmationOpen] = useState(false);
   const [includeSaleDetails, setIncludeSaleDetails] = useState(false);
   const [detailsDialog, setDetailsDialog] = useState<{ open: boolean; data?: CashClosureDetailsDialogData | null; title?: string }>({ open: false });
   const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
+  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState<number | undefined>(undefined);
+  const [withdrawReason, setWithdrawReason] = useState<string>('');
+  const [withdrawReasonOther, setWithdrawReasonOther] = useState('');
 
   // Buscar caixa atual
   const { data: currentClosure, isLoading: isLoadingCurrent, refetch: refetchCurrent } = useQuery<CashClosure | null>({
@@ -216,7 +248,7 @@ export default function CashClosurePage() {
   });
 
   // Buscar estatísticas do caixa
-  const { data: stats } = useQuery<CashStats>({
+  const { data: stats, refetch: refetchStats } = useQuery<CashStats>({
     queryKey: ['cash-stats'],
     queryFn: async () => (await api.get('/cash-closure/stats')).data,
     enabled: !!currentClosure,
@@ -265,11 +297,6 @@ export default function CashClosurePage() {
       return;
     }
 
-    if ((withdrawals ?? 0) < 0) {
-      toast.error('Valor de saques não pode ser negativo');
-      return;
-    }
-
     if ((closingAmount ?? 0) === 0) {
       toast.error('Informe o valor contado no caixa antes de fechar.');
       return;
@@ -279,6 +306,36 @@ export default function CashClosurePage() {
     setCloseConfirmationOpen(true);
   };
 
+  const handleCreateWithdrawal = async () => {
+    const amount = withdrawAmount ?? 0;
+    const reason = withdrawReason === 'Outro' ? withdrawReasonOther.trim() : withdrawReason;
+
+    if (amount <= 0) {
+      toast.error('Informe um valor maior que zero');
+      return;
+    }
+
+    if (!reason) {
+      toast.error('Informe o motivo do saque');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.post('/cash-closure/withdrawals', { amount, reason });
+      toast.success('Saque registrado com sucesso!');
+      setWithdrawDialogOpen(false);
+      setWithdrawAmount(undefined);
+      setWithdrawReason('');
+      setWithdrawReasonOther('');
+      refetchStats();
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const executeCloseCashClosure = async (shouldPrint: boolean) => {
     if (!currentClosure) return;
 
@@ -286,7 +343,6 @@ export default function CashClosurePage() {
     try {
       const response = await api.patch('/cash-closure/close', {
         closingAmount: closingAmount ?? 0,
-        withdrawals: withdrawals ?? 0,
         printReport: shouldPrint,
         closingDate: toLocalISOString(),
         includeSaleDetails,
@@ -318,7 +374,6 @@ export default function CashClosurePage() {
       }
 
       setClosingAmount(0);
-      setWithdrawals(0);
       setCloseConfirmationOpen(false);
     } catch (error) {
       handleApiError(error);
@@ -425,7 +480,7 @@ export default function CashClosurePage() {
 
   // Cálculos - Usar apenas vendas em dinheiro para o caixa
   const expectedClosing = currentClosure
-    ? Number(currentClosure.openingAmount || 0) + Number(stats?.totalCashSales || 0) - Number(withdrawals ?? 0)
+    ? Number(currentClosure.openingAmount || 0) + Number(stats?.totalCashSales || 0) - Number(stats?.totalWithdrawals ?? 0)
     : 0;
 
   const difference = Number(closingAmount ?? 0) - expectedClosing;
@@ -519,6 +574,90 @@ export default function CashClosurePage() {
       </Dialog>
 
       <Dialog
+        open={withdrawDialogOpen}
+        onOpenChange={(open) => {
+          if (!loading) {
+            setWithdrawDialogOpen(open);
+            if (!open) {
+              setWithdrawAmount(undefined);
+              setWithdrawReason('');
+              setWithdrawReasonOther('');
+            }
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowDownCircle className="h-5 w-5" />
+              Registrar Saque
+            </DialogTitle>
+            <DialogDescription>
+              Registre o saque realizado no caixa. O valor será descontado do saldo esperado no fechamento.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="withdrawAmount">Valor (R$) *</Label>
+              <Input
+                id="withdrawAmount"
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="0.00"
+                value={withdrawAmount ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setWithdrawAmount(v === '' ? undefined : (() => { const n = Number(v); return isNaN(n) ? undefined : n; })());
+                }}
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="withdrawReason">Motivo do saque *</Label>
+              <Select value={withdrawReason} onValueChange={setWithdrawReason} disabled={loading}>
+                <SelectTrigger id="withdrawReason">
+                  <SelectValue placeholder="Selecione o motivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {WITHDRAWAL_REASONS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {withdrawReason === 'Outro' && (
+                <Textarea
+                  placeholder="Descreva o motivo do saque"
+                  value={withdrawReasonOther}
+                  onChange={(e) => setWithdrawReasonOther(e.target.value)}
+                  disabled={loading}
+                  rows={3}
+                  className="mt-2"
+                />
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setWithdrawDialogOpen(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreateWithdrawal}
+              disabled={loading || (withdrawAmount ?? 0) <= 0 || !withdrawReason || (withdrawReason === 'Outro' && !withdrawReasonOther.trim())}
+            >
+              {loading ? 'Registrando...' : 'Registrar Saque'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={detailsDialog.open}
         onOpenChange={(open) => {
           setDetailsDialog((prev) => (open ? { ...prev, open } : { open: false }));
@@ -579,6 +718,39 @@ export default function CashClosurePage() {
                       <p className="text-xs text-muted-foreground">Retiradas</p>
                       <p className="text-sm font-semibold text-foreground">{formatCurrency(summary.totalWithdrawals ?? 0)}</p>
                     </div>
+                  </div>
+
+                  {reportData.withdrawals && reportData.withdrawals.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-foreground">Detalhamento de saques</h3>
+                      <div className="rounded-md border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[140px]">Data/Hora</TableHead>
+                              <TableHead>Motivo</TableHead>
+                              <TableHead className="text-right w-[120px]">Valor</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {reportData.withdrawals.map((w, idx) => (
+                              <TableRow key={w.id ?? idx}>
+                                <TableCell className="text-muted-foreground text-sm">
+                                  {formatDateTime(w.createdAt)}
+                                </TableCell>
+                                <TableCell>{w.reason}</TableCell>
+                                <TableCell className="text-right font-medium text-red-600 dark:text-red-400">
+                                  -{formatCurrency(w.amount)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <div className="rounded-lg border p-4">
                       <p className="text-xs text-muted-foreground">Vendas em dinheiro</p>
                       <p className="text-sm font-semibold text-foreground">{formatCurrency(summary.totalCashSales ?? 0)}</p>
@@ -991,64 +1163,80 @@ export default function CashClosurePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="closingAmount" className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    Valor Contado no Caixa (R$) *
-                  </Label>
-                  <Input
-                    id="closingAmount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={closingAmount ?? ''}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setClosingAmount(v === '' ? undefined : (() => { const n = Number(v); return isNaN(n) ? undefined : n; })());
-                    }}
-                    onFocus={(e) => {
-                      if (Number(e.target.value) === 0) {
-                        e.target.value = '';
-                      }
-                    }}
-                    placeholder="0.00"
+              <div className="space-y-4">
+                <div className="flex items-end justify-between gap-4">
+                  <div className="space-y-2 flex-1">
+                    <Label htmlFor="closingAmount" className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Valor Contado no Caixa (R$) *
+                    </Label>
+                    <Input
+                      id="closingAmount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={closingAmount ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setClosingAmount(v === '' ? undefined : (() => { const n = Number(v); return isNaN(n) ? undefined : n; })());
+                      }}
+                      onFocus={(e) => {
+                        if (Number(e.target.value) === 0) {
+                          e.target.value = '';
+                        }
+                      }}
+                      placeholder="0.00"
+                      disabled={loading}
+                      className="text-lg"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Conte todo o dinheiro físico no caixa
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setWithdrawDialogOpen(true)}
                     disabled={loading}
-                    className="text-lg"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Conte todo o dinheiro físico no caixa
-                  </p>
+                    className="shrink-0 gap-2"
+                  >
+                    <ArrowDownCircle className="h-4 w-4" />
+                    Registrar Saque
+                  </Button>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="withdrawals" className="flex items-center gap-2">
-                    <Wallet className="h-4 w-4" />
-                    Saques Realizados (R$)
-                  </Label>
-                  <Input
-                    id="withdrawals"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={withdrawals ?? ''}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setWithdrawals(v === '' ? undefined : (() => { const n = Number(v); return isNaN(n) ? undefined : n; })());
-                    }}
-                    onFocus={(e) => {
-                      if (Number(e.target.value) === 0) {
-                        e.target.value = '';
-                      }
-                    }}
-                    placeholder="0.00"
-                    disabled={loading}
-                    className="text-lg"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Total de saques/retiradas durante o dia
-                  </p>
-                </div>
+                {stats?.withdrawals && stats.withdrawals.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Saques registrados no dia</Label>
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[140px]">Data/Hora</TableHead>
+                            <TableHead>Motivo</TableHead>
+                            <TableHead className="text-right w-[120px]">Valor</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {stats.withdrawals.map((w) => (
+                            <TableRow key={w.id}>
+                              <TableCell className="text-muted-foreground text-sm">
+                                {formatDateTime(w.createdAt)}
+                              </TableCell>
+                              <TableCell>{w.reason}</TableCell>
+                              <TableCell className="text-right font-medium text-red-600 dark:text-red-400">
+                                -{formatCurrency(w.amount)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Total de saques: <span className="font-semibold text-foreground">{formatCurrency(stats.totalWithdrawals ?? 0)}</span>
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Resumo do Fechamento */}
@@ -1065,7 +1253,7 @@ export default function CashClosurePage() {
                   </div>
                   <div className="flex justify-between text-red-600 dark:text-red-400">
                     <span>- Saques:</span>
-                    <span className="font-medium">{formatCurrency(withdrawals ?? 0)}</span>
+                    <span className="font-medium">{formatCurrency(stats?.totalWithdrawals ?? 0)}</span>
                   </div>
                   <div className="border-t pt-2 flex justify-between font-bold">
                     <span>Saldo Esperado:</span>

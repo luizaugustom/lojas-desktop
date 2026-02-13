@@ -157,8 +157,10 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
     }
   }, [product]);
 
-  // Resetar formulário quando produto muda
+  // Resetar formulário quando produto muda ou quando modal abre para novo produto
   useEffect(() => {
+    if (!open) return; // Só resetar quando o modal estiver aberto
+
     if (product) {
       console.log('[ProductDialog] Produto recebido:', product);
       console.log('[ProductDialog] Fotos do produto:', product.photos);
@@ -179,10 +181,15 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
         ncm: product.ncm || '',
         cfop: product.cfop || '',
         costPrice: product.costPrice ? Number(product.costPrice) : undefined,
+        minStockQuantity: product.minStockQuantity ?? undefined,
         lowStockAlertThreshold: product.lowStockAlertThreshold ?? 3,
       });
+      setSelectedPhotos([]);
+      setPhotoPreviewUrls([]);
+      setExistingPhotosToDelete([]);
     } else {
       // Ao criar novo produto, manter apenas a categoria, limpar todo o resto
+      // IMPORTANTE: incluir todos os campos para evitar que valores do produto anterior persistam
       reset({
         name: '',
         barcode: '',
@@ -191,15 +198,17 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
         category: lastCategory || '',
         expirationDate: undefined,
         unitOfMeasure: 'un',
-        ncm: '', // Será preenchido com padrão pelo backend se vazio
-        cfop: '', // Será preenchido com padrão pelo backend se vazio
+        ncm: '',
+        cfop: '',
+        costPrice: undefined,
+        minStockQuantity: undefined,
         lowStockAlertThreshold: 3,
       });
       setSelectedPhotos([]);
       setPhotoPreviewUrls([]);
       setExistingPhotosToDelete([]);
     }
-  }, [product, reset, lastCategory]);
+  }, [open, product, reset, lastCategory]);
 
   // Focar automaticamente o campo de código de barras ao abrir o modal
   useEffect(() => {

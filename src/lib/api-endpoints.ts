@@ -140,6 +140,9 @@ export const cashClosureApi = {
     api.get('/cash-closure', { params }),
   current: () => api.get('/cash-closure/current'),
   stats: () => api.get('/cash-closure/stats'),
+  createWithdrawal: (data: { amount: number; reason: string }) =>
+    api.post('/cash-closure/withdrawals', data),
+  getWithdrawals: () => api.get('/cash-closure/withdrawals'),
   history: (params?: { page?: number; limit?: number }) =>
     api.get('/cash-closure/history', { params }),
   get: (id: string) => api.get(`/cash-closure/${id}`),
