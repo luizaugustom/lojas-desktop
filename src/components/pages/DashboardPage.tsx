@@ -11,8 +11,6 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { companyApi, customerApi } from '../../lib/api-endpoints';
 import { useDevices } from '../../contexts/DeviceContext';
 // PrinterDriverSetup removido - funcionalidades de impressão removidas
-import { PlanWarningBanner } from '../plan-limits/plan-warning-banner';
-import { PlanUsageCard } from '../plan-limits/plan-usage-card';
 
 interface MetricCardProps {
   title: string;
@@ -106,19 +104,10 @@ export default function DashboardPage() {
     return [];
   };
 
-  // Sales last 7 days (for chart) - usa filtro global se disponível
+  // Sales last 7 days (for chart) - sempre últimos 7 dias da data atual
   const now = new Date();
-  const chartStartDate = dateRange.startDate || new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0);
-  const chartEndDate = dateRange.endDate || new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-  
-  // Para o gráfico, sempre mostra os últimos 7 dias dentro do período filtrado ou últimos 7 dias globais
-  const start7 = new Date(Math.max(
-    chartEndDate.getTime() - 6 * 24 * 60 * 60 * 1000,
-    chartStartDate?.getTime() || 0
-  ));
-  start7.setHours(0, 0, 0, 0);
-  const end7 = chartEndDate;
-  end7.setHours(23, 59, 59, 999);
+  const start7 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0);
+  const end7 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
   const start7Iso = toLocalISOString(start7);
   const end7Iso = toLocalISOString(end7);
   
@@ -245,6 +234,17 @@ export default function DashboardPage() {
     const err = salesError || productsError || customersError || companiesError;
     if (err) handleApiError(err);
   }, [salesError, productsError, customersError, companiesError]);
+
+  // Formatar período para exibição
+  const getPeriodLabel = () => {
+    if (!dateRange.startDate || !dateRange.endDate) {
+      return 'período';
+    }
+    const start = new Date(dateRange.startDate);
+    const end = new Date(dateRange.endDate);
+    const formatShort = (d: Date) => `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+    return `${formatShort(start)} - ${formatShort(end)}`;
+  };
 
   // Compute sales metrics for month
   const sales: Sale[] = normalizeList<Sale>(salesData, 'sales');
@@ -386,18 +386,16 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Visão geral do seu negócio</p>
       </div>
 
-      {/* Plan Warnings */}
-      {user?.role === 'empresa' && <PlanWarningBanner />}
 
       {/* Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
-          title="Vendas (mês)"
+          title={`Vendas (${getPeriodLabel()})`}
           value={totalSalesCount}
           icon={ShoppingCart}
         />
         <MetricCard
-          title="Receita (mês)"
+          title={`Receita (${getPeriodLabel()})`}
           value={formatCurrency(revenueTotal || 0)}
           icon={DollarSign}
         />
@@ -413,12 +411,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Plan Usage Card - apenas para empresas */}
-      {user?.role === 'empresa' && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <PlanUsageCard />
-        </div>
-      )}
+
 
       {/* Alerta local: Estoque Baixo */}
       {lowStockCount > 0 && (

@@ -70,6 +70,23 @@ export default function SalesPage() {
     },
   });
 
+  // Buscar caixa atual para verificar se está aberto
+  const { data: currentClosure } = useQuery({
+    queryKey: ['current-cash-closure', user?.id],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/cash-closure/current');
+        return response.data;
+      } catch (error: any) {
+        if (error.response?.status === 404 || error.response?.status === 204) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    enabled: !!user,
+  });
+
   const products = productsResponse?.products || [];
 
   const handleBarcodeScanned = async (barcode: string) => {
@@ -134,21 +151,13 @@ export default function SalesPage() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        if (!user) return;
-        const resp = await api.get('/cash-closure/current');
-        const current = resp?.data;
-        if (!current || !current.id) {
-          setOpeningDialogOpen(true);
-        }
-      } catch (err: any) {
-        const status = err?.response?.status;
-        if (status === 404 || status === 204) {
-          setOpeningDialogOpen(true);
-        }
+    // Ao montar, verificar se existe fechamento de caixa atual. Se não, pedir saldo inicial.
+    if (user && currentClosure !== undefined) {
+      // Se não houver um current válido, abrir diálogo
+      if (!currentClosure || !currentClosure.id) {
+        setOpeningDialogOpen(true);
       }
-    })();
+    }
 
     setScannerActive(true);
 
@@ -189,7 +198,7 @@ export default function SalesPage() {
       window.removeEventListener('keydown', onKey);
       setScannerActive(false);
     };
-  }, [barcodeBuffer, lastScanned, setScannerActive, setBarcodeBuffer]);
+  }, [barcodeBuffer, lastScanned, setScannerActive, setBarcodeBuffer, user, currentClosure]);
 
   const handleCheckout = () => {
     if (items.length === 0) return;

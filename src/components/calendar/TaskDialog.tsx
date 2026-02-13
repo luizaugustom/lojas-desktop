@@ -13,6 +13,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
+import { Checkbox } from '../ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -48,8 +49,9 @@ export function TaskDialog({ open, onClose, onSave, task, sellers = [] }: TaskDi
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState<Date | undefined>(new Date());
   const [dueTime, setDueTime] = useState<string>('09:00');
+  const [hasExplicitTime, setHasExplicitTime] = useState<boolean>(true);
   const [type, setType] = useState<'PERSONAL' | 'WORK'>('WORK');
-  const [assignedToId, setAssignedToId] = useState<string>('');
+  const [assignedToIds, setAssignedToIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -60,18 +62,37 @@ export function TaskDialog({ open, onClose, onSave, task, sellers = [] }: TaskDi
         setDescription(task.description || '');
         setDueDate(d);
         setDueTime(formatTime(d));
+        setHasExplicitTime(task.hasExplicitTime ?? true);
         setType(task.type);
-        setAssignedToId(task.assignedToType === 'company' ? 'company' : task.assignedToId);
+        const fromAssignees = Array.isArray(task.assignees)
+          ? task.assignees.map((assignee) => assignee.id)
+          : [];
+        if (fromAssignees.length > 0) {
+          setAssignedToIds(fromAssignees);
+        } else if (task.assignedToId) {
+          setAssignedToIds([task.assignedToId]);
+        } else {
+          setAssignedToIds([]);
+        }
       } else {
         setTitle('');
         setDescription('');
         setDueDate(new Date());
         setDueTime('09:00');
+        setHasExplicitTime(true);
         setType('WORK');
-        setAssignedToId('');
+        setAssignedToIds([]);
       }
     }
   }, [open, task]);
+
+  const companyAssigneeId = isCompany ? user?.id : undefined;
+
+  const toggleAssignee = (id: string) => {
+    setAssignedToIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) {
@@ -85,7 +106,11 @@ export function TaskDialog({ open, onClose, onSave, task, sellers = [] }: TaskDi
 
     const [hours, minutes] = dueTime.split(':').map(Number);
     const finalDueDate = new Date(dueDate);
-    finalDueDate.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
+    if (hasExplicitTime) {
+      finalDueDate.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
+    } else {
+      finalDueDate.setHours(9, 0, 0, 0);
+    }
 
     setSaving(true);
     try {
@@ -94,16 +119,21 @@ export function TaskDialog({ open, onClose, onSave, task, sellers = [] }: TaskDi
         description: description.trim() || undefined,
         dueDate: finalDueDate.toISOString(),
         type,
+        hasExplicitTime,
       };
 
       if (isCompany) {
-        // Se for 'company' ou vazio, não envia assignedToId (atribui à empresa)
-        if (assignedToId && assignedToId !== 'company') {
-          data.assignedToId = assignedToId;
+        const selected = assignedToIds.length > 0
+          ? assignedToIds
+          : companyAssigneeId
+            ? [companyAssigneeId]
+            : [];
+        if (selected.length > 0) {
+          data.assignedToIds = selected;
         }
       } else if (isSeller) {
         // Vendedor sempre cria para si mesmo
-        data.assignedToId = user?.id;
+        data.assignedToIds = user?.id ? [user.id] : [];
       }
 
       if (task) {
@@ -176,9 +206,26 @@ export function TaskDialog({ open, onClose, onSave, task, sellers = [] }: TaskDi
               type="time"
               value={dueTime}
               onChange={(e) => setDueTime(e.target.value)}
-              disabled={saving}
+              disabled={saving || !hasExplicitTime}
               className="max-w-[140px]"
             />
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="task-no-time"
+                checked={!hasExplicitTime}
+                onCheckedChange={(checked) => {
+                  const next = !(checked === true);
+                  setHasExplicitTime(next);
+                  if (!next) {
+                    setDueTime('09:00');
+                  }
+                }}
+                disabled={saving}
+              />
+              <Label htmlFor="task-no-time" className="text-sm font-normal">
+                Sem horario (enviar as 09:00)
+              </Label>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -196,24 +243,41 @@ export function TaskDialog({ open, onClose, onSave, task, sellers = [] }: TaskDi
 
           {isCompany && (
             <div className="space-y-2">
-              <Label htmlFor="task-assigned">Atribuir para</Label>
-              <Select
-                value={assignedToId || 'company'}
-                onValueChange={(value) => setAssignedToId(value === 'company' ? '' : value)}
-                disabled={saving}
-              >
-                <SelectTrigger id="task-assigned">
-                  <SelectValue placeholder="Empresa (padrão)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="company">Empresa</SelectItem>
+              <Label>Atribuir para</Label>
+              <div className="rounded-md border p-3 space-y-3">
+                {companyAssigneeId && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="assignee-company"
+                      checked={assignedToIds.includes(companyAssigneeId)}
+                      onCheckedChange={() => toggleAssignee(companyAssigneeId)}
+                      disabled={saving}
+                    />
+                    <Label htmlFor="assignee-company" className="text-sm font-normal">
+                      Empresa
+                    </Label>
+                  </div>
+                )}
+                <div className="border-t" />
+                <div className="space-y-2 max-h-[180px] overflow-auto">
                   {sellers.map((seller) => (
-                    <SelectItem key={seller.id} value={seller.id}>
-                      {seller.name}
-                    </SelectItem>
+                    <div key={seller.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`assignee-${seller.id}`}
+                        checked={assignedToIds.includes(seller.id)}
+                        onCheckedChange={() => toggleAssignee(seller.id)}
+                        disabled={saving}
+                      />
+                      <Label htmlFor={`assignee-${seller.id}`} className="text-sm font-normal">
+                        {seller.name}
+                      </Label>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
+                  {sellers.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Nenhum vendedor encontrado.</p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>

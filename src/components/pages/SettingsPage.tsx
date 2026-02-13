@@ -55,7 +55,11 @@ export default function SettingsPage() {
     phone: '',
     login: '',
   });
-  
+
+  // Estado do apelido da empresa
+  const [companyNickname, setCompanyNickname] = useState('');
+  const [savingNickname, setSavingNickname] = useState(false);
+
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -186,6 +190,9 @@ export default function SettingsPage() {
         setBrandColor(data.brandColor);
         setCompanyColor(data.brandColor);
       }
+      if (data?.fantasyName) {
+        setCompanyNickname(data.fantasyName);
+      }
     } catch (error) {
       console.error('Erro ao carregar dados da empresa:', error);
       setCompanyData(null);
@@ -198,18 +205,31 @@ export default function SettingsPage() {
     try {
       setSavingBrandColor(true);
       await companyApi.updateMyCompany({ brandColor });
-      
+
       // Invalidar o cache da query para forçar atualização
       await queryClient.invalidateQueries({ queryKey: ['my-company', user?.companyId] });
-      
+
       // Aplicar a cor imediatamente
       setCompanyColor(brandColor);
-      
+
       toast.success('Cor da empresa atualizada!');
     } catch (error: any) {
       handleApiError(error);
     } finally {
       setSavingBrandColor(false);
+    }
+  };
+
+  const handleSaveCompanyNickname = async () => {
+    try {
+      setSavingNickname(true);
+      await companyApi.updateMyCompany({ fantasyName: companyNickname });
+      toast.success('Apelido da empresa atualizado!');
+      await loadCompanyData();
+    } catch (error: any) {
+      handleApiError(error);
+    } finally {
+      setSavingNickname(false);
     }
   };
 
@@ -1319,13 +1339,6 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {profile?.plan && (
-              <div className="space-y-2">
-                <Label>Plano</Label>
-                <Input value={profile.plan} disabled className="capitalize bg-muted" />
-              </div>
-            )}
-
             <Button 
               onClick={handleUpdateProfile} 
               disabled={updatingProfile}
@@ -1648,6 +1661,34 @@ export default function SettingsPage() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Essa cor será aplicada como primária (botões, destaques e gráficos).</p>
+              </div>
+
+              {/* Apelido da empresa */}
+              <div className="space-y-2">
+                <Label htmlFor="company-nickname">Apelido da Empresa</Label>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <Input
+                    id="company-nickname"
+                    value={companyNickname}
+                    onChange={(e) => setCompanyNickname(e.target.value)}
+                    placeholder="Digite um apelido para a empresa"
+                    className="flex-1"
+                  />
+                  <Button onClick={handleSaveCompanyNickname} disabled={savingNickname}>
+                    {savingNickname ? (
+                      <>
+                        <Save className="mr-2 h-4 w-4 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Salvar apelido
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Define um nome amigável para identificar a empresa no sistema.</p>
               </div>
 
               {/* Informações */}
@@ -2252,26 +2293,6 @@ export default function SettingsPage() {
                         Exemplo: se você digitar "masolucoes", sua página será acessível em {`${PUBLIC_SITE_URL}/catalog/masolucoes`}
                       </p>
                     </div>
-
-                    {catalogPublicUrl && (
-                      <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                        <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">
-                          ✅ Sua página está disponível
-                        </p>
-                        <a
-                          href={catalogPublicUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-start gap-2 text-green-700 dark:text-green-300 hover:underline"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                          <span className="flex flex-col">
-                            <span className="font-medium">Abrir página pública</span>
-                            <span className="text-xs break-all">{catalogPublicUrl}</span>
-                          </span>
-                        </a>
-                      </div>
-                    )}
 
                     {/* Aviso se não tiver permissão */}
                     {catalogPageConfig?.catalogPageAllowed === false && (

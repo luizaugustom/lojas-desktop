@@ -41,9 +41,11 @@ export interface TaskItemType {
   assignedToType: string;
   assignedToId: string;
   assignedToName: string | null;
+  assignees?: Array<{ id: string; type: 'company' | 'seller'; name: string | null }>;
   title: string;
   description: string | null;
   dueDate: string;
+  hasExplicitTime?: boolean;
   type: 'PERSONAL' | 'WORK';
   isCompleted: boolean;
   completedAt: string | null;
@@ -357,7 +359,7 @@ export function CalendarPanel({ open, onOpenChange }: CalendarPanelProps) {
                         onDelete={() => setDeleteTarget({ id: task.id, title: task.title })}
                         onToggleComplete={() => handleToggleComplete(task)}
                         onViewDetails={() => setDetailsTask(task)}
-                        canEdit={isCompany || (isSeller && task.assignedToId === user?.id)}
+                        canEdit={isCompany || (isSeller && task.authorType === 'seller' && task.authorId === user?.id)}
                         canDelete={
                           isCompany || (isSeller && task.authorType === 'seller' && task.authorId === user?.id)
                         }
@@ -388,7 +390,10 @@ export function CalendarPanel({ open, onOpenChange }: CalendarPanelProps) {
         task={detailsTask}
         onEdit={() => detailsTask && handleEdit(detailsTask)}
         onDelete={() => detailsTask && setDeleteTarget({ id: detailsTask.id, title: detailsTask.title })}
-        canEdit={!!detailsTask && (isCompany || (isSeller && detailsTask.assignedToId === user?.id))}
+        canEdit={
+          !!detailsTask &&
+          (isCompany || (isSeller && detailsTask.authorType === 'seller' && detailsTask.authorId === user?.id))
+        }
         canDelete={
           !!detailsTask &&
           (isCompany || (isSeller && detailsTask.authorType === 'seller' && detailsTask.authorId === user?.id))

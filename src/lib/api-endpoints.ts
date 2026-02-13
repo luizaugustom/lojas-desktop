@@ -269,6 +269,8 @@ export const taskApi = {
     dueDate: string;
     type: 'PERSONAL' | 'WORK';
     assignedToId?: string;
+    assignedToIds?: string[];
+    hasExplicitTime?: boolean;
   }) => api.post('/task', data),
   list: (params?: {
     startDate?: string;
@@ -287,6 +289,8 @@ export const taskApi = {
       dueDate?: string;
       type?: 'PERSONAL' | 'WORK';
       assignedToId?: string;
+      assignedToIds?: string[];
+      hasExplicitTime?: boolean;
     },
   ) => api.patch(`/task/${id}`, data),
   delete: (id: string) => api.delete(`/task/${id}`),

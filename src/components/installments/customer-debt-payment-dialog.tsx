@@ -26,11 +26,12 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { useAuth } from '../../hooks/useAuth';
 import { formatCurrency, formatDate } from '../../lib/utils';
-import { Loader2, Square, CheckSquare, Eye } from 'lucide-react';
+import { Loader2, Square, CheckSquare, Eye, Download } from 'lucide-react';
 import { PaymentReceiptConfirmDialog } from './payment-receipt-confirm-dialog';
 import { printContent } from '../../lib/print-service';
 import { generateBulkPaymentReceiptContent } from '../../lib/payment-receipt-content';
 import { InstallmentProductsDialog } from './installment-products-dialog';
+import { ConfirmationModal } from '../ui/confirmation-modal';
 
 interface CustomerDebtPaymentDialogProps {
   open: boolean;
@@ -57,6 +58,15 @@ interface CustomerDebtSummary {
     totalInstallments: number;
     saleId?: string;
   }>;
+}
+
+interface GeneratedBillet {
+  installmentId: string;
+  installmentNumber?: number;
+  totalInstallments?: number;
+  dueDate?: string;
+  remainingAmount?: number | string;
+  newBilletPdf: string;
 }
 
 const toNumber = (value: any): number => {
@@ -135,6 +145,8 @@ export function CustomerDebtPaymentDialog({
   }>>([]);
   const [totalRemainingDebt, setTotalRemainingDebt] = useState<number | null>(null);
   const [debtFilter, setDebtFilter] = useState<DebtFilter>('default');
+  const [showGeneratedBillets, setShowGeneratedBillets] = useState(false);
+  const [showBilletConfirm, setShowBilletConfirm] = useState(false);
 
   const companyInfo = useMemo(() => {
     if (!company) return null;
@@ -197,6 +209,8 @@ export function CustomerDebtPaymentDialog({
       setTotalRemainingDebt(null);
       setSelectedInstallmentId(null);
       setDebtFilter('default');
+      setShowGeneratedBillets(false);
+      setShowBilletConfirm(false);
     }
   }, [open]);
 
@@ -228,6 +242,12 @@ export function CustomerDebtPaymentDialog({
     return filterInstallmentsByDueDate(installments, debtFilter);
   }, [installments, debtFilter]);
 
+  const installmentDetailsById = useMemo(() => {
+    return new Map(
+      installments.map((inst) => [inst.id, inst]),
+    );
+  }, [installments]);
+
   const selectedInstallments = useMemo(() => {
     return filteredInstallments.filter((inst) => selection[inst.id]?.selected);
   }, [filteredInstallments, selection]);
@@ -252,6 +272,25 @@ export function CustomerDebtPaymentDialog({
   const hasFilteredPendingInstallments = filteredInstallments.some(
     (inst) => toNumber(inst.remainingAmount) > 0,
   );
+
+  const generatedBillets = useMemo<GeneratedBillet[]>(() => {
+    if (!paymentData?.payments || !Array.isArray(paymentData.payments)) return [];
+    return paymentData.payments
+      .filter((payment: any) => !!payment?.newBilletPdf)
+      .map((payment: any) => {
+        const details = installmentDetailsById.get(payment.installmentId);
+        return {
+          installmentId: payment.installmentId,
+          installmentNumber: details?.installmentNumber,
+          totalInstallments: details?.totalInstallments,
+          dueDate: payment.dueDate ?? details?.dueDate,
+          remainingAmount: payment.remainingAmount ?? details?.remainingAmount,
+          newBilletPdf: payment.newBilletPdf,
+        };
+      });
+  }, [paymentData?.payments, installmentDetailsById]);
+
+  const hasGeneratedBillets = generatedBillets.length > 0;
 
   const toggleSelection = (installmentId: string) => {
     setSelection((prev) => {
@@ -415,6 +454,14 @@ export function CustomerDebtPaymentDialog({
         sellerName: user?.name,
         payments: response?.data?.payments || [],
       });
+      const payments = Array.isArray(response?.data?.payments) ? response.data.payments : [];
+      const hasNewBillets = payments.some((payment: any) => !!payment?.newBilletPdf);
+      if (hasNewBillets) {
+        setShowBilletConfirm(true);
+        setShowGeneratedBillets(false);
+      } else {
+        setShowGeneratedBillets(false);
+      }
       
       toast.success(response?.data?.message || 'Pagamentos registrados com sucesso!');
       await refetch();
@@ -541,10 +588,39 @@ export function CustomerDebtPaymentDialog({
     }
   };
 
+  const downloadBilletPdf = (base64: string, filename: string) => {
+    if (!base64 || typeof window === 'undefined') return;
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i += 1) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleSkipReceipt = () => {
     setShowReceiptConfirm(false);
     setPaymentData(null);
     onClose();
+  };
+
+  const handleShowGeneratedBillets = () => {
+    setShowBilletConfirm(false);
+    setShowGeneratedBillets(true);
+  };
+
+  const handleSkipGeneratedBillets = () => {
+    setShowBilletConfirm(false);
+    setShowGeneratedBillets(false);
   };
 
   return (
@@ -564,199 +640,243 @@ export function CustomerDebtPaymentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading || isFetching ? (
-          <div className="flex min-h-[200px] items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          </div>
-        ) : !hasAnyPendingInstallments ? (
-          <div className="py-10 text-center text-muted-foreground">
-            Nenhuma dívida pendente foi encontrada para este cliente.
-          </div>
-        ) : !hasFilteredPendingInstallments ? (
-          <div className="py-10 text-center text-muted-foreground">
-            Nenhuma dívida encontrada para este filtro. Tente &quot;Todas as dívidas&quot;.
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="space-y-2">
-                <Label>Filtrar dívidas</Label>
-                <Select
-                  value={debtFilter}
-                  onValueChange={(value) => setDebtFilter(value as DebtFilter)}
-                >
-                  <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="Filtrar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">Vencidas ou este mês</SelectItem>
-                    <SelectItem value="overdue">Somente atrasadas</SelectItem>
-                    <SelectItem value="all">Todas as dívidas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-2">
+              <Label>Filtrar dívidas</Label>
+              <Select
+                value={debtFilter}
+                onValueChange={(value) => setDebtFilter(value as DebtFilter)}
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="Filtrar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Vencidas ou este mês</SelectItem>
+                  <SelectItem value="overdue">Somente atrasadas</SelectItem>
+                  <SelectItem value="all">Todas as dívidas</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-lg border p-4">
-                <p className="text-sm text-muted-foreground">Total em aberto</p>
-                <p className="text-xl font-semibold text-primary">{formatCurrency(totalRemaining)}</p>
-              </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-sm text-muted-foreground">Parcelas selecionadas</p>
-                <p className="text-xl font-semibold">{selectedInstallments.length}</p>
-              </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-sm text-muted-foreground">Total a pagar</p>
-                <p className="text-xl font-semibold text-green-600">{formatCurrency(totalToPay)}</p>
-              </div>
+          </div>
+
+          {isLoading || isFetching ? (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={selectAll}>
-                Selecionar todas
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={clearSelection}>
-                Limpar seleção
-              </Button>
+          ) : !hasAnyPendingInstallments ? (
+            <div className="py-10 text-center text-muted-foreground">
+              Nenhuma dívida pendente foi encontrada para este cliente.
             </div>
+          ) : !hasFilteredPendingInstallments ? (
+            <div className="py-10 text-center text-muted-foreground">
+              Nenhuma dívida encontrada para este filtro. Tente &quot;Todas as dívidas&quot;.
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Total em aberto</p>
+                  <p className="text-xl font-semibold text-primary">{formatCurrency(totalRemaining)}</p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Parcelas selecionadas</p>
+                  <p className="text-xl font-semibold">{selectedInstallments.length}</p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Total a pagar</p>
+                  <p className="text-xl font-semibold text-green-600">{formatCurrency(totalToPay)}</p>
+                </div>
+              </div>
 
-            <ScrollArea className="h-72 rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12"></TableHead>
-                    <TableHead>Parcela</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Restante</TableHead>
-                    <TableHead>Valor a pagar</TableHead>
-                    <TableHead className="w-20">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInstallments.map((inst) => {
-                    const remaining = selection[inst.id]?.remaining ?? toNumber(inst.remainingAmount);
-                    const isSelected = selection[inst.id]?.selected ?? false;
-                    const inputValue = selection[inst.id]?.inputValue ?? '';
-                    const amount = selection[inst.id]?.amount ?? 0;
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={selectAll}>
+                  Selecionar todas
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={clearSelection}>
+                  Limpar seleção
+                </Button>
+              </div>
 
-                    if (remaining <= 0) {
-                      return null;
-                    }
+              <ScrollArea className="h-72 rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12"></TableHead>
+                      <TableHead>Parcela</TableHead>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Restante</TableHead>
+                      <TableHead>Valor a pagar</TableHead>
+                      <TableHead className="w-20">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredInstallments.map((inst) => {
+                      const remaining = selection[inst.id]?.remaining ?? toNumber(inst.remainingAmount);
+                      const isSelected = selection[inst.id]?.selected ?? false;
+                      const inputValue = selection[inst.id]?.inputValue ?? '';
+                      const amount = selection[inst.id]?.amount ?? 0;
 
-                    return (
-                      <TableRow key={inst.id} className={!isSelected ? 'opacity-60' : ''}>
-                        <TableCell>
-                          <button
-                            type="button"
-                            onClick={() => toggleSelection(inst.id)}
-                            className="text-muted-foreground transition hover:text-primary"
-                            aria-label={isSelected ? 'Desmarcar parcela' : 'Selecionar parcela'}
-                          >
-                            {isSelected ? (
-                              <CheckSquare className="h-5 w-5" />
-                            ) : (
-                              <Square className="h-5 w-5" />
-                            )}
-                          </button>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              Parcela {inst.installmentNumber}/{inst.totalInstallments}
-                            </span>
+                      if (remaining <= 0) {
+                        return null;
+                      }
+
+                      return (
+                        <TableRow key={inst.id} className={!isSelected ? 'opacity-60' : ''}>
+                          <TableCell>
+                            <button
+                              type="button"
+                              onClick={() => toggleSelection(inst.id)}
+                              className="text-muted-foreground transition hover:text-primary"
+                              aria-label={isSelected ? 'Desmarcar parcela' : 'Selecionar parcela'}
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="h-5 w-5" />
+                              ) : (
+                                <Square className="h-5 w-5" />
+                              )}
+                            </button>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                Parcela {inst.installmentNumber}/{inst.totalInstallments}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{formatDate(inst.dueDate)}</TableCell>
+                          <TableCell>{formatCurrency(remaining)}</TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={inputValue}
+                              onChange={(event) => updateAmount(inst.id, event.target.value)}
+                              disabled={!isSelected}
+                              inputMode="decimal"
+                              className="appearance-none"
+                              onFocus={(event) => {
+                                if (event.target.value === '0') {
+                                  updateAmount(inst.id, '');
+                                }
+                              }}
+                              onBlur={(event) => {
+                                const current = selection[inst.id];
+                                if (!current) return;
+                                if (event.target.value === '') {
+                                  return;
+                                }
+
+                                const normalized = normalizeDecimalInput(event.target.value);
+                                const numericValue = Number(normalized);
+
+                                if (Number.isNaN(numericValue)) {
+                                  updateAmount(inst.id, formatInputValue(current.amount));
+                                  return;
+                                }
+
+                                const clampedValue = Math.max(
+                                  0,
+                                  Math.min(current.remaining, Math.round(numericValue * 100) / 100),
+                                );
+                                const formatted = formatInputValue(clampedValue);
+                                if (formatted !== event.target.value) {
+                                  updateAmount(inst.id, formatted);
+                                }
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedInstallmentId(inst.id)}
+                              className="h-8 w-8 p-0"
+                              title="Ver detalhes dos produtos"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Método de pagamento</Label>
+                  <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o método" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Dinheiro</SelectItem>
+                      <SelectItem value="pix">PIX</SelectItem>
+                      <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
+                      <SelectItem value="debit_card">Cartão de Débito</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Observações</Label>
+                  <Textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="Adicione observações (opcional)"
+                    rows={4}
+                  />
+                </div>
+              </div>
+
+              {hasGeneratedBillets && showGeneratedBillets && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                  <div className="text-sm font-semibold">Boletos gerados para o proximo mes</div>
+                  <div className="mt-3 space-y-2">
+                    {generatedBillets.map((billet: GeneratedBillet) => {
+                      const installmentLabel =
+                        billet.installmentNumber && billet.totalInstallments
+                          ? `Parcela ${billet.installmentNumber}/${billet.totalInstallments}`
+                          : 'Parcela atualizada';
+                      const dueDateLabel = billet.dueDate ? formatDate(billet.dueDate) : 'Nao informado';
+                      const fileName =
+                        billet.installmentNumber && billet.totalInstallments
+                          ? `boleto-parcela-${billet.installmentNumber}-${billet.totalInstallments}.pdf`
+                          : 'boleto-restante.pdf';
+
+                      return (
+                        <div
+                          key={billet.installmentId}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-100 bg-white px-3 py-2"
+                        >
+                          <div className="text-sm">
+                            <div className="font-medium">{installmentLabel}</div>
+                            <div className="text-xs text-amber-800">Vencimento: {dueDateLabel}</div>
                           </div>
-                        </TableCell>
-                        <TableCell>{formatDate(inst.dueDate)}</TableCell>
-                        <TableCell>{formatCurrency(remaining)}</TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={inputValue}
-                            onChange={(event) => updateAmount(inst.id, event.target.value)}
-                            disabled={!isSelected}
-                            inputMode="decimal"
-                            className="appearance-none"
-                            onFocus={(event) => {
-                              if (event.target.value === '0') {
-                                updateAmount(inst.id, '');
-                              }
-                            }}
-                            onBlur={(event) => {
-                              const current = selection[inst.id];
-                              if (!current) return;
-                              if (event.target.value === '') {
-                                return;
-                              }
-
-                              const normalized = normalizeDecimalInput(event.target.value);
-                              const numericValue = Number(normalized);
-
-                              if (Number.isNaN(numericValue)) {
-                                updateAmount(inst.id, formatInputValue(current.amount));
-                                return;
-                              }
-
-                              const clampedValue = Math.max(
-                                0,
-                                Math.min(current.remaining, Math.round(numericValue * 100) / 100),
-                              );
-                              const formatted = formatInputValue(clampedValue);
-                              if (formatted !== event.target.value) {
-                                updateAmount(inst.id, formatted);
-                              }
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
                           <Button
                             type="button"
-                            variant="ghost"
                             size="sm"
-                            onClick={() => setSelectedInstallmentId(inst.id)}
-                            className="h-8 w-8 p-0"
-                            title="Ver detalhes dos produtos"
+                            variant="outline"
+                            onClick={() => downloadBilletPdf(billet.newBilletPdf, fileName)}
+                            className="flex items-center gap-2"
                           >
-                            <Eye className="h-4 w-4" />
+                            <Download className="h-4 w-4" />
+                            Baixar boleto
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Método de pagamento</Label>
-                <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o método" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Dinheiro</SelectItem>
-                    <SelectItem value="pix">PIX</SelectItem>
-                    <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
-                    <SelectItem value="debit_card">Cartão de Débito</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">Observações</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  placeholder="Adicione observações (opcional)"
-                  rows={4}
-                />
-              </div>
-            </div>
-          </div>
-        )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
         <DialogFooter className="mt-6">
           <Button
@@ -792,6 +912,16 @@ export function CustomerDebtPaymentDialog({
         open={showReceiptConfirm}
         onConfirm={handlePrintReceipt}
         onCancel={handleSkipReceipt}
+      />
+
+      <ConfirmationModal
+        open={showBilletConfirm}
+        onClose={handleSkipGeneratedBillets}
+        onConfirm={handleShowGeneratedBillets}
+        title="Boleto do restante"
+        description="Deseja visualizar ou imprimir o boleto referente ao valor restante da dívida?"
+        confirmText="Visualizar boleto"
+        cancelText="Não agora"
       />
 
       {/* Modal de detalhes dos produtos */}

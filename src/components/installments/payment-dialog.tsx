@@ -25,6 +25,7 @@ import { formatCurrency } from '../../lib/utils';
 import { DollarSign, CreditCard, Banknote, Smartphone } from 'lucide-react';
 import { PaymentReceiptConfirmDialog } from './payment-receipt-confirm-dialog';
 import { InstallmentBilletViewer } from './installment-billet-viewer';
+import { ConfirmationModal } from '../ui/confirmation-modal';
 import { printContent } from '../../lib/print-service';
 import { generatePaymentReceiptContent } from '../../lib/payment-receipt-content';
 
@@ -68,6 +69,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
   const [customerTotalAfterPayment, setCustomerTotalAfterPayment] = useState<number | null>(null);
   const [newBilletPdf, setNewBilletPdf] = useState<string | null>(null);
   const [showNewBillet, setShowNewBillet] = useState(false);
+  const [showNewBilletConfirm, setShowNewBilletConfirm] = useState(false);
 
   const {
     register,
@@ -92,6 +94,11 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
     } else if (!open) {
       // Limpa o formulário quando o diálogo fecha
       reset();
+      setShowReceiptConfirm(false);
+      setPaymentData(null);
+      setNewBilletPdf(null);
+      setShowNewBillet(false);
+      setShowNewBilletConfirm(false);
     }
   }, [open, installment?.id, installment?.remainingAmount, setValue, reset]);
 
@@ -130,10 +137,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
       if (response.data?.newBilletPdf) {
         setNewBilletPdf(response.data.newBilletPdf);
         toast.success('Pagamento registrado! Novo boleto gerado para o valor restante.');
-        // Mostrar o boleto após um breve delay
-        setTimeout(() => {
-          setShowNewBillet(true);
-        }, 500);
+        setShowNewBilletConfirm(true);
       } else {
         toast.success(response.data.message || 'Pagamento registrado com sucesso!');
         // Mostra o diálogo de confirmação de impressão apenas se não houver novo boleto
@@ -261,6 +265,18 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
     setNewBilletPdf(null);
     setShowNewBillet(false);
     onClose();
+  };
+
+  const handleConfirmNewBillet = () => {
+    setShowNewBilletConfirm(false);
+    setShowNewBillet(true);
+  };
+
+  const handleSkipNewBillet = () => {
+    setShowNewBilletConfirm(false);
+    setShowNewBillet(false);
+    setNewBilletPdf(null);
+    setShowReceiptConfirm(true);
   };
 
   const handleNewBilletClose = () => {
@@ -449,6 +465,16 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
         open={showReceiptConfirm}
         onConfirm={handlePrintReceipt}
         onCancel={handleSkipReceipt}
+      />
+
+      <ConfirmationModal
+        open={showNewBilletConfirm}
+        onClose={handleSkipNewBillet}
+        onConfirm={handleConfirmNewBillet}
+        title="Boleto do restante"
+        description="Deseja visualizar ou imprimir o boleto referente ao valor restante da dívida?"
+        confirmText="Visualizar boleto"
+        cancelText="Não agora"
       />
 
       {/* Visualizador de novo boleto (pagamento parcial) */}

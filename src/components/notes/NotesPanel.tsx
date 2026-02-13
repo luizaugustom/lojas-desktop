@@ -291,8 +291,8 @@ export function NotesPanel({ open, onOpenChange }: NotesPanelProps) {
             )}
           </div>
 
-          <div className="flex-1 min-h-0 overflow-hidden flex flex-col min-h-[200px] max-h-[50vh]">
-            <ScrollArea className="h-full min-h-0 px-4 sm:px-6">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <ScrollArea className="h-full min-h-[200px] max-h-[50vh] px-4 sm:px-6">
               <div className="space-y-2 pb-4 w-full max-w-full min-w-0 box-border">
               {loading ? (
                 <div className="space-y-2 w-full max-w-full min-w-0">

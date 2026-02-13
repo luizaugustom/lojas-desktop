@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit, Trash2, Package, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Edit, Trash2, Package, AlertCircle, AlertTriangle, Eye } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
@@ -11,6 +11,7 @@ import { handleApiError } from '../../lib/handleApiError';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { getImageUrl } from '../../lib/image-utils';
 import { ProductImage } from './ProductImage';
+import { ProductDetailsModal } from './product-details-modal';
 import type { Product } from '../../types';
 
 interface ProductsTableProps {
@@ -26,6 +27,8 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
   const { api } = useAuth();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ images: string[]; index: number } | null>(null);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedProductForDetails, setSelectedProductForDetails] = useState<Product | null>(null);
   const [confirmationModal, setConfirmationModal] = useState<{
     open: boolean;
     product: Product | null;
@@ -161,6 +164,19 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
                   <div className="flex justify-end gap-2">
                     {canManage && (
                       <>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            setSelectedProductForDetails(product);
+                            setDetailsModalOpen(true);
+                          }}
+                          aria-label={`Ver detalhes de ${product.name}`}
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Ver detalhes"
+                        >
+                          <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => onEdit(product)} aria-label={`Editar produto ${product.name}`}>
                           <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                         </Button>
@@ -216,6 +232,18 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
           alt="Imagem do produto"
         />
       )}
+
+      {/* Modal de Detalhes do Produto */}
+      <ProductDetailsModal
+        open={detailsModalOpen}
+        onClose={() => {
+          setDetailsModalOpen(false);
+          setSelectedProductForDetails(null);
+        }}
+        product={selectedProductForDetails}
+        onEdit={canManage ? onEdit : undefined}
+        canEdit={canManage}
+      />
     </Card>
   );
 }

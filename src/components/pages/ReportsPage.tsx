@@ -3,7 +3,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { Download, FileText, Calendar, Package, ShoppingCart, FileBarChart, Users, DollarSign, Info } from 'lucide-react';
+import { Download, FileText, Package, ShoppingCart, FileBarChart, Users, DollarSign, Info, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { DatePicker } from '../ui/date-picker';
@@ -21,10 +21,11 @@ import { useDateRange } from '../../hooks/useDateRange';
 import { handleApiError } from '../../lib/handleApiError';
 import { reportSchema } from '../../lib/validations';
 import { downloadFile, getFileExtension } from '../../lib/utils';
-import type { GenerateReportDto, ReportHistory, Seller } from '../../types';
+import type { GenerateReportDto, Seller } from '../../types';
 
 const reportTypes = [
   { value: 'sales', label: 'Relatório de Vendas', icon: ShoppingCart },
+  { value: 'cancelled_sales', label: 'Relatório de Vendas Canceladas', icon: XCircle },
   { value: 'products', label: 'Relatório de Produtos', icon: Package },
   { value: 'invoices', label: 'Relatório de Notas Fiscais', icon: FileText },
   { value: 'complete', label: 'Relatório Completo', icon: FileBarChart },
@@ -40,7 +41,6 @@ export default function ReportsPage() {
   const { api, user } = useAuth();
   const { queryKeyPart } = useDateRange();
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<ReportHistory[]>([]);
 
   const { data: sellersData } = useQuery({
     queryKey: ['sellers', queryKeyPart],
@@ -113,20 +113,12 @@ export default function ReportsPage() {
 
       downloadFile(blob, filename);
 
-      const newHistoryItem: ReportHistory = {
-        id: Date.now().toString(),
-        type: data.reportType,
-        format: data.format,
-        date: new Date().toISOString(),
-        size: blob.size,
-        filename,
-      };
-      setHistory((prev) => [newHistoryItem, ...prev]);
-
       toast.success('Relatório gerado e baixado com sucesso!');
+
     } catch (error: any) {
       console.error('Erro ao gerar relatório:', error);
 
+      // Tratamento especial para erros de blob
       if (error.response?.data instanceof Blob) {
         try {
           const text = await error.response.data.text();
@@ -142,6 +134,7 @@ export default function ReportsPage() {
       setLoading(false);
     }
   };
+
 
   if (!user) {
     return null;
@@ -159,16 +152,17 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-2 w-full h-fit -mb-2 sm:-mb-4 lg:-mb-6">
-      <div>
+    <div className="min-h-0">
+      <div className="mb-2">
         <h1 className="text-3xl font-bold tracking-tight">Relatórios Contábeis</h1>
         <p className="text-muted-foreground">
           Gere relatórios completos para envio à contabilidade
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 w-full">
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-2 w-full mb-2 items-start">
+        {/* Form Section */}
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
@@ -356,46 +350,6 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="flex flex-col h-fit max-h-[450px]">
-          <CardHeader className="flex-shrink-0 pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-              Histórico
-            </CardTitle>
-            <CardDescription>Relatórios gerados recentemente</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto min-h-0 pb-3">
-            <div className="space-y-1.5">
-              {history.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Nenhum relatório gerado ainda
-                </p>
-              ) : (
-                history.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3 border rounded-lg hover:bg-accent transition-colors"
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-medium text-sm capitalize">
-                        {reportTypes.find((t) => t.value === item.type)?.label}
-                      </span>
-                      <span className="text-xs text-muted-foreground uppercase bg-secondary px-2 py-0.5 rounded">
-                        {item.format}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(item.date).toLocaleString('pt-BR')}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {(item.size / 1024).toFixed(2)} KB
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
 

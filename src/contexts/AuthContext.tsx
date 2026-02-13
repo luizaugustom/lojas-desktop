@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { authLogin, authLogout, getAccessToken, setAccessToken, api, type DeviceInfo } from '../lib/apiClient';
 import toast from 'react-hot-toast';
 import type { User } from '../types';
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     // Listener para logout automático (login em outro dispositivo)
@@ -154,6 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setAccessToken(null);
       setUser(null);
+      // Limpa cache do React Query para evitar dados de outro usuário
+      queryClient.clear();
       toast.success('Logout realizado com sucesso!');
     }
   };

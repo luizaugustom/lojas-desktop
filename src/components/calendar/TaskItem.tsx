@@ -37,6 +37,26 @@ export function TaskItem({
   };
 
   const isCompanyCreated = task.authorType === 'company';
+  const assigneeLabels =
+    task.assignees && task.assignees.length > 0
+      ? task.assignees.map((assignee) =>
+          assignee.type === 'company'
+            ? 'Empresa'
+            : assignee.name
+              ? `Vendedor: ${assignee.name}`
+              : 'Vendedor'
+        )
+      : task.assignedToName
+        ? [
+            task.assignedToType === 'company'
+              ? 'Empresa'
+              : `Vendedor: ${task.assignedToName}`,
+          ]
+        : [];
+  const assigneePreview =
+    assigneeLabels.length > 2
+      ? `${assigneeLabels.slice(0, 2).join(', ')} +${assigneeLabels.length - 2}`
+      : assigneeLabels.join(', ');
 
   return (
     <div
@@ -103,9 +123,9 @@ export function TaskItem({
               {isToday && !task.isCompleted && (
                 <span className="text-primary font-medium shrink-0">Hoje</span>
               )}
-              {task.assignedToName && (
+              {assigneePreview && (
                 <span className="text-xs truncate min-w-0 flex-1 overflow-hidden">
-                  {task.assignedToType === 'company' ? 'Empresa' : `Vendedor: ${task.assignedToName}`}
+                  {assigneePreview}
                 </span>
               )}
             </div>

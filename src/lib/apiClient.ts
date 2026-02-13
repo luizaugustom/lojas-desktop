@@ -211,9 +211,7 @@ export interface DeviceInfo {
     deviceName: deviceInfo?.deviceName,
   });
   return res.data;
-}
-
-/**
+}/**
  * GET /auth/sessions
  * Listar sessões ativas do usuário
  */

@@ -22,22 +22,22 @@ import { SaleDetailsDialog } from '../sales-history/sale-details-dialog';
 import { CancelSaleDialog } from '../sales/cancel-sale-dialog';
 import { saleApi } from '../../lib/api-endpoints';
 
-type PeriodFilter = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
+type PeriodFilter = 'today' | 'week' | 'last_15_days' | 'month' | '3months' | '6months' | 'year' | 'all';
 
 interface PeriodOption {
   value: PeriodFilter;
   label: string;
-  days?: number;
 }
 
 const periodOptions: PeriodOption[] = [
-  { value: 'today', label: 'Hoje', days: 0 },
-  { value: 'week', label: 'Última Semana', days: 7 },
-  { value: 'month', label: 'Último Mês', days: 30 },
-  { value: '3months', label: 'Últimos 3 Meses', days: 90 },
-  { value: '6months', label: 'Últimos 6 Meses', days: 180 },
-  { value: 'year', label: 'Último Ano', days: 365 },
-  { value: 'all', label: 'Todas', days: undefined },
+  { value: 'today', label: 'Hoje' },
+  { value: 'week', label: 'Esta Semana' },
+  { value: 'last_15_days', label: 'Últimos 15 dias' },
+  { value: 'month', label: 'Último Mês' },
+  { value: '3months', label: 'Últimos 3 Meses' },
+  { value: '6months', label: 'Últimos 6 Meses' },
+  { value: 'year', label: 'Este Ano' },
+  { value: 'all', label: 'Todas' },
 ];
 
 export default function SalesHistoryPage() {
@@ -62,27 +62,52 @@ export default function SalesHistoryPage() {
 
   // Calcular datas com base no período selecionado da página
   const periodRange = useMemo(() => {
-    const end = new Date();
+    const now = new Date();
+    const end = new Date(now);
     end.setHours(23, 59, 59, 999);
-    
-    const selectedPeriod = periodOptions.find(p => p.value === period);
-    
-    if (!selectedPeriod || selectedPeriod.days === undefined) {
-      return { startDate: undefined, endDate: undefined };
-    }
 
-    const start = new Date();
-    if (selectedPeriod.days === 0) {
-      start.setHours(0, 0, 0, 0);
-    } else {
-      start.setDate(start.getDate() - selectedPeriod.days);
-      start.setHours(0, 0, 0, 0);
-    }
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
 
-    return {
-      startDate: start,
-      endDate: end,
-    };
+    switch (period) {
+      case 'today':
+        return { startDate: start, endDate: end };
+
+      case 'week': {
+        // Semana atual: segunda-feira até hoje
+        const day = start.getDay();
+        const diff = day === 0 ? 6 : day - 1;
+        start.setDate(start.getDate() - diff);
+        return { startDate: start, endDate: end };
+      }
+
+      case 'last_15_days':
+        start.setDate(start.getDate() - 14);
+        return { startDate: start, endDate: end };
+
+      case 'month':
+        start.setMonth(start.getMonth() - 1);
+        return { startDate: start, endDate: end };
+
+      case '3months':
+        start.setMonth(start.getMonth() - 3);
+        return { startDate: start, endDate: end };
+
+      case '6months':
+        start.setMonth(start.getMonth() - 6);
+        return { startDate: start, endDate: end };
+
+      case 'year':
+        // Ano atual: 1º de janeiro até hoje
+        start.setMonth(0, 1);
+        return { startDate: start, endDate: end };
+
+      case 'all':
+        return { startDate: undefined, endDate: undefined };
+
+      default:
+        return { startDate: undefined, endDate: undefined };
+    }
   }, [period]);
 
   // Combinar filtro global com filtro de período: usar o mais restritivo
@@ -114,13 +139,25 @@ export default function SalesHistoryPage() {
     };
   }, [periodRange, queryParams]);
 
-  // Buscar vendas - usar endpoint correto baseado no role
+  // Buscar vendas - usar endpoint correto baseado no role (com filtros do backend)
   const { data: salesData, isLoading, refetch } = useQuery({
-    queryKey: ['sales-history', queryKeyPart, isSeller, period, page, limit, startDate, endDate],
+    queryKey: ['sales-history', queryKeyPart, isSeller, period, page, limit, startDate, endDate, filterClient, filterSeller, filterPayment],
     queryFn: async () => {
       const params: any = { page, limit };
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+
+      // Adicionar novos filtros
+      if (filterClient.trim()) {
+        params.clientName = filterClient.trim();
+        params.clientCpfCnpj = filterClient.trim();
+      }
+      if (filterSeller.trim()) {
+        params.sellerId = filterSeller.trim();
+      }
+      if (filterPayment.trim()) {
+        params.paymentMethod = filterPayment.trim();
+      }
 
       // Se for vendedor, usar endpoint my-sales, senão usar endpoint geral
       const endpoint = isSeller ? '/sale/my-sales' : '/sale';
@@ -130,13 +167,25 @@ export default function SalesHistoryPage() {
     enabled: !!user,
   });
 
-  // Buscar estatísticas - usar endpoint correto baseado no role
+  // Buscar estatísticas - usar endpoint correto baseado no role (com TODOS os filtros)
   const { data: statsData } = useQuery({
-    queryKey: ['sales-stats', queryKeyPart, isSeller, period, startDate, endDate],
+    queryKey: ['sales-stats', queryKeyPart, isSeller, period, startDate, endDate, filterClient, filterSeller, filterPayment],
     queryFn: async () => {
       const params: any = {};
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+
+      // Adicionar novos filtros
+      if (filterClient.trim()) {
+        params.clientName = filterClient.trim();
+        params.clientCpfCnpj = filterClient.trim();
+      }
+      if (filterSeller.trim()) {
+        params.sellerId = filterSeller.trim();
+      }
+      if (filterPayment.trim()) {
+        params.paymentMethod = filterPayment.trim();
+      }
 
       // Se for vendedor, usar endpoint my-stats, senão usar endpoint stats
       const endpoint = isSeller ? '/sale/my-stats' : '/sale/stats';
@@ -146,47 +195,23 @@ export default function SalesHistoryPage() {
     enabled: !!user,
   });
 
-  const sales = salesData?.sales || salesData?.data || [];
-  const total = salesData?.total || 0;
-  const totalPages = salesData?.totalPages || Math.ceil(total / limit);
-
-  // Backend retorna totalValue, mas o código espera totalRevenue
-  // Buscar perdas (totalCost no período)
-  const { data: lossesData } = useQuery({
-    queryKey: ['losses-summary', startDate, endDate],
+  // Buscar lucro líquido (SOMENTE com filtros de data)
+  const { data: netProfitData } = useQuery({
+    queryKey: ['net-profit', queryKeyPart, period, startDate, endDate],
     queryFn: async () => {
       const params: any = {};
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
-      const response = await api.get('/product-losses/summary', { params });
+
+      const response = await api.get('/sale/net-profit', { params });
       return response.data;
     },
-    enabled: !!user,
+    enabled: !!user && !isSeller, // Apenas para empresas
   });
 
-  // Buscar contas pagas no período e somar os valores
-  const { data: paidBillsData } = useQuery({
-    queryKey: ['paid-bills', startDate, endDate],
-    queryFn: async () => {
-      const params: any = { isPaid: true };
-      if (startDate) params.startDate = startDate;
-      
-      // Sempre limitar até hoje para não incluir contas futuras
-      // Mesmo que o período selecionado inclua datas futuras, só consideramos contas que já venceram
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-      params.endDate = today.toISOString();
-      
-      const response = await api.get('/bill-to-pay', { params });
-      return response.data;
-    },
-    enabled: !!user,
-  });
-
-  const totalLosses = lossesData?.totalCost || 0;
-  const paidBillsAmount = Array.isArray(paidBillsData?.bills)
-    ? paidBillsData.bills.reduce((sum: number, bill: any) => sum + (bill?.amount || 0), 0)
-    : 0;
+  const sales = salesData?.sales || salesData?.data || [];
+  const total = salesData?.total || 0;
+  const totalPages = salesData?.totalPages || Math.ceil(total / limit);
 
   const stats = {
     totalSales: statsData?.totalSales || 0,
@@ -195,23 +220,8 @@ export default function SalesHistoryPage() {
     totalCostOfGoods: statsData?.totalCostOfGoods || 0,
   };
 
-  const totalInstallmentInterest = Number(statsData?.totalInstallmentInterest || 0);
-  const netProfit = (stats.totalRevenue || 0) - (stats.totalCostOfGoods || 0) - paidBillsAmount - totalLosses - totalInstallmentInterest;
-
-  // Debug: log stats data
-  if (statsData) {
-    console.log('[Sales History] Stats from API:', statsData);
-    console.log('[Sales History] Parsed stats:', stats);
-    console.log('[Sales History] Bills:', paidBillsAmount, 'Losses:', totalLosses);
-    console.log('[Sales History] Net Profit Calculation:', {
-      revenue: stats.totalRevenue,
-      cogs: stats.totalCostOfGoods,
-      bills: paidBillsAmount,
-      losses: totalLosses,
-      installmentInterest: totalInstallmentInterest,
-      netProfit: (stats.totalRevenue || 0) - (stats.totalCostOfGoods || 0) - paidBillsAmount - totalLosses - totalInstallmentInterest,
-    });
-  }
+  // Lucro líquido vem diretamente do endpoint (apenas para empresas)
+  const netProfit = !isSeller ? (netProfitData?.netProfit ?? 0) : null;
 
   const filteredSales = useMemo(() => {
     let list = sales as any[];
@@ -305,6 +315,18 @@ export default function SalesHistoryPage() {
       const params: any = { limit: 10000 };
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
+
+      // Adicionar filtros aplicados
+      if (filterClient.trim()) {
+        params.clientName = filterClient.trim();
+        params.clientCpfCnpj = filterClient.trim();
+      }
+      if (filterSeller.trim()) {
+        params.sellerId = filterSeller.trim();
+      }
+      if (filterPayment.trim()) {
+        params.paymentMethod = filterPayment.trim();
+      }
 
       // Se for vendedor, usar endpoint my-sales, senão usar endpoint geral
       const endpoint = isSeller ? '/sale/my-sales' : '/sale';
@@ -468,59 +490,63 @@ export default function SalesHistoryPage() {
         </div>
       </Card>
 
-      {/* Estatísticas */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Total de Vendas</p>
-              <p className="text-2xl font-bold mt-2">{stats.totalSales}</p>
+      {/* Estatísticas - apenas para empresas */}
+      {!isSeller && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total de Vendas</p>
+                <p className="text-2xl font-bold mt-2">{stats.totalSales}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-primary" />
+              </div>
             </div>
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-primary" />
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Receita Total</p>
-              <p className="text-2xl font-bold mt-2">{formatCurrency(stats.totalRevenue)}</p>
+          <Card className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Receita Total</p>
+                <p className="text-2xl font-bold mt-2">{formatCurrency(stats.totalRevenue)}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-500/10 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-green-600" />
+              </div>
             </div>
-            <div className="h-12 w-12 rounded-full bg-green-500/10 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-green-600" />
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Ticket Médio</p>
-              <p className="text-2xl font-bold mt-2">{formatCurrency(stats.averageTicket)}</p>
+          <Card className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Ticket Médio</p>
+                <p className="text-2xl font-bold mt-2">{formatCurrency(stats.averageTicket)}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Calendar className="h-6 w-6 text-blue-600" />
+              </div>
             </div>
-            <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center">
-              <Calendar className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-muted-foreground">Lucro Líquido</p>
-              <p className={`text-2xl font-bold mt-2 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {formatCurrency(netProfit)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Receita - COGS - Contas - Perdas - Juros</p>
-            </div>
-            <div className={`h-12 w-12 rounded-full flex items-center justify-center ${netProfit >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-              <Wallet className={`h-6 w-6 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
-            </div>
-          </div>
-        </Card>
-      </div>
+          {netProfit !== null && (
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-muted-foreground">Lucro Líquido</p>
+                  <p className={`text-2xl font-bold mt-2 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(netProfit)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Receita - COGS - Contas - Perdas - Juros</p>
+                </div>
+                <div className={`h-12 w-12 rounded-full flex items-center justify-center ${netProfit >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                  <Wallet className={`h-6 w-6 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Tabela de Vendas */}
       <Card>

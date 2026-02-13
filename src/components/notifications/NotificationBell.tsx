@@ -12,11 +12,24 @@ import { notificationApi } from '../../lib/api-endpoints';
 export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const [lastNotifiedAt, setLastNotifiedAt] = useState<string | null>(null);
 
   useEffect(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('lastNotificationAt') : null;
+    const initial = stored || new Date().toISOString();
+    setLastNotifiedAt(initial);
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
     loadUnreadCount();
-    
-    const interval = setInterval(loadUnreadCount, 30000);
+    checkNewNotifications(initial);
+
+    const interval = setInterval(() => {
+      loadUnreadCount();
+      checkNewNotifications();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -26,6 +39,34 @@ export function NotificationBell() {
       setUnreadCount(response.data?.count || 0);
     } catch (error) {
       console.error('Erro ao carregar contador de notificações:', error);
+    }
+  };
+
+  const checkNewNotifications = async (initialAt?: string) => {
+    try {
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('lastNotificationAt') : null;
+      const since = initialAt || stored || lastNotifiedAt || new Date().toISOString();
+      const response = await notificationApi.list({ onlyUnread: true });
+      const data = Array.isArray(response.data) ? response.data : response.data?.notifications || [];
+
+      const newOnes = data
+        .filter((notification: any) => new Date(notification.createdAt) > new Date(since))
+        .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      if (newOnes.length > 0) {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          newOnes.forEach((notification: any) => {
+            new Notification(notification.title, { body: notification.message });
+          });
+        }
+        const latest = newOnes[newOnes.length - 1].createdAt;
+        setLastNotifiedAt(latest);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lastNotificationAt', latest);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao verificar novas notificações:', error);
     }
   };
 

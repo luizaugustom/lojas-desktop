@@ -78,6 +78,22 @@ export function TaskDetailsModal({
     WORK: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
   };
   const isCompanyCreated = task.authorType === 'company';
+  const assigneeLabels =
+    task.assignees && task.assignees.length > 0
+      ? task.assignees.map((assignee) =>
+          assignee.type === 'company'
+            ? 'Empresa'
+            : assignee.name
+              ? `Vendedor: ${assignee.name}`
+              : 'Vendedor'
+        )
+      : task.assignedToName
+        ? [
+            task.assignedToType === 'company'
+              ? 'Empresa'
+              : `Vendedor: ${task.assignedToName}`,
+          ]
+        : [];
 
   const handleEdit = () => {
     onClose();
@@ -169,13 +185,7 @@ export function TaskDetailsModal({
           <DetailRow
             icon={UserPlus}
             label="Atribuída a"
-            value={
-              task.assignedToType === 'company'
-                ? 'Empresa'
-                : task.assignedToName
-                  ? `Vendedor: ${task.assignedToName}`
-                  : '—'
-            }
+            value={assigneeLabels.length > 0 ? assigneeLabels.join(', ') : '—'}
           />
           <div className="border-b my-2" />
 
