@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'react-hot-toast';
-import { Eye, EyeOff, MessageCircle } from 'lucide-react';
+import { Eye, EyeOff, MessageCircle, FileText } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -12,6 +12,7 @@ import { loginSchema } from '@/lib/validations';
 import { getRandomVerse } from '@/lib/verses';
 import { handleApiError } from '@/lib/handleApiError';
 import { useAuth } from '@/contexts/AuthContext';
+import TermosDeUsoPage from './TermosDeUsoPage';
 import logoImage from '@/logosvg.svg';
 
 export default function LoginPage() {
@@ -82,6 +83,7 @@ export default function LoginPage() {
   };
 
   const [showSavedEmailsDialog, setShowSavedEmailsDialog] = useState(false);
+  const [showTermsDialog, setShowTermsDialog] = useState(false);
   const [emailSearchTerm, setEmailSearchTerm] = useState('');
 
   const filteredSavedEmails = (emailSearchTerm
@@ -180,6 +182,18 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            {/* Link para Termos de Uso */}
+            <div className="mt-3 text-center">
+              <button
+                type="button"
+                onClick={() => setShowTermsDialog(true)}
+                className="text-xs sm:text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1.5 transition-colors"
+              >
+                <FileText className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                Termos de Uso
+              </button>
+            </div>
+
             {verse && (
               <div className="mt-3 text-center text-muted-foreground">
                 <p className="italic text-xs">"{verse.text}"</p>
@@ -220,6 +234,12 @@ export default function LoginPage() {
               </ul>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Dialog de Termos de Uso */}
+      <Dialog open={showTermsDialog} onOpenChange={setShowTermsDialog}>
+        <DialogContent className="max-w-6xl max-h-[95vh] p-0">
+          <TermosDeUsoPage onClose={() => setShowTermsDialog(false)} />
         </DialogContent>
       </Dialog>
       {/* Botão SAC no canto inferior esquerdo */}

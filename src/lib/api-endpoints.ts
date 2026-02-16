@@ -108,6 +108,7 @@ export const companyApi = {
   updateFocusNfeConfig: (id: string, data: any) => api.patch(`/company/${id}/focus-nfe-config`, data),
   getFocusNfeConfig: (id: string) => api.get(`/company/${id}/focus-nfe-config`),
   getFiscalConfigForAdmin: (id: string) => api.get(`/company/${id}/fiscal-config`),
+  acceptTerms: (data: { accepted: boolean }) => api.post('/company/terms', data),
 };
 
 export const fiscalApi = {

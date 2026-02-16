@@ -101,6 +101,10 @@ export interface Company {
   // Installment Configuration
   installmentInterestRates?: Record<string, number>; // Taxas de juros por parcela: { "1": 0, "2": 2.5, "3": 3.0, ... }
   maxInstallments?: number; // Limite máximo de parcelas
+  // Terms of Use Acceptance
+  termsAccepted?: boolean;
+  termsAcceptedAt?: string | null;
+  termsRejectedAt?: string | null;
 }
 
 export interface Admin {
