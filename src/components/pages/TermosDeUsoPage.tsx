@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
-import { FileText, CheckCircle2, XCircle } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, ArrowLeft } from 'lucide-react';
 import { companyApi } from '@/lib/api-endpoints';
 import toast from 'react-hot-toast';
 
@@ -263,9 +263,9 @@ As comunicações entre as partes podem ser realizadas através do Sistema, e-ma
 
 Para questões relacionadas a estes Termos, suporte técnico ou outras dúvidas, o Usuário pode entrar em contato com a MONT através dos canais disponibilizados no Sistema ou:
 
-- **E-mail**: [e-mail de contato]
-- **Telefone**: [telefone de contato]
-- **WhatsApp**: 48 99848-2590
+- **E-mail**: montsoftwares@gmail.com
+- **Telefone**: 48 998482590
+- **WhatsApp**: 48 998482590
 
 A MONT se esforça para responder às solicitações em tempo hábil, mas não garante prazos específicos de resposta.
 
@@ -274,7 +274,7 @@ A MONT se esforça para responder às solicitações em tempo hábil, mas não g
 **Ao aceitar estes Termos de Uso, você declara ter lido, compreendido e concordado integralmente com todas as condições aqui estabelecidas.**
 
 **MONT Tecnologia da Informação**  
-CNPJ: [CNPJ da empresa]  
+CNPJ: 63.117.232/0001-44  
 Florianópolis/SC, Brasil`;
 
 interface TermosDeUsoPageProps {
@@ -349,9 +349,25 @@ export default function TermosDeUsoPage({ showAcceptButtons = false, onAccept, o
       <div className="max-w-4xl mx-auto">
         <Card className="w-full">
           <CardHeader className="border-b">
-            <div className="flex items-center gap-3">
-              <FileText className="h-6 w-6 text-primary" />
-              <CardTitle className="text-2xl">Termos de Uso do Sistema MontShop</CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FileText className="h-6 w-6 text-primary" />
+                <CardTitle className="text-2xl">Termos de Uso do Sistema MontShop</CardTitle>
+              </div>
+              {(onClose || !showAcceptButtons) && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (onClose) {
+                      onClose();
+                    }
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Voltar para Login
+                </Button>
+              )}
             </div>
             <p className="text-sm text-muted-foreground mt-2">
               Última atualização: 16 de fevereiro de 2025
