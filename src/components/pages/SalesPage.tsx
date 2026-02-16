@@ -42,7 +42,7 @@ export default function SalesPage() {
   const { addItem, items, clearCart } = useCartStore();
   const [lastScanned, setLastScanned] = useState(0);
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(null);
-  const [keyboardFocusArea, setKeyboardFocusArea] = useState<'products' | 'cart'>('products');
+  const [keyboardFocusArea, setKeyboardFocusArea] = useState<'products' | 'cart'>('cart');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const {

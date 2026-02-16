@@ -3,7 +3,7 @@ import { NotificationItem } from './NotificationItem';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { CheckCheck, RefreshCw, Bell } from 'lucide-react';
+import { CheckCheck, RefreshCw, Bell, Trash2 } from 'lucide-react';
 import { notificationApi } from '../../lib/api-endpoints';
 import { toast } from 'react-hot-toast';
 
@@ -66,6 +66,18 @@ export function NotificationPanel() {
     }
   };
 
+  const handleDeleteRead = async () => {
+    if (!window.confirm('Remover todas as notificações lidas?')) return;
+    try {
+      await notificationApi.deleteRead();
+      setNotifications(prev => prev.filter(n => !n.isRead));
+      toast.success('Notificações lidas removidas');
+    } catch (error: any) {
+      console.error('Erro ao remover notificações lidas:', error);
+      toast.error('Erro ao remover notificações lidas');
+    }
+  };
+
   const handleDelete = async (id: string) => {
     try {
       await notificationApi.delete(id);
@@ -94,6 +106,7 @@ export function NotificationPanel() {
   });
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
+  const readCount = notifications.length - unreadCount;
 
   if (loading) {
     return (
@@ -128,6 +141,17 @@ export function NotificationPanel() {
             >
               <CheckCheck className="h-4 w-4 mr-2" />
               Marcar todas
+            </Button>
+          )}
+          {readCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDeleteRead}
+              title="Remover notificações lidas"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Remover lidas
             </Button>
           )}
         </div>

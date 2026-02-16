@@ -22,7 +22,7 @@ interface NCMSearchModalProps {
   onSelect: (ncmCode: string) => void;
 }
 
-const MAX_DISPLAY_RESULTS = 200; // Limitar resultados exibidos para performance
+const MAX_DISPLAY_RESULTS = 500; // Limitar resultados exibidos para performance
 const DEBOUNCE_DELAY = 300; // ms
 
 export function NCMSearchModal({ open, onClose, onSelect }: NCMSearchModalProps) {
@@ -99,7 +99,7 @@ export function NCMSearchModal({ open, onClose, onSelect }: NCMSearchModalProps)
   // Buscar resultados
   const searchResults = useMemo(() => {
     if (!debouncedQuery.trim()) {
-      return ncmData.slice(0, 100); // Mostrar primeiros 100 quando sem busca
+      return ncmData.slice(0, 300); // Mostrar primeiros 300 quando sem busca
     }
     
     const results = searchNCM(debouncedQuery, ncmData);

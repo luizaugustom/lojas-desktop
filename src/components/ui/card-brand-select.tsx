@@ -69,7 +69,8 @@ export function CardBrandSelect({
   id,
   className,
 }: CardBrandSelectProps) {
-  const selectedBrand = [...cardBrands, ...otherBrands].find(b => b.value === value);
+  const allBrands = [...cardBrands, ...otherBrands];
+  const selectedBrand = allBrands.find((brand) => brand.value === value);
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -99,31 +100,23 @@ export function CardBrandSelect({
         
         {/* Botão "Outras" com dropdown */}
         <Select
-          value={value && !cardBrands.find(b => b.value === value) ? value : 'other'}
-          onValueChange={(val) => {
-            if (val !== 'other') {
-              onChange(val as CardBrand);
-            }
-          }}
+          value={value || ''}
+          onValueChange={(val) => onChange(val as CardBrand)}
           disabled={disabled}
         >
           <SelectTrigger
             id={id}
             className={cn(
               'flex-1 min-w-[80px] h-9',
-              value && !cardBrands.find(b => b.value === value)
+              value && !cardBrands.find((brand) => brand.value === value)
                 ? 'bg-primary text-primary-foreground'
                 : ''
             )}
           >
-            <SelectValue placeholder="Outras">
-              {value && !cardBrands.find(b => b.value === value)
-                ? otherBrands.find(b => b.value === value)?.shortLabel || 'Outras'
-                : 'Outras'}
-            </SelectValue>
+            <SelectValue placeholder="Outras" />
           </SelectTrigger>
           <SelectContent>
-            {otherBrands.map((brand) => (
+            {allBrands.map((brand) => (
               <SelectItem key={brand.value} value={brand.value}>
                 <div className="flex items-center gap-2">
                   <CreditCard className="h-4 w-4" />

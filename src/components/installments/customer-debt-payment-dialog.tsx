@@ -144,7 +144,7 @@ export function CustomerDebtPaymentDialog({
     dueDate: string;
   }>>([]);
   const [totalRemainingDebt, setTotalRemainingDebt] = useState<number | null>(null);
-  const [debtFilter, setDebtFilter] = useState<DebtFilter>('default');
+  const [debtFilter, setDebtFilter] = useState<DebtFilter>('all');
   const [showGeneratedBillets, setShowGeneratedBillets] = useState(false);
   const [showBilletConfirm, setShowBilletConfirm] = useState(false);
 
@@ -208,7 +208,7 @@ export function CustomerDebtPaymentDialog({
       setRemainingDebts([]);
       setTotalRemainingDebt(null);
       setSelectedInstallmentId(null);
-      setDebtFilter('default');
+      setDebtFilter('all');
       setShowGeneratedBillets(false);
       setShowBilletConfirm(false);
     }
@@ -468,7 +468,9 @@ export function CustomerDebtPaymentDialog({
       onPaid?.();
       
       // Mostra o diálogo de confirmação de impressão
-      setShowReceiptConfirm(true);
+      if (!hasNewBillets) {
+        setShowReceiptConfirm(true);
+      }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Erro ao registrar pagamentos');
@@ -616,11 +618,13 @@ export function CustomerDebtPaymentDialog({
   const handleShowGeneratedBillets = () => {
     setShowBilletConfirm(false);
     setShowGeneratedBillets(true);
+    setShowReceiptConfirm(true);
   };
 
   const handleSkipGeneratedBillets = () => {
     setShowBilletConfirm(false);
     setShowGeneratedBillets(false);
+    setShowReceiptConfirm(true);
   };
 
   return (

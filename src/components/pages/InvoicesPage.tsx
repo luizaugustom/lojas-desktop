@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { FileText, Download, RefreshCw, Search, PlusCircle, Trash2, Plus, Package, XCircle, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { FileText, Download, RefreshCw, Search, PlusCircle, Trash2, Plus, Package, XCircle, CheckCircle2, AlertCircle, Info, FileX, FileEdit, WifiOff, Wifi } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency, formatDateTime, downloadFile } from '@/lib/utils';
+import { fiscalApi } from '@/lib/api-endpoints';
 import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import { isValidCPF, isValidCNPJ, isValidCPFOrCNPJ } from '@/lib/validations';
 
@@ -23,6 +24,8 @@ interface FiscalDoc {
   accessKey?: string;
   status?: string;
   total?: number;
+  cbsValue?: number | null;
+  ibsValue?: number | null;
   createdAt?: string;
 }
 
@@ -111,9 +114,39 @@ export default function InvoicesPage() {
   const [hasValidFiscalConfig, setHasValidFiscalConfig] = useState<boolean | null>(null);
   const [checkingFiscalConfig, setCheckingFiscalConfig] = useState(false);
 
+  // Inutilizar numeração
+  const [inutilizarOpen, setInutilizarOpen] = useState(false);
+  const [inutilizarSerie, setInutilizarSerie] = useState('1');
+  const [inutilizarNumeroInicial, setInutilizarNumeroInicial] = useState('');
+  const [inutilizarNumeroFinal, setInutilizarNumeroFinal] = useState('');
+  const [inutilizarJustificativa, setInutilizarJustificativa] = useState('');
+  const [inutilizarModelo, setInutilizarModelo] = useState<'55' | '65'>('65');
+  const [inutilizarSubmitting, setInutilizarSubmitting] = useState(false);
+
+  // Carta de Correção (CC-e) - apenas NF-e
+  const [cartaCorrecaoOpen, setCartaCorrecaoOpen] = useState(false);
+  const [documentForCarta, setDocumentForCarta] = useState<FiscalDoc | null>(null);
+  const [correcaoText, setCorrecaoText] = useState('');
+  const [cartaSubmitting, setCartaSubmitting] = useState(false);
+
+  // Contingência NFC-e
+  const [contingenciaLoading, setContingenciaLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: contingenciaData } = useQuery({
+    queryKey: ['fiscal-contingencia-status'],
+    queryFn: async () => (await fiscalApi.getContingenciaStatus()).data,
+    enabled: !!user?.companyId && user?.role === 'empresa',
+  });
+  const contingenciaEnabled = contingenciaData?.contingenciaEnabled ?? false;
+
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['fiscal-outbound', search],
-    queryFn: async () => (await api.get('/fiscal', { params: { search, documentType: 'outbound' } })).data,
+    queryFn: async () =>
+      (
+        await api.get('/fiscal', {
+          params: { page: 1, limit: 100, documentType: 'outbound' },
+        })
+      ).data,
   });
 
   // Query para buscar produtos da empresa
@@ -492,8 +525,80 @@ export default function InvoicesPage() {
           <Button variant="outline" onClick={() => refetch()} disabled={isLoading} className="text-foreground">
             <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
           </Button>
+          {user?.role === 'empresa' && (
+            <Button variant="outline" size="sm" onClick={() => setInutilizarOpen(true)} title="Inutilizar numeração (NF-e ou NFC-e)">
+              <FileX className="mr-2 h-4 w-4" /> Inutilizar Numeração
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Status contingência NFC-e */}
+      {user?.role === 'empresa' && (
+        <Card className={`p-3 ${contingenciaEnabled ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'border-muted'}`}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              {contingenciaEnabled ? (
+                <>
+                  <WifiOff className="h-5 w-5 text-amber-600" />
+                  <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Modo contingência NFC-e ativo</span>
+                  {contingenciaData?.contingenciaMotivo && (
+                    <span className="text-xs text-amber-700 dark:text-amber-300">— {contingenciaData.contingenciaMotivo}</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Wifi className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Conexão normal com SEFAZ</span>
+                </>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {contingenciaEnabled ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={contingenciaLoading}
+                  onClick={async () => {
+                    try {
+                      setContingenciaLoading(true);
+                      await fiscalApi.desativarContingencia();
+                      toast.success('Contingência desativada.');
+                      await queryClient.invalidateQueries({ queryKey: ['fiscal-contingencia-status'] });
+                    } catch (e: any) {
+                      toast.error(e?.response?.data?.message || 'Erro ao desativar contingência');
+                    } finally {
+                      setContingenciaLoading(false);
+                    }
+                  }}
+                >
+                  Desativar contingência
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={contingenciaLoading}
+                  onClick={async () => {
+                    try {
+                      setContingenciaLoading(true);
+                      await fiscalApi.ativarContingencia({ motivo: 'Indisponibilidade do ambiente de autorização' });
+                      toast.success('Modo contingência ativado.');
+                      await queryClient.invalidateQueries({ queryKey: ['fiscal-contingencia-status'] });
+                    } catch (e: any) {
+                      toast.error(e?.response?.data?.message || 'Erro ao ativar contingência');
+                    } finally {
+                      setContingenciaLoading(false);
+                    }
+                  }}
+                >
+                  Ativar contingência
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card className="p-4">
         <InputWithIcon
@@ -561,10 +666,19 @@ export default function InvoicesPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-2 text-right text-foreground">{doc.total != null ? formatCurrency(doc.total) : '-'}</td>
+                  <td className="px-4 py-2 text-right text-foreground">
+                    <div>
+                      {doc.total != null ? formatCurrency(doc.total) : '-'}
+                      {(doc.cbsValue != null || doc.ibsValue != null) && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          CBS {doc.cbsValue != null ? formatCurrency(doc.cbsValue) : '-'} / IBS {doc.ibsValue != null ? formatCurrency(doc.ibsValue) : '-'}
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-2 text-foreground">{doc.createdAt ? formatDateTime(doc.createdAt) : '-'}</td>
                   <td className="px-4 py-2 text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 flex-wrap">
                       <Button
                         size="sm"
                         variant="outline"
@@ -624,6 +738,20 @@ export default function InvoicesPage() {
                       >
                         <Download className="mr-2 h-4 w-4" /> XML
                       </Button>
+                      {doc.documentType === 'NFe' && (doc.status === 'Autorizada' || doc.status === 'Autorizado') && doc.accessKey && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setDocumentForCarta(doc);
+                            setCorrecaoText('');
+                            setCartaCorrecaoOpen(true);
+                          }}
+                          title="Enviar Carta de Correção Eletrônica (CC-e)"
+                        >
+                          <FileEdit className="mr-2 h-4 w-4" /> CC-e
+                        </Button>
+                      )}
                       {(doc.status !== 'Cancelada' && doc.status !== 'Cancelado' && doc.status !== 'MOCK' && doc.accessKey) && (
                         <Button
                           size="sm"
@@ -1211,6 +1339,127 @@ export default function InvoicesPage() {
               disabled={selectedProducts.length === 0}
             >
               Adicionar Selecionados
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Inutilizar Numeração */}
+      <Dialog open={inutilizarOpen} onOpenChange={setInutilizarOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Inutilizar Numeração</DialogTitle>
+            <DialogDescription>
+              Inutilize uma faixa de numeração de NF-e ou NFC-e na SEFAZ. Justificativa com no mínimo 15 caracteres.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Série</Label>
+                <Input value={inutilizarSerie} onChange={(e) => setInutilizarSerie(e.target.value)} placeholder="1" />
+              </div>
+              <div className="space-y-2">
+                <Label>Modelo</Label>
+                <Select value={inutilizarModelo} onValueChange={(v) => setInutilizarModelo(v as '55' | '65')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="65">65 - NFC-e</SelectItem>
+                    <SelectItem value="55">55 - NF-e</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Número inicial</Label>
+                <Input type="number" min={1} value={inutilizarNumeroInicial} onChange={(e) => setInutilizarNumeroInicial(e.target.value)} placeholder="100" />
+              </div>
+              <div className="space-y-2">
+                <Label>Número final</Label>
+                <Input type="number" min={1} value={inutilizarNumeroFinal} onChange={(e) => setInutilizarNumeroFinal(e.target.value)} placeholder="150" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Justificativa * (mín. 15 caracteres)</Label>
+              <Textarea value={inutilizarJustificativa} onChange={(e) => setInutilizarJustificativa(e.target.value)} placeholder="Ex.: Inutilização por perda de sequência na numeração" rows={3} />
+              <p className="text-xs text-muted-foreground">{inutilizarJustificativa.length}/15</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInutilizarOpen(false)}>Fechar</Button>
+            <Button
+              disabled={inutilizarSubmitting || inutilizarJustificativa.trim().length < 15 || !inutilizarNumeroInicial || !inutilizarNumeroFinal || Number(inutilizarNumeroInicial) > Number(inutilizarNumeroFinal)}
+              onClick={async () => {
+                try {
+                  setInutilizarSubmitting(true);
+                  await fiscalApi.inutilizarNumeracao({
+                    serie: inutilizarSerie || '1',
+                    numeroInicial: Number(inutilizarNumeroInicial),
+                    numeroFinal: Number(inutilizarNumeroFinal),
+                    justificativa: inutilizarJustificativa.trim(),
+                    modelo: inutilizarModelo,
+                  });
+                  toast.success('Numeração inutilizada com sucesso na SEFAZ.');
+                  setInutilizarOpen(false);
+                  setInutilizarJustificativa('');
+                  setInutilizarNumeroInicial('');
+                  setInutilizarNumeroFinal('');
+                  await refetch();
+                } catch (e: any) {
+                  handleApiError(e);
+                } finally {
+                  setInutilizarSubmitting(false);
+                }
+              }}
+            >
+              {inutilizarSubmitting ? 'Enviando...' : 'Inutilizar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Carta de Correção (CC-e) */}
+      <Dialog open={cartaCorrecaoOpen} onOpenChange={setCartaCorrecaoOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Carta de Correção Eletrônica (CC-e)</DialogTitle>
+            <DialogDescription>
+              Enviar CC-e para NF-e autorizada. Não é permitido alterar valores, alíquotas ou dados de emitente/destinatário. Mín. 15, máx. 1000 caracteres.
+            </DialogDescription>
+          </DialogHeader>
+          {documentForCarta && (
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-muted-foreground">Documento: {documentForCarta.accessKey || documentForCarta.id}</p>
+              <div className="space-y-2">
+                <Label>Texto da correção *</Label>
+                <Textarea value={correcaoText} onChange={(e) => setCorrecaoText(e.target.value)} placeholder="Descreva a correção..." rows={4} maxLength={1000} />
+                <p className="text-xs text-muted-foreground">{correcaoText.length}/1000 (mín. 15)</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCartaCorrecaoOpen(false)}>Fechar</Button>
+            <Button
+              disabled={cartaSubmitting || !documentForCarta || correcaoText.trim().length < 15}
+              onClick={async () => {
+                if (!documentForCarta) return;
+                try {
+                  setCartaSubmitting(true);
+                  await fiscalApi.enviarCartaCorrecao(documentForCarta.id, { correcao: correcaoText.trim() });
+                  toast.success('Carta de Correção enviada com sucesso.');
+                  setCartaCorrecaoOpen(false);
+                  setDocumentForCarta(null);
+                  setCorrecaoText('');
+                  await refetch();
+                } catch (e: any) {
+                  handleApiError(e);
+                } finally {
+                  setCartaSubmitting(false);
+                }
+              }}
+            >
+              {cartaSubmitting ? 'Enviando...' : 'Enviar CC-e'}
             </Button>
           </DialogFooter>
         </DialogContent>

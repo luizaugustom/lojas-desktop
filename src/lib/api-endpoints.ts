@@ -131,7 +131,21 @@ export const fiscalApi = {
   downloadInfo: (id: string) => api.get(`/fiscal/${id}/download-info`),
   download: (id: string, format: 'xml' | 'pdf') =>
     api.get(`/fiscal/${id}/download`, { params: { format }, responseType: 'blob' }),
-  cancel: (id: string, data: any) => api.post(`/fiscal/${id}/cancel`, data),
+  cancel: (id: string, data: { reason: string }) => api.post(`/fiscal/${id}/cancel`, data),
+  inutilizarNumeracao: (data: {
+    serie: string;
+    numeroInicial: number;
+    numeroFinal: number;
+    justificativa: string;
+    modelo: '55' | '65';
+  }) => api.post('/fiscal/inutilizacao', data),
+  enviarCartaCorrecao: (id: string, data: { correcao: string }) =>
+    api.post(`/fiscal/${id}/carta-correcao`, data),
+  ativarContingencia: (data?: { motivo?: string }) =>
+    api.post('/fiscal/contingencia/ativar', data ?? {}),
+  desativarContingencia: () => api.post('/fiscal/contingencia/desativar'),
+  getContingenciaStatus: () => api.get('/fiscal/contingencia/status'),
+  listarContingenciaPendentes: () => api.get('/fiscal/contingencia/pendentes'),
 };
 
 export const cashClosureApi = {
@@ -304,6 +318,7 @@ export const notificationApi = {
   get: (id: string) => api.get(`/notification/${id}`),
   markAsRead: (id: string) => api.put(`/notification/${id}/read`),
   markAllAsRead: () => api.put('/notification/read-all'),
+  deleteRead: () => api.delete('/notification/read'),
   delete: (id: string) => api.delete(`/notification/${id}`),
   getPreferences: () => api.get('/notification/preferences/me'),
   updatePreferences: (data: {

@@ -229,7 +229,8 @@ function saveToCache(data: NCMItem[]): void {
 }
 
 /**
- * Normaliza dados da API para o formato esperado
+ * Normaliza dados da API para o formato esperado.
+ * API Siscomex retorna: { Nomenclaturas: [{ Codigo, Descricao, ... }] } ou array direto.
  */
 function normalizeAPIData(apiData: any[]): NCMItem[] {
   if (!Array.isArray(apiData)) {
@@ -237,26 +238,26 @@ function normalizeAPIData(apiData: any[]): NCMItem[] {
   }
 
   const normalized: Array<NCMItem | null> = apiData.map((item: any): NCMItem | null => {
-      // A API pode retornar diferentes formatos, tentamos normalizar
-      const codigo = item.codigo || item.Codigo || item.code || '';
-      const descricao = item.descricao || item.Descricao || item.description || '';
-      
-      // Garantir que o código tenha 8 dígitos
-      const normalizedCode = codigo.toString().padStart(8, '0').slice(0, 8);
-      
-      if (!normalizedCode || normalizedCode.length !== 8) {
-        return null;
-      }
+    // API Siscomex usa Codigo/Descricao (maiúscula); aceita também camelCase
+    const codigo = item.Codigo ?? item.codigo ?? item.code ?? '';
+    const descricao = item.Descricao ?? item.descricao ?? item.description ?? '';
+    
+    // Remove pontos do código (ex: "0101.21.00" -> "01012100") e normaliza para 8 dígitos
+    const codigoLimp = String(codigo).replace(/\./g, '').replace(/\D/g, '');
+    const normalizedCode = codigoLimp.padStart(8, '0').slice(0, 8);
+    
+    if (!normalizedCode || normalizedCode.length !== 8) return null;
+    if (normalizedCode === '00000000' && !String(descricao).trim()) return null;
 
-      return {
-        codigo: normalizedCode,
-        descricao: descricao.trim(),
-        ex: item.ex || item.Ex || item.exception || undefined,
-        tipo: item.tipo || item.Tipo || item.type || undefined,
-        vigenciaInicio: item.vigenciaInicio || item.VigenciaInicio || undefined,
-        vigenciaFim: item.vigenciaFim || item.VigenciaFim || undefined,
-      };
-    });
+    return {
+      codigo: normalizedCode,
+      descricao: String(descricao).trim() || '(Sem descrição)',
+      ex: item.Ex ?? item.ex ?? item.exception,
+      tipo: item.Tipo ?? item.tipo ?? item.type,
+      vigenciaInicio: item.VigenciaInicio ?? item.vigenciaInicio,
+      vigenciaFim: item.VigenciaFim ?? item.vigenciaFim,
+    };
+  });
 
   return normalized.filter((item): item is NCMItem => item !== null);
 }
@@ -309,7 +310,13 @@ export async function loadNCMData(
       throw new Error(data.message || 'Erro desconhecido da API');
     }
 
-    const normalizedData = normalizeAPIData(Array.isArray(data) ? data : [data]);
+    // API Siscomex retorna { Nomenclaturas: [...] }; aceita também array direto
+    const rawItems = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.Nomenclaturas)
+        ? data.Nomenclaturas
+        : [data];
+    const normalizedData = normalizeAPIData(rawItems);
     if (normalizedData.length === 0) {
       const cached = loadFromCache();
       if (cached && cached.data.length > 0) return cached.data;

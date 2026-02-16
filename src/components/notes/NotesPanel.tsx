@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { ScrollArea } from '../ui/scroll-area';
 import { notesApi } from '../../lib/api-endpoints';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -292,7 +291,7 @@ export function NotesPanel({ open, onOpenChange }: NotesPanelProps) {
           </div>
 
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-            <ScrollArea className="h-full min-h-[200px] max-h-[50vh] px-4 sm:px-6">
+            <div className="h-full min-h-[200px] max-h-[50vh] px-4 sm:px-6 overflow-y-auto pr-2">
               <div className="space-y-2 pb-4 w-full max-w-full min-w-0 box-border">
               {loading ? (
                 <div className="space-y-2 w-full max-w-full min-w-0">
@@ -378,7 +377,7 @@ export function NotesPanel({ open, onOpenChange }: NotesPanelProps) {
                 ))
               )}
               </div>
-            </ScrollArea>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
