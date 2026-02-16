@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, RefreshCw, Search, Download, Upload, PlusCircle, Trash2, Pencil, Loader2, RotateCcw, FileCode2 } from 'lucide-react';
+import { FileText, RefreshCw, Search, Download, Upload, PlusCircle, Trash2, Pencil, Loader2, RotateCcw, FileCode2, HelpCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
@@ -14,6 +14,8 @@ import { Textarea } from '../ui/textarea';
 import { formatCurrency, formatDateTime, downloadFile } from '@/lib/utils';
 import { fiscalApi, productApi, billApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
+import { PageHelpModal } from '../help/page-help-modal';
+import { inboundInvoicesHelpTitle, inboundInvoicesHelpDescription, inboundInvoicesHelpIcon, getInboundInvoicesHelpTabs } from '../help/contents/inbound-invoices-help';
 
 interface InboundDoc {
   id: string;
@@ -74,6 +76,7 @@ export default function InboundInvoicesPage() {
   const [itemLinkedIds, setItemLinkedIds] = useState<string[]>([]);
   const [itemNewProductData, setItemNewProductData] = useState<Record<number, { name: string; barcode: string; costPrice: number; stockQuantity: number; ncm: string; cfop: string; unitOfMeasure: string; price: number }>>({});
   const [registerBillsFromXml, setRegisterBillsFromXml] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     if (user && user.role !== 'empresa') {
@@ -243,6 +246,9 @@ export default function InboundInvoicesPage() {
           )}
           <Button variant="outline" onClick={() => refetch()} disabled={isLoading} className="text-foreground">
             <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
           </Button>
         </div>
       </div>
@@ -948,6 +954,15 @@ export default function InboundInvoicesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={inboundInvoicesHelpTitle}
+        description={inboundInvoicesHelpDescription}
+        icon={inboundInvoicesHelpIcon}
+        tabs={getInboundInvoicesHelpTabs()}
+      />
     </div>
   );
 }

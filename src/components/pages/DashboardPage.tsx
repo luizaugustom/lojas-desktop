@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingCart, Package, Users, DollarSign, TrendingUp, TrendingDown, AlertTriangle, Building2 } from 'lucide-react';
+import { ShoppingCart, Package, Users, DollarSign, TrendingUp, TrendingDown, AlertTriangle, Building2, HelpCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
@@ -10,6 +10,9 @@ import { ProductImage } from '../products/ProductImage';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { companyApi, customerApi } from '../../lib/api-endpoints';
 import { useDevices } from '../../contexts/DeviceContext';
+import { Button } from '../ui/button';
+import { PageHelpModal } from '../help/page-help-modal';
+import { dashboardHelpTitle, dashboardHelpDescription, dashboardHelpIcon, getDashboardHelpTabs } from '../help/contents/dashboard-help';
 // PrinterDriverSetup removido - funcionalidades de impressão removidas
 
 interface MetricCardProps {
@@ -80,6 +83,7 @@ interface Customer {
 export default function DashboardPage() {
   const { api, isAuthenticated, user } = useAuth();
   const { queryParams, queryKeyPart, dateRange } = useDateRange();
+  const [helpOpen, setHelpOpen] = useState(false);
   const { printers, scales } = useDevices();
   // Variáveis de impressora removidas - funcionalidades de impressão removidas
 
@@ -339,9 +343,14 @@ export default function DashboardPage() {
     
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard Administrativo</h1>
-          <p className="text-muted-foreground">Visão geral do sistema</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard Administrativo</h1>
+            <p className="text-muted-foreground">Visão geral do sistema</p>
+          </div>
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
+          </Button>
         </div>
 
         <div className="grid gap-4 md:grid-cols-1">
@@ -375,17 +384,30 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        <PageHelpModal
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          title={dashboardHelpTitle}
+          description={dashboardHelpDescription}
+          icon={dashboardHelpIcon}
+          tabs={getDashboardHelpTabs()}
+        />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Visão geral do seu negócio</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Visão geral do seu negócio</p>
+        </div>
+        <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <HelpCircle className="h-5 w-5" />
+        </Button>
       </div>
-
 
       {/* Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -610,6 +632,15 @@ export default function DashboardPage() {
       </div>
 
       {/* PrinterDriverSetup removido - funcionalidades de impressão removidas */}
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={dashboardHelpTitle}
+        description={dashboardHelpDescription}
+        icon={dashboardHelpIcon}
+        tabs={getDashboardHelpTabs()}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Download, RefreshCw, Search, PlusCircle, Trash2, Plus, Package, XCircle, CheckCircle2, AlertCircle, Info, FileX, FileEdit, WifiOff, Wifi } from 'lucide-react';
+import { FileText, Download, RefreshCw, Search, PlusCircle, Trash2, Plus, Package, XCircle, CheckCircle2, AlertCircle, Info, HelpCircle, FileX, FileEdit, WifiOff, Wifi } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
@@ -17,6 +17,7 @@ import { formatCurrency, formatDateTime, downloadFile } from '@/lib/utils';
 import { fiscalApi } from '@/lib/api-endpoints';
 import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import { isValidCPF, isValidCNPJ, isValidCPFOrCNPJ } from '@/lib/validations';
+import { InvoiceHelpModal } from '../invoices/InvoiceHelpModal';
 
 interface FiscalDoc {
   id: string;
@@ -128,6 +129,9 @@ export default function InvoicesPage() {
   const [documentForCarta, setDocumentForCarta] = useState<FiscalDoc | null>(null);
   const [correcaoText, setCorrecaoText] = useState('');
   const [cartaSubmitting, setCartaSubmitting] = useState(false);
+
+  // Modal de ajuda
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Contingência NFC-e
   const [contingenciaLoading, setContingenciaLoading] = useState(false);
@@ -512,8 +516,19 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Notas Fiscais</h1>
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight">Notas Fiscais</h1>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setHelpOpen(true)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Ajuda sobre funcionalidades"
+            >
+              <HelpCircle className="h-5 w-5" />
+            </Button>
+          </div>
           <p className="text-muted-foreground">Visualize e baixe suas NF-e</p>
         </div>
         <div className="flex gap-2">
@@ -1552,6 +1567,8 @@ export default function InvoicesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <InvoiceHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

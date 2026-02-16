@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, Users, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, Search, Users, TrendingUp, TrendingDown, HelpCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { InputWithIcon } from '../ui/input';
 import { Card } from '../ui/card';
@@ -12,6 +12,8 @@ import { SellerDialog } from '../sellers/seller-dialog';
 import { SellerDetailsDialog } from '../sellers/seller-details-dialog';
 import { formatCurrency } from '../../lib/utils';
 import type { Seller } from '../../types';
+import { PageHelpModal } from '../help/page-help-modal';
+import { sellersHelpTitle, sellersHelpDescription, sellersHelpIcon, getSellersHelpTabs } from '../help/contents/sellers-help';
 
 export default function SellersPage() {
   const { user } = useAuth();
@@ -19,6 +21,7 @@ export default function SellersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const { data: sellersResponse, isLoading, refetch } = useQuery({
     queryKey: ['sellers', search, user?.companyId],
@@ -100,10 +103,15 @@ export default function SellersPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Vendedores</h1>
           <p className="text-muted-foreground">Gerencie os vendedores da sua empresa</p>
         </div>
-        <Button onClick={handleCreate} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Vendedor
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleCreate} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Vendedor
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       {/* Estatísticas Gerais */}
@@ -201,6 +209,15 @@ export default function SellersPage() {
         onClose={handleCloseDetails}
         onEdit={handleEdit}
         seller={selectedSeller}
+      />
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={sellersHelpTitle}
+        description={sellersHelpDescription}
+        icon={sellersHelpIcon}
+        tabs={getSellersHelpTabs()}
       />
     </div>
   );

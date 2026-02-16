@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Bell, Lock, Save, Upload, X, Image, MessageSquare, Store, ExternalLink, Settings as SettingsIcon, Percent, CreditCard, Plus, Edit2, Trash2, AlertCircle } from 'lucide-react';
+import { User, Bell, Lock, Save, Upload, X, Image, MessageSquare, Store, ExternalLink, Settings as SettingsIcon, Percent, CreditCard, Plus, Edit2, Trash2, AlertCircle, HelpCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -26,6 +26,8 @@ import { useUIStore } from '@/store/ui-store';
 import { useQueryClient } from '@tanstack/react-query';
 import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import { getAcquirerList } from '@/lib/acquirer-cnpj-list';
+import { PageHelpModal } from '../help/page-help-modal';
+import { settingsHelpTitle, settingsHelpDescription, settingsHelpIcon, getSettingsHelpTabs } from '../help/contents/settings-help';
 
 const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL || 'https://montshop.vercel.app').replace(/\/+$/, '');
 
@@ -45,6 +47,7 @@ export default function SettingsPage() {
   
   // Estado do perfil
   const [profile, setProfile] = useState<any>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [updatingProfile, setUpdatingProfile] = useState(false);
   
@@ -1112,9 +1115,14 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-        <p className="text-muted-foreground">Gerencie as configurações do sistema</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
+          <p className="text-muted-foreground">Gerencie as configurações do sistema</p>
+        </div>
+        <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <HelpCircle className="h-5 w-5" />
+        </Button>
       </div>
 
       {user?.role === 'empresa' && (
@@ -2805,6 +2813,15 @@ export default function SettingsPage() {
         {/* Sentinel para rolar até o fim de Notificações */}
         <div id="notificacoes-fim" className="h-1" />
       </div>
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={settingsHelpTitle}
+        description={settingsHelpDescription}
+        icon={settingsHelpIcon}
+        tabs={getSettingsHelpTabs()}
+      />
     </div>
   );
 }

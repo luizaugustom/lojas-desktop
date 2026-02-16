@@ -10,7 +10,8 @@ import {
   RefreshCw,
   TrendingUp,
   DollarSign,
-  ShoppingCart
+  ShoppingCart,
+  HelpCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '../ui/button';
@@ -31,6 +32,8 @@ import { formatDate, formatCurrency } from '../../lib/utils';
 import { SellerCharts } from '../sellers/seller-charts';
 import { sellerApi } from '../../lib/api-endpoints';
 import type { Seller, SellerStats, Sale, DataPeriodFilter } from '../../types';
+import { PageHelpModal } from '../help/page-help-modal';
+import { sellerProfileHelpTitle, sellerProfileHelpDescription, sellerProfileHelpIcon, getSellerProfileHelpTabs } from '../help/contents/seller-profile-help';
 
 const SELLER_PERIOD_OPTIONS: Array<{ value: DataPeriodFilter; label: string }> = [
   { value: 'LAST_1_MONTH', label: 'Último mês' },
@@ -77,6 +80,7 @@ export default function SellerProfilePage() {
     resolveSellerPeriod((user?.dataPeriod as DataPeriodFilter | null) ?? null),
   );
   const [isUpdatingDataPeriod, setIsUpdatingDataPeriod] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const isInternalUpdateRef = useRef(false);
   const lastUserDataPeriodRef = useRef<DataPeriodFilter | null | undefined>(undefined);
 
@@ -288,6 +292,9 @@ export default function SellerProfilePage() {
             disabled={isLoadingProfile || isLoadingStats || isLoadingSales}
           >
             <RefreshCw className={`h-4 w-4 ${(isLoadingProfile || isLoadingStats || isLoadingSales) ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
           </Button>
         </div>
       </div>
@@ -510,6 +517,15 @@ export default function SellerProfilePage() {
           </div>
         )}
       </Card>
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={sellerProfileHelpTitle}
+        description={sellerProfileHelpDescription}
+        icon={sellerProfileHelpIcon}
+        tabs={getSellerProfileHelpTabs()}
+      />
     </div>
   );
 }

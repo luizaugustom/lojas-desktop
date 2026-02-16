@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, Download, Filter, TrendingUp, Wallet } from 'lucide-react';
+import { Calendar, Download, Filter, TrendingUp, Wallet, HelpCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../hooks/useAuth';
@@ -21,6 +21,8 @@ import { SalesTable } from '../sales-history/sales-table';
 import { SaleDetailsDialog } from '../sales-history/sale-details-dialog';
 import { CancelSaleDialog } from '../sales/cancel-sale-dialog';
 import { saleApi } from '../../lib/api-endpoints';
+import { PageHelpModal } from '../help/page-help-modal';
+import { salesHistoryHelpTitle, salesHistoryHelpDescription, salesHistoryHelpIcon, getSalesHistoryHelpTabs } from '../help/contents/sales-history-help';
 
 type PeriodFilter = 'today' | 'week' | 'last_15_days' | 'month' | '3months' | '6months' | 'year' | 'all';
 
@@ -48,6 +50,7 @@ export default function SalesHistoryPage() {
   const [limit] = useState(20);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [cancelSaleId, setCancelSaleId] = useState<string | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -427,10 +430,15 @@ export default function SalesHistoryPage() {
             Visualize e gerencie todas as vendas realizadas
           </p>
         </div>
-        <Button onClick={handleExportSales} variant="outline">
-          <Download className="mr-2 h-4 w-4" />
-          Exportar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleExportSales} variant="outline">
+            <Download className="mr-2 h-4 w-4" />
+            Exportar
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -582,6 +590,15 @@ export default function SalesHistoryPage() {
         }}
         onConfirm={handleConfirmCancel}
         loading={cancelling}
+      />
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={salesHistoryHelpTitle}
+        description={salesHistoryHelpDescription}
+        icon={salesHistoryHelpIcon}
+        tabs={getSalesHistoryHelpTabs()}
       />
     </div>
   );

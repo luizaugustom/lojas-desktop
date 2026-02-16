@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Filter, X } from 'lucide-react';
+import { Plus, Filter, X, HelpCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import {
@@ -14,6 +14,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useDateRange } from '../../hooks/useDateRange';
 import { BillsTable } from '../bills/bills-table';
 import { BillDialog } from '../bills/bill-dialog';
+import { PageHelpModal } from '../help/page-help-modal';
+import { billsHelpTitle, billsHelpDescription, billsHelpIcon, getBillsHelpTabs } from '../help/contents/bills-help';
 
 type DateFilter = 'all' | 'this-week' | 'next-week' | 'next-month' | 'this-year';
 
@@ -21,6 +23,7 @@ export default function BillsPage() {
   const { api } = useAuth();
   const { queryParams, queryKeyPart, dateRange } = useDateRange();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
 
   // Calcular datas baseadas no filtro da página
@@ -133,10 +136,15 @@ export default function BillsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Contas a Pagar</h1>
           <p className="text-muted-foreground">Gerencie suas contas e despesas</p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Conta
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Conta
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       <Card className="p-4">
@@ -174,6 +182,15 @@ export default function BillsPage() {
       <BillsTable bills={bills || []} isLoading={isLoading} onRefetch={refetch} />
 
       <BillDialog open={dialogOpen} onClose={handleClose} />
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={billsHelpTitle}
+        description={billsHelpDescription}
+        icon={billsHelpIcon}
+        tabs={getBillsHelpTabs()}
+      />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
   Eye,
   Loader2,
   ArrowDownCircle,
+  HelpCircle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '../ui/button';
@@ -54,6 +55,8 @@ import { printContent } from '@/lib/print-service';
 import { cashClosureApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency, formatDateTime, formatDate, toLocalISOString } from '@/lib/utils';
+import { PageHelpModal } from '../help/page-help-modal';
+import { cashClosureHelpTitle, cashClosureHelpDescription, cashClosureHelpIcon, getCashClosureHelpTabs } from '../help/contents/cash-closure-help';
 
 interface PaymentSummaryEntry {
   method: string;
@@ -230,6 +233,7 @@ export default function CashClosurePage() {
   const [withdrawAmount, setWithdrawAmount] = useState<number | undefined>(undefined);
   const [withdrawReason, setWithdrawReason] = useState<string>('');
   const [withdrawReasonOther, setWithdrawReasonOther] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Buscar caixa atual
   const { data: currentClosure, isLoading: isLoadingCurrent, refetch: refetchCurrent } = useQuery<CashClosure | null>({
@@ -886,12 +890,17 @@ export default function CashClosurePage() {
             Gerencie a abertura e fechamento do caixa
           </p>
         </div>
-        {currentClosure && (
-          <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-            <Unlock className="h-4 w-4 mr-1" />
-            Caixa Aberto
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {currentClosure && (
+            <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+              <Unlock className="h-4 w-4 mr-1" />
+              Caixa Aberto
+            </Badge>
+          )}
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       {!currentClosure ? (
@@ -1461,6 +1470,15 @@ export default function CashClosurePage() {
           )}
         </Card>
       )}
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={cashClosureHelpTitle}
+        description={cashClosureHelpDescription}
+        icon={cashClosureHelpIcon}
+        tabs={getCashClosureHelpTabs()}
+      />
     </div>
     </>
   );

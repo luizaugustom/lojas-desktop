@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, AlertTriangle } from 'lucide-react';
+import { Plus, Search, AlertTriangle, HelpCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '../ui/button';
 import { InputWithIcon } from '../ui/input';
@@ -14,6 +14,8 @@ import { ProductFilters } from '../products/product-filters';
 import { applyProductFilters, getActiveFiltersCount, type ProductFilters as ProductFiltersType } from '../../lib/productFilters';
 import type { Product, PlanUsageStats } from '../../types';
 import { handleApiError } from '../../lib/handleApiError';
+import { PageHelpModal } from '../help/page-help-modal';
+import { productsHelpTitle, productsHelpDescription, productsHelpIcon, getProductsHelpTabs } from '../help/contents/products-help';
 
 export default function ProductsPage() {
   const { api, user } = useAuth();
@@ -23,6 +25,7 @@ export default function ProductsPage() {
   const [lossDialogOpen, setLossDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [productForLoss, setProductForLoss] = useState<Product | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [filters, setFilters] = useState<ProductFiltersType>({
     expiringSoon: false,
     lowStock: false,
@@ -137,19 +140,24 @@ export default function ProductsPage() {
             )}
           </p>
         </div>
-        {canManageProducts && (
-          <Button 
-            onClick={handleCreate}
-            disabled={planUsage?.usage.products.max ? planUsage.usage.products.current >= planUsage.usage.products.max : false}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Produto
-            {planUsage?.usage.products.percentage != null &&
-              planUsage.usage.products.percentage >= 90 && (
-              <AlertTriangle className="ml-2 h-4 w-4 text-yellow-500" />
-            )}
+        <div className="flex items-center gap-2">
+          {canManageProducts && (
+            <Button 
+              onClick={handleCreate}
+              disabled={planUsage?.usage.products.max ? planUsage.usage.products.current >= planUsage.usage.products.max : false}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Produto
+              {planUsage?.usage.products.percentage != null &&
+                planUsage.usage.products.percentage >= 90 && (
+                <AlertTriangle className="ml-2 h-4 w-4 text-yellow-500" />
+              )}
+            </Button>
+          )}
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
           </Button>
-        )}
+        </div>
       </div>
 
       <Card className="p-4">
@@ -191,6 +199,15 @@ export default function ProductsPage() {
         open={lossDialogOpen}
         onClose={handleLossClose}
         initialProduct={productForLoss}
+      />
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={productsHelpTitle}
+        description={productsHelpDescription}
+        icon={productsHelpIcon}
+        tabs={getProductsHelpTabs()}
       />
     </div>
   );

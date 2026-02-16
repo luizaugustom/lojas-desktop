@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { DollarSign, AlertTriangle, CheckCircle2, Filter, X } from 'lucide-react';
+import { DollarSign, AlertTriangle, CheckCircle2, Filter, X, HelpCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Button } from '../ui/button';
@@ -20,6 +20,8 @@ import { CustomerDebtPaymentDialog } from '../installments/customer-debt-payment
 import { formatCurrency } from '../../lib/utils';
 import { useDeviceStore } from '../../store/device-store';
 import toast from 'react-hot-toast';
+import { PageHelpModal } from '../help/page-help-modal';
+import { installmentsHelpTitle, installmentsHelpDescription, installmentsHelpIcon, getInstallmentsHelpTabs } from '../help/contents/installments-help';
 
 type DateFilter = 'all' | 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'this-year';
 
@@ -35,6 +37,7 @@ export default function InstallmentsPage() {
   } | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('this-month');
   const [lastScanned, setLastScanned] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const {
     barcodeBuffer,
@@ -330,6 +333,9 @@ export default function InstallmentsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Clientes com Dívidas</h1>
             <p className="text-muted-foreground">Lista de clientes com pagamentos pendentes</p>
           </div>
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
+          </Button>
         </div>
 
         <CustomersDebtList
@@ -350,6 +356,15 @@ export default function InstallmentsPage() {
           onClose={handlePaymentClose}
           installment={selectedInstallment}
         />
+
+        <PageHelpModal
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          title={installmentsHelpTitle}
+          description={installmentsHelpDescription}
+          icon={installmentsHelpIcon}
+          tabs={getInstallmentsHelpTabs()}
+        />
       </div>
     );
   }
@@ -362,6 +377,9 @@ export default function InstallmentsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Pagamentos a Prazo</h1>
             <p className="text-muted-foreground">Gerencie parcelas e pagamentos dos clientes</p>
           </div>
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
+          </Button>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
@@ -512,6 +530,15 @@ export default function InstallmentsPage() {
           open={paymentDialogOpen}
           onClose={handlePaymentClose}
           installment={selectedInstallment}
+        />
+
+        <PageHelpModal
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          title={installmentsHelpTitle}
+          description={installmentsHelpDescription}
+          icon={installmentsHelpIcon}
+          tabs={getInstallmentsHelpTabs()}
         />
       </div>
     );

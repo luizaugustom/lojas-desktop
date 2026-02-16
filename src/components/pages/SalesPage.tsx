@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Barcode, Info } from 'lucide-react';
+import { Search, Barcode, Info, HelpCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Label } from '../ui/label';
@@ -15,6 +15,8 @@ import { BarcodeScanner } from '../sales/barcode-scanner';
 import { CheckoutDialog } from '../sales/checkout-dialog';
 import { BudgetDialog } from '../sales/budget-dialog';
 import { KeyboardShortcutsHelpDialog } from '../sales/keyboard-shortcuts-help-dialog';
+import { PageHelpModal } from '../help/page-help-modal';
+import { salesHelpTitle, salesHelpDescription, salesHelpIcon, getSalesHelpTabs } from '../help/contents/sales-help';
 import { handleNumberInputChange, isValidId } from '../../lib/utils-clean';
 import { useDeviceStore } from '../../store/device-store';
 import { parseScaleBarcode } from '../../lib/scale-barcode';
@@ -39,6 +41,7 @@ export default function SalesPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const { addItem, items, clearCart } = useCartStore();
   const [lastScanned, setLastScanned] = useState(0);
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(null);
@@ -331,6 +334,15 @@ export default function SalesPage() {
             >
               <Info className="h-5 w-5" />
             </button>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              className="inline-flex items-center justify-center rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted hover:scale-105 transition-transform"
+              aria-label="Ajuda"
+              title="Central de ajuda"
+            >
+              <HelpCircle className="h-5 w-5" />
+            </button>
           </div>
           <div className="flex gap-2">
             <InputWithIcon
@@ -401,6 +413,15 @@ export default function SalesPage() {
       <KeyboardShortcutsHelpDialog
         open={helpDialogOpen}
         onClose={() => setHelpDialogOpen(false)}
+      />
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={salesHelpTitle}
+        description={salesHelpDescription}
+        icon={salesHelpIcon}
+        tabs={getSalesHelpTabs()}
       />
 
       <Dialog open={openingDialogOpen} onOpenChange={setOpeningDialogOpen}>

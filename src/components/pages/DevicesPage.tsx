@@ -1,17 +1,20 @@
 import { useDevices } from '../../contexts/DeviceContext';
 import { Button } from '../ui/button';
-import { Printer, Scale, RefreshCw, Search, CheckCircle2, XCircle, AlertCircle, Check } from 'lucide-react';
+import { Printer, Scale, RefreshCw, Search, CheckCircle2, XCircle, AlertCircle, Check, HelpCircle } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { handleApiError } from '../../lib/handleApiError';
 import { Badge } from '../ui/badge';
 import { savePrintSettings } from '@/lib/print-settings';
 import { checkPrinterStatus } from '@/lib/printer-check';
+import { PageHelpModal } from '../help/page-help-modal';
+import { devicesHelpTitle, devicesHelpDescription, devicesHelpIcon, getDevicesHelpTabs } from '../help/contents/devices-help';
 
 export default function DevicesPage() {
   const { printers, scales, refreshPrinters, refreshScales, configuredPrinterName } = useDevices();
   const [discovering, setDiscovering] = useState(false);
   const [settingDefault, setSettingDefault] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const handleDiscover = async () => {
     try {
@@ -49,9 +52,14 @@ export default function DevicesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dispositivos</h1>
-        <p className="text-muted-foreground">Gerencie impressoras e balanças</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dispositivos</h1>
+          <p className="text-muted-foreground">Gerencie impressoras e balanças</p>
+        </div>
+        <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <HelpCircle className="h-5 w-5" />
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -211,6 +219,15 @@ export default function DevicesPage() {
           </div>
         </div>
       </div>
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={devicesHelpTitle}
+        description={devicesHelpDescription}
+        icon={devicesHelpIcon}
+        tabs={getDevicesHelpTabs()}
+      />
     </div>
   );
 }

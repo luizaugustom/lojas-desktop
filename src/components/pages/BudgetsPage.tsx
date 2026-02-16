@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Search, Download, Eye, Trash2, CheckCircle, XCircle, Clock, Edit, Printer } from 'lucide-react';
+import { FileText, Search, Download, Eye, Trash2, CheckCircle, XCircle, Clock, Edit, Printer, HelpCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -30,6 +30,8 @@ import { formatCurrency } from '@/lib/utils-clean';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
 import { printContent } from '@/lib/print-service';
+import { PageHelpModal } from '../help/page-help-modal';
+import { budgetsHelpTitle, budgetsHelpDescription, budgetsHelpIcon, getBudgetsHelpTabs } from '../help/contents/budgets-help';
 interface Budget {
   id: string;
   budgetNumber: number;
@@ -73,6 +75,7 @@ export default function BudgetsPage() {
   const [statusNotes, setStatusNotes] = useState<string>('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [printingBudgetId, setPrintingBudgetId] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   
   const isCompany = user?.role === 'empresa';
 
@@ -256,6 +259,9 @@ export default function BudgetsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Orçamentos</h1>
           <p className="text-muted-foreground">Gerencie seus orçamentos</p>
         </div>
+        <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <HelpCircle className="h-5 w-5" />
+        </Button>
       </div>
 
       <Card>
@@ -578,6 +584,15 @@ export default function BudgetsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={budgetsHelpTitle}
+        description={budgetsHelpDescription}
+        icon={budgetsHelpIcon}
+        tabs={getBudgetsHelpTabs()}
+      />
     </div>
   );
 }

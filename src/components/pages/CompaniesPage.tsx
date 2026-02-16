@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
-import { Plus, Building2, Search, Filter } from 'lucide-react';
+import { Plus, Building2, Search, Filter, HelpCircle } from 'lucide-react';
 import { InputWithIcon } from '../ui/input';
 import { useAuth } from '../../hooks/useAuth';
 import { CompaniesTable } from '../companies/companies-table';
@@ -12,6 +12,8 @@ import { Company, CreateCompanyDto } from '../../types';
 import { companyApi } from '../../lib/api-endpoints';
 import { toast } from 'react-hot-toast';
 import { convertPrismaIdToUUID, isValidId } from '../../lib/utils';
+import { PageHelpModal } from '../help/page-help-modal';
+import { companiesHelpTitle, companiesHelpDescription, companiesHelpIcon, getCompaniesHelpTabs } from '../help/contents/companies-help';
 
 export default function CompaniesPage() {
   const { user } = useAuth();
@@ -24,6 +26,7 @@ export default function CompaniesPage() {
   const [companyToToggle, setCompanyToToggle] = useState<Company | null>(null);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
   const [isFocusNfeModalOpen, setIsFocusNfeModalOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [companyForFocusNfe, setCompanyForFocusNfe] = useState<Company | null>(null);
 
   // Verificar se o usuário é admin
@@ -189,10 +192,15 @@ export default function CompaniesPage() {
             Gerencie todas as empresas cadastradas no sistema
           </p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Nova Empresa
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nova Empresa
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+            <HelpCircle className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       <Card className="p-6">
@@ -265,6 +273,15 @@ export default function CompaniesPage() {
         onSuccess={() => {
           fetchCompanies();
         }}
+      />
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={companiesHelpTitle}
+        description={companiesHelpDescription}
+        icon={companiesHelpIcon}
+        tabs={getCompaniesHelpTabs()}
       />
     </div>
   );

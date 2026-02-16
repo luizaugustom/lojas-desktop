@@ -3,7 +3,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { Download, FileText, Package, ShoppingCart, FileBarChart, Users, DollarSign, Info, XCircle } from 'lucide-react';
+import { Download, FileText, Package, ShoppingCart, FileBarChart, Users, DollarSign, Info, XCircle, HelpCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { DatePicker } from '../ui/date-picker';
@@ -22,6 +22,8 @@ import { handleApiError } from '../../lib/handleApiError';
 import { reportSchema } from '../../lib/validations';
 import { downloadFile, getFileExtension } from '../../lib/utils';
 import type { GenerateReportDto, Seller } from '../../types';
+import { PageHelpModal } from '../help/page-help-modal';
+import { reportsHelpTitle, reportsHelpDescription, reportsHelpIcon, getReportsHelpTabs } from '../help/contents/reports-help';
 
 const reportTypes = [
   { value: 'sales', label: 'Relatório de Vendas', icon: ShoppingCart },
@@ -41,6 +43,7 @@ export default function ReportsPage() {
   const { api, user } = useAuth();
   const { queryKeyPart } = useDateRange();
   const [loading, setLoading] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const { data: sellersData } = useQuery({
     queryKey: ['sellers', queryKeyPart],
@@ -153,11 +156,16 @@ export default function ReportsPage() {
 
   return (
     <div className="min-h-0">
-      <div className="mb-2">
-        <h1 className="text-3xl font-bold tracking-tight">Relatórios Contábeis</h1>
-        <p className="text-muted-foreground">
-          Gere relatórios completos para envio à contabilidade
-        </p>
+      <div className="mb-2 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Relatórios Contábeis</h1>
+          <p className="text-muted-foreground">
+            Gere relatórios completos para envio à contabilidade
+          </p>
+        </div>
+        <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <HelpCircle className="h-5 w-5" />
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-2 w-full mb-2 items-start">
@@ -379,6 +387,15 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       )}
+
+      <PageHelpModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        title={reportsHelpTitle}
+        description={reportsHelpDescription}
+        icon={reportsHelpIcon}
+        tabs={getReportsHelpTabs()}
+      />
     </div>
   );
 }
