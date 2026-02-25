@@ -125,9 +125,9 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
               className="flex items-center gap-3 hover:opacity-80 transition-opacity"
             >
               {!sidebarCollapsed && (
-                <img src={logoImage} alt="MontShop Logo" className="h-6 w-6" />
+                <img src={logoImage} alt="Montshop Logo" className="h-6 w-6" />
               )}
-              {!sidebarCollapsed && <span className="text-lg font-bold">MontShop</span>}
+              {!sidebarCollapsed && <span className="text-lg font-bold">Montshop</span>}
             </button>
             <div className="flex items-center gap-1">
               <button

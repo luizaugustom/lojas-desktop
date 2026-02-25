@@ -13,12 +13,12 @@ function cleanRelease() {
       // Tentar fechar processos do app que possam estar usando os arquivos
       try {
         if (process.platform === 'win32') {
-          // Tentar matar processos do MontShop/Electron
+          // Tentar matar processos do Montshop/Electron
           try {
-            execSync('taskkill /F /IM "MontShop Desktop.exe" 2>nul', { stdio: 'ignore' });
+            execSync('taskkill /F /IM "Montshop Desktop.exe" 2>nul', { stdio: 'ignore' });
           } catch {}
           try {
-            execSync('taskkill /F /FI "WINDOWTITLE eq MontShop*" 2>nul', { stdio: 'ignore' });
+            execSync('taskkill /F /FI "WINDOWTITLE eq Montshop*" 2>nul', { stdio: 'ignore' });
           } catch {}
         }
       } catch (error) {
@@ -38,7 +38,7 @@ function cleanRelease() {
         console.log('✓ Pasta release limpa');
       } catch (error) {
         console.warn('⚠ Aviso: Não foi possível remover alguns arquivos.');
-        console.warn('  Feche o aplicativo MontShop Desktop e tente novamente.');
+        console.warn('  Feche o aplicativo Montshop Desktop e tente novamente.');
         console.warn('  Erro:', error.message);
         // Não falhar o build, apenas avisar
       }

@@ -143,7 +143,7 @@ export function Header({ onLogout }: HeaderProps) {
           </div>
         ) : (
           <div className="text-xs sm:text-sm font-medium text-muted-foreground truncate">
-            {user?.name || 'MontShop'}
+            {user?.name || 'Montshop'}
           </div>
         )}
       </div>

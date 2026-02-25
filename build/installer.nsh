@@ -1,19 +1,19 @@
-; Script NSIS customizado para o instalador do MontShop Desktop
+; Script NSIS customizado para o instalador do Montshop Desktop
 ; Personalização completa da interface do instalador com branding do sistema
 ; Cores: Azul primário #3b82f6 (RGB: 59, 130, 246)
 
 ; Variáveis para personalização (apenas se não estiverem definidas pelo electron-builder)
 !ifndef PRODUCT_NAME
-  !define PRODUCT_NAME "MontShop Desktop"
+  !define PRODUCT_NAME "Montshop Desktop"
 !endif
 !ifndef PRODUCT_PUBLISHER
-  !define PRODUCT_PUBLISHER "MontShop"
+  !define PRODUCT_PUBLISHER "Montshop"
 !endif
 !ifndef PRODUCT_WEB_SITE
   !define PRODUCT_WEB_SITE "https://montshop.com"
 !endif
 
-; Cores do tema MontShop (Azul primário)
+; Cores do tema Montshop (Azul primário)
 !define COLOR_PRIMARY "0x3b82f6"      ; Azul primário
 !define COLOR_PRIMARY_DARK "0x2563eb" ; Azul escuro para hover
 !define COLOR_BACKGROUND "0xffffff"   ; Branco
@@ -52,10 +52,10 @@
   
   ; Banner de boas-vindas customizado
   !ifndef MUI_WELCOMEPAGE_TITLE
-    !define MUI_WELCOMEPAGE_TITLE "Bem-vindo ao Instalador do MontShop Desktop"
+    !define MUI_WELCOMEPAGE_TITLE "Bem-vindo ao Instalador do Montshop Desktop"
   !endif
   !ifndef MUI_WELCOMEPAGE_TEXT
-    !define MUI_WELCOMEPAGE_TEXT "Este assistente irá guiá-lo através da instalação do MontShop Desktop em seu computador.$\r$\n$\r$\nRecomendamos fechar todas as outras aplicações antes de continuar."
+    !define MUI_WELCOMEPAGE_TEXT "Este assistente irá guiá-lo através da instalação do Montshop Desktop em seu computador.$\r$\n$\r$\nRecomendamos fechar todas as outras aplicações antes de continuar."
   !endif
   
   ; Texto da página de finalização
@@ -63,7 +63,7 @@
     !define MUI_FINISHPAGE_TITLE "Instalação Concluída"
   !endif
   !ifndef MUI_FINISHPAGE_TEXT
-    !define MUI_FINISHPAGE_TEXT "O MontShop Desktop foi instalado com sucesso em seu computador."
+    !define MUI_FINISHPAGE_TEXT "O Montshop Desktop foi instalado com sucesso em seu computador."
   !endif
   ; Permitir que o usuário execute o aplicativo após instalação
   ; O NSIS executa automaticamente o executável principal quando MUI_FINISHPAGE_RUN está definido
@@ -71,59 +71,59 @@
     !define MUI_FINISHPAGE_RUN
   !endif
   !ifndef MUI_FINISHPAGE_RUN_TEXT
-    !define MUI_FINISHPAGE_RUN_TEXT "Abrir MontShop Desktop"
+    !define MUI_FINISHPAGE_RUN_TEXT "Abrir Montshop Desktop"
   !endif
   ; Não definir MUI_FINISHPAGE_RUN_FUNCTION - usar comportamento padrão do NSIS
   ; O NSIS executará automaticamente "$INSTDIR\${PRODUCT_NAME}.exe"
   
   ; Personalizar cores dos componentes
-  ; Usar cores do tema MontShop
+  ; Usar cores do tema Montshop
   !ifndef MUI_INSTFILESPAGE_PROGRESSBAR
     !define MUI_INSTFILESPAGE_PROGRESSBAR "smooth"
   !endif
   
   ; Texto e cores personalizadas
   !ifndef MUI_TEXT_WELCOME_INFO_TITLE
-    !define MUI_TEXT_WELCOME_INFO_TITLE "Bem-vindo ao Instalador do MontShop Desktop"
+    !define MUI_TEXT_WELCOME_INFO_TITLE "Bem-vindo ao Instalador do Montshop Desktop"
   !endif
   !ifndef MUI_TEXT_WELCOME_INFO_TEXT
-    !define MUI_TEXT_WELCOME_INFO_TEXT "Este assistente irá instalar o MontShop Desktop versão ${VERSION} em seu computador.$\r$\n$\r$\nClique em Avançar para continuar."
+    !define MUI_TEXT_WELCOME_INFO_TEXT "Este assistente irá instalar o Montshop Desktop versão ${VERSION} em seu computador.$\r$\n$\r$\nClique em Avançar para continuar."
   !endif
   !ifndef MUI_TEXT_LICENSE_TITLE
     !define MUI_TEXT_LICENSE_TITLE "Contrato de Licença"
   !endif
   !ifndef MUI_TEXT_LICENSE_SUBTITLE
-    !define MUI_TEXT_LICENSE_SUBTITLE "Por favor, leia os termos do contrato de licença antes de instalar o MontShop Desktop."
+    !define MUI_TEXT_LICENSE_SUBTITLE "Por favor, leia os termos do contrato de licença antes de instalar o Montshop Desktop."
   !endif
   !ifndef MUI_TEXT_COMPONENTS_TITLE
     !define MUI_TEXT_COMPONENTS_TITLE "Escolher Componentes"
   !endif
   !ifndef MUI_TEXT_COMPONENTS_SUBTITLE
-    !define MUI_TEXT_COMPONENTS_SUBTITLE "Escolha quais componentes do MontShop Desktop você deseja instalar."
+    !define MUI_TEXT_COMPONENTS_SUBTITLE "Escolha quais componentes do Montshop Desktop você deseja instalar."
   !endif
   !ifndef MUI_TEXT_INSTALLING_TITLE
     !define MUI_TEXT_INSTALLING_TITLE "Instalando"
   !endif
   !ifndef MUI_TEXT_INSTALLING_SUBTITLE
-    !define MUI_TEXT_INSTALLING_SUBTITLE "Por favor, aguarde enquanto o MontShop Desktop está sendo instalado..."
+    !define MUI_TEXT_INSTALLING_SUBTITLE "Por favor, aguarde enquanto o Montshop Desktop está sendo instalado..."
   !endif
   !ifndef MUI_TEXT_FINISH_TITLE
     !define MUI_TEXT_FINISH_TITLE "Instalação Concluída"
   !endif
   !ifndef MUI_TEXT_FINISH_SUBTITLE
-    !define MUI_TEXT_FINISH_SUBTITLE "O MontShop Desktop foi instalado com sucesso."
+    !define MUI_TEXT_FINISH_SUBTITLE "O Montshop Desktop foi instalado com sucesso."
   !endif
   !ifndef MUI_TEXT_FINISH_INFO_TITLE
-    !define MUI_TEXT_FINISH_INFO_TITLE "Finalizando a instalação do MontShop Desktop"
+    !define MUI_TEXT_FINISH_INFO_TITLE "Finalizando a instalação do Montshop Desktop"
   !endif
   !ifndef MUI_TEXT_FINISH_INFO_TEXT
-    !define MUI_TEXT_FINISH_INFO_TEXT "O MontShop Desktop foi instalado em seu computador.$\r$\n$\r$\nClique em Finalizar para fechar este assistente."
+    !define MUI_TEXT_FINISH_INFO_TEXT "O Montshop Desktop foi instalado em seu computador.$\r$\n$\r$\nClique em Finalizar para fechar este assistente."
   !endif
   !ifndef MUI_TEXT_ABORT_TITLE
     !define MUI_TEXT_ABORT_TITLE "Instalação Cancelada"
   !endif
   !ifndef MUI_TEXT_ABORT_SUBTITLE
-    !define MUI_TEXT_ABORT_SUBTITLE "A instalação do MontShop Desktop não foi concluída."
+    !define MUI_TEXT_ABORT_SUBTITLE "A instalação do Montshop Desktop não foi concluída."
   !endif
 !macroend
 

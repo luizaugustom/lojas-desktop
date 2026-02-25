@@ -128,17 +128,17 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 tag_name: tagName,
-                name: `MontShop Desktop v${version}`,
-                body: `## 🚀 MontShop Desktop v${version}\n\n` +
+                name: `Montshop Desktop v${version}`,
+                body: `## 🚀 Montshop Desktop v${version}\n\n` +
                       `Atualização automática criada pelo GitHub Actions.\n\n` +
                       `**Data:** ${new Date().toLocaleString('pt-BR')}\n\n` +
                       `**Commit:** ${context.sha.substring(0, 7)}\n\n` +
                       `### 📥 Instalação\n\n` +
-                      `1. Baixe o arquivo \`MontShop-Desktop-Setup-${version}.exe\`\n` +
+                      `1. Baixe o arquivo \`Montshop-Desktop-Setup-${version}.exe\`\n` +
                       `2. Execute o instalador\n` +
                       `3. A aplicação será atualizada automaticamente na próxima vez que abrir\n\n` +
                       `### ⚡ Atualização Automática\n\n` +
-                      `Se você já tem o MontShop Desktop instalado, a atualização será baixada e instalada automaticamente ao fechar o aplicativo.`,
+                      `Se você já tem o Montshop Desktop instalado, a atualização será baixada e instalada automaticamente ao fechar o aplicativo.`,
                 draft: false,
                 prerelease: false
               });
@@ -163,7 +163,7 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             
-            const filePath = `./release/MontShop-Desktop-Setup-${process.env.VERSION}.exe`;
+            const filePath = `./release/Montshop-Desktop-Setup-${process.env.VERSION}.exe`;
             
             if (!fs.existsSync(filePath)) {
               throw new Error(`Arquivo não encontrado: ${filePath}`);

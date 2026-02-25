@@ -78,7 +78,7 @@ export function TermsAcceptanceModal({ open, companyName, onAccept, onReject }: 
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <div className="flex items-center gap-3">
             <FileText className="h-6 w-6 text-primary" />
-            <DialogTitle className="text-2xl">Termos de Uso do Sistema MontShop</DialogTitle>
+            <DialogTitle className="text-2xl">Termos de Uso do Sistema Montshop</DialogTitle>
           </div>
           <DialogDescription className="mt-2">
             É necessário aceitar os Termos de Uso para continuar utilizando o sistema.

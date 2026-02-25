@@ -247,7 +247,7 @@ export function PaymentReceipt({
           <div style={{ marginTop: '4px' }}>Documento não fiscal</div>
           <div style={{ marginTop: '4px' }}>Obrigado pela preferência!</div>
           <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-          <div style={{ marginTop: '2px', fontWeight: 'bold' }}>MontShop</div>
+          <div style={{ marginTop: '2px', fontWeight: 'bold' }}>Montshop</div>
           <div style={{ fontSize: '10px' }}>sistemamontshop.com</div>
         </div>
       </div>

@@ -155,7 +155,7 @@ function buildHtmlDocument(content: string, options?: PrintJobOptions): string {
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>Impressão MontShop</title>
+        <title>Impressão Montshop</title>
         <style>
           @media print {
             @page {

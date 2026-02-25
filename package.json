@@ -97,7 +97,7 @@
   },
   "build": {
     "appId": "com.montshop.desktop",
-    "productName": "MontShop Desktop",
+    "productName": "Montshop Desktop",
     "directories": {
       "output": "release"
     },
@@ -134,18 +134,18 @@
         }
       ],
       "icon": "build/icon.ico",
-      "publisherName": "MontShop",
+      "publisherName": "Montshop",
       "verifyUpdateCodeSignature": false,
-      "executableName": "MontShop Desktop"
+      "executableName": "Montshop Desktop"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "MontShop Desktop",
+      "shortcutName": "Montshop Desktop",
       "include": "build/installer.nsh",
-      "artifactName": "MontShop-Desktop-Setup-${version}.${ext}",
+      "artifactName": "Montshop-Desktop-Setup-${version}.${ext}",
       "deleteAppDataOnUninstall": false,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico"

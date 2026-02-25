@@ -44,7 +44,7 @@ export default function TitleBar() {
   return (
     <div className="title-bar">
       <div className="title-bar-title">
-        <span className="text-sm font-medium">MontShop Desktop</span>
+        <span className="text-sm font-medium">Montshop Desktop</span>
       </div>
       <div className="title-bar-controls">
         <button

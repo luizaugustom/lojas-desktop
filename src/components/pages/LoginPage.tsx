@@ -105,14 +105,14 @@ export default function LoginPage() {
             <div className="flex justify-center mb-3">
               <img 
                 src={logoImage} 
-                alt="MontShop Logo" 
+                alt="Montshop Logo" 
                 width={96}
                 height={96}
                 className="h-24 w-24 object-contain"
                 style={{ maxWidth: '96px', maxHeight: '96px' }}
               />
             </div>
-            <CardTitle className="text-xl sm:text-2xl font-bold -m-10">MontShop</CardTitle>
+            <CardTitle className="text-xl sm:text-2xl font-bold -m-10">Montshop</CardTitle>
             <CardDescription className="text-sm">Entre com suas credenciais para acessar o sistema</CardDescription>
           </CardHeader>
           <CardContent className="p-3 sm:p-4 pt-4 sm:pt-5">
@@ -267,7 +267,7 @@ export default function LoginPage() {
           <div className="space-y-3 mt-4">
             <Button
               onClick={() => {
-                window.open('https://wa.me/5548998482590?text=Eu%20sou%20usuario%20do%20MontShop%20e%20preciso%20de%20atendimento', '_blank');
+                window.open('https://wa.me/5548998482590?text=Eu%20sou%20usuario%20do%20Montshop%20e%20preciso%20de%20atendimento', '_blank');
                 setShowSACDialog(false);
               }}
               className="w-full flex items-center justify-center gap-2 h-12"
@@ -278,7 +278,7 @@ export default function LoginPage() {
             <Button
               variant="outline"
               onClick={() => {
-                window.location.href = 'mailto:montsoftwares@gmail.com?subject=Atendimento MontShop';
+                window.location.href = 'mailto:montsoftwares@gmail.com?subject=Atendimento Montshop';
                 setShowSACDialog(false);
               }}
               className="w-full flex items-center justify-center gap-2 h-12"
