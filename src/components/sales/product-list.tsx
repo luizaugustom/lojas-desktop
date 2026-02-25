@@ -179,6 +179,11 @@ export function ProductList({ products, isLoading, onAddToCart, keyboardFocusAre
                         <Tag className="h-3 w-3 text-red-500 flex-shrink-0" />
                       )}
                     </div>
+                    {product.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                        {product.description}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col items-end">
                     {product.isOnPromotion && product.promotionPrice !== undefined ? (

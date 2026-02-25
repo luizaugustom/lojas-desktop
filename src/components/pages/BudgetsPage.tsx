@@ -29,9 +29,11 @@ import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency } from '@/lib/utils-clean';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
-import { printContent } from '@/lib/print-service';
+import { printContent as printContentService } from '@/lib/print-service';
 import { PageHelpModal } from '../help/page-help-modal';
 import { budgetsHelpTitle, budgetsHelpDescription, budgetsHelpIcon, getBudgetsHelpTabs } from '../help/contents/budgets-help';
+import { useCartStore } from '@/store/cart-store';
+import { CheckoutDialog } from '../sales/checkout-dialog';
 interface Budget {
   id: string;
   budgetNumber: number;
@@ -76,8 +78,26 @@ export default function BudgetsPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [printingBudgetId, setPrintingBudgetId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
-  
+  const [checkoutOpenFromBudget, setCheckoutOpenFromBudget] = useState(false);
+  const [pendingApprovalBudget, setPendingApprovalBudget] = useState<Budget | null>(null);
+  const [pendingApprovalNotes, setPendingApprovalNotes] = useState<string>('');
+
+  const { clearCart, addItem } = useCartStore();
   const isCompany = user?.role === 'empresa';
+
+  const { data: currentClosure } = useQuery({
+    queryKey: ['current-cash-closure', user?.id],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/cash-closure/current');
+        return response.data;
+      } catch (error: any) {
+        if (error.response?.status === 404 || error.response?.status === 204) return null;
+        throw error;
+      }
+    },
+    enabled: !!user,
+  });
 
   const { queryParams, queryKeyPart } = useDateRange();
   const { data: budgets, isLoading, refetch } = useQuery({
@@ -123,7 +143,7 @@ export default function BudgetsPage() {
       }
 
       if (content) {
-        const printResult = await printContent(content);
+        const printResult = await printContentService(content);
 
         if (printResult.success) {
           toast.success('Orçamento enviado para impressão!');
@@ -200,32 +220,72 @@ export default function BudgetsPage() {
   const handleUpdateStatus = async () => {
     if (!editingBudget || !newStatus) return;
 
+    if (newStatus === 'approved' && editingBudget.status !== 'approved') {
+      if (!currentClosure || !currentClosure.id) {
+        toast.error('Abra o caixa na página de Vendas para poder aprovar orçamentos.');
+        return;
+      }
+      setEditStatusDialogOpen(false);
+      setPendingApprovalNotes(statusNotes);
+      setEditingBudget(null);
+      setNewStatus('');
+      setStatusNotes('');
+      clearCart();
+      for (const item of editingBudget.items) {
+        const product = {
+          id: item.product.id,
+          name: item.product.name,
+          barcode: item.product.barcode,
+          price: item.unitPrice,
+        };
+        addItem(product, item.quantity);
+      }
+      setPendingApprovalBudget(editingBudget);
+      setCheckoutOpenFromBudget(true);
+      return;
+    }
+
     setUpdatingStatus(true);
     try {
       await api.patch(`/budget/${editingBudget.id}`, {
         status: newStatus,
         notes: statusNotes || undefined,
       });
-      
       toast.success('Status do orçamento atualizado com sucesso!');
-      
-      // Se o status foi alterado para aprovado, informar sobre a venda criada
-      if (newStatus === 'approved' && editingBudget.status !== 'approved') {
-        toast.success('Venda criada automaticamente com base no orçamento!');
-      }
-      
       setEditStatusDialogOpen(false);
       setEditingBudget(null);
       setNewStatus('');
       setStatusNotes('');
-      
-      // Invalidar cache e recarregar
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
       refetch();
     } catch (error) {
       handleApiError(error);
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  const handleCheckoutCloseFromBudget = () => {
+    setCheckoutOpenFromBudget(false);
+    setPendingApprovalBudget(null);
+    setPendingApprovalNotes('');
+  };
+
+  const handleSaleCreatedFromBudget = async (saleId: string) => {
+    if (!pendingApprovalBudget) return;
+    try {
+      await api.patch(`/budget/${pendingApprovalBudget.id}`, {
+        status: 'approved',
+        notes: pendingApprovalNotes || undefined,
+      });
+      toast.success('Orçamento aprovado e venda registrada com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      refetch();
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setPendingApprovalBudget(null);
+      setPendingApprovalNotes('');
     }
   };
 
@@ -547,7 +607,7 @@ export default function BudgetsPage() {
               </Select>
               {newStatus === 'approved' && editingBudget?.status !== 'approved' && (
                 <p className="text-sm text-muted-foreground">
-                  ⚠️ Ao aprovar este orçamento, uma venda será criada automaticamente.
+                  O caixa deve estar aberto. Será aberto o fluxo de finalizar venda (pagamentos, boleto, NFC-e/cupom).
                 </p>
               )}
             </div>
@@ -585,6 +645,12 @@ export default function BudgetsPage() {
         </DialogContent>
       </Dialog>
 
+      <CheckoutDialog
+        open={checkoutOpenFromBudget}
+        onClose={handleCheckoutCloseFromBudget}
+        initialClient={pendingApprovalBudget ? { name: pendingApprovalBudget.clientName, cpfCnpj: pendingApprovalBudget.clientCpfCnpj } : undefined}
+        onSaleCreated={handleSaleCreatedFromBudget}
+      />
       <PageHelpModal
         open={helpOpen}
         onClose={() => setHelpOpen(false)}

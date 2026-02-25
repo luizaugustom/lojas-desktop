@@ -1,4 +1,4 @@
-import { FileDown, Upload, RefreshCw, Download, Package, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { FileDown, Upload, RefreshCw, Download, Package, CheckCircle2, AlertTriangle, RotateCcw, FileText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { FeatureCard, StepItem, TipItem, TroubleshootItem, type PageHelpTab } from '../page-help-modal';
 
@@ -42,6 +42,87 @@ export function getInboundInvoicesHelpTabs(): PageHelpTab[] {
               <StepItem number={2} text="O sistema exibirá chave, fornecedor, valor e itens. Confira os dados." />
               <StepItem number={3} text="Para cada item: vincule a um produto existente (por código/NCM) ou crie um novo produto." />
               <StepItem number={4} text="Salve. A nota ficará registrada e os produtos vinculados ou criados." />
+            </CardContent>
+          </Card>
+        </div>
+      ),
+    },
+    {
+      value: 'devolucao',
+      label: 'Devolução de notas',
+      content: (
+        <div className="space-y-6">
+          <Card className="border-amber-200 dark:border-amber-800 bg-gradient-to-br from-amber-50 to-transparent dark:from-amber-900/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <RotateCcw className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                Emissão de NFe de devolução
+              </CardTitle>
+              <CardDescription>
+                A NFe de devolução é a nota fiscal de saída que sua empresa emite para o fornecedor quando devolve mercadorias que foram recebidas em uma nota de entrada. Ela referencia a nota de entrada original e é transmitida pela Focus NFe (mesmo provedor das demais NF-e).
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Requisitos para emitir a devolução</CardTitle>
+              <CardDescription>Antes de iniciar, confira se a nota de entrada atende aos requisitos.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <FileText className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
+                  <span><strong className="text-foreground">XML da nota de entrada:</strong> a nota precisa ter sido importada com o arquivo XML (não apenas dados manuais). Sem o XML, o sistema não consegue montar a NFe de devolução.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <FileText className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
+                  <span><strong className="text-foreground">Chave de acesso com 44 dígitos:</strong> a chave da NF-e deve estar completa e válida para referenciar a devolução na SEFAZ.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <FileText className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
+                  <span><strong className="text-foreground">Configuração fiscal:</strong> a API Key do Focus NFe deve estar configurada (pela empresa ou pelo administrador) para que a emissão seja enviada à SEFAZ.</span>
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Passo a passo: como emitir a NFe de devolução</CardTitle>
+              <CardDescription>Siga cada etapa para garantir a emissão correta.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <StepItem number={1} text="Na lista de Notas Fiscais de Entrada, localize a nota do fornecedor que você deseja devolver. Verifique se a nota possui o botão «Emitir Devolução» ativo (se estiver desabilitado, a nota não tem XML ou chave válida)." />
+              <StepItem number={2} text="Clique no botão «Emitir Devolução». Será aberto um modal com o título «Emitir nota de devolução»." />
+              <StepItem number={3} text="Aguarde o carregamento do preview. O sistema exibirá o resumo da nota de entrada: fornecedor, chave de acesso e valor total, além de uma tabela com todos os itens (descrição, quantidade, valor unitário e total por item)." />
+              <StepItem number={4} text="Confira atentamente os dados exibidos. A NFe de devolução será emitida com todos os itens da nota de entrada (devolução total). Certifique-se de que é realmente essa a nota e os itens que deseja devolver." />
+              <StepItem number={5} text="Se estiver tudo correto, clique em «Confirmar e emitir». O sistema enviará a NFe de devolução para a Focus NFe; a emissão pode levar alguns segundos." />
+              <StepItem number={6} text="Ao concluir, uma mensagem de sucesso será exibida e a nota de devolução ficará registrada. Você pode acessá-la pelo botão «Ver devoluções» na mesma linha da nota de entrada e baixar o PDF/XML da NFe de devolução a partir dali." />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Ver devoluções já emitidas</CardTitle>
+              <CardDescription>Como consultar e baixar as NFe de devolução.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <StepItem number={1} text="Na linha da nota de entrada, clique em «Ver devoluções» (ou «Devoluções (N)» se já houver N devoluções emitidas)." />
+              <StepItem number={2} text="Será aberto um diálogo listando todas as NFe de devolução emitidas para aquela nota: número da NFe, status, data de emissão e chave." />
+              <StepItem number={3} text="Use o botão «Download» em cada devolução para baixar o PDF ou XML da NFe de devolução, conforme disponível no sistema." />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-orange-500" />Dicas e problemas comuns – Devolução</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <TipItem icon={<CheckCircle2 className="h-4 w-4 text-green-500" />} text="Só é possível emitir devolução para notas que foram importadas com XML. Notas cadastradas apenas com chave/fornecedor/valor manual não possuem os dados necessários para a NFe de devolução." />
+              <TroubleshootItem problem="Botão «Emitir Devolução» desabilitado" solution="Verifique se a nota foi importada com o arquivo XML e se a chave de acesso tem 44 dígitos. Passe o mouse sobre o botão para ver a dica: «É necessário ter o XML e a chave de 44 dígitos para emitir a devolução.»" />
+              <TroubleshootItem problem="Erro ao carregar o preview no modal" solution="A nota pode não ser uma NF-e de entrada válida, o XML pode estar incompleto ou o endereço do fornecedor no XML pode estar incompleto. Confira o XML original e, se necessário, reimporte a nota com o XML correto." />
+              <TroubleshootItem problem="Falha ao emitir (Focus NFe / SEFAZ)" solution="Verifique a configuração da API Key do Focus NFe nas configurações da empresa. Erros de timeout ou conexão indicam problema de rede ou indisponibilidade do serviço; tente novamente em alguns instantes." />
             </CardContent>
           </Card>
         </div>

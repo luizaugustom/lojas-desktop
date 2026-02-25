@@ -77,6 +77,11 @@ export function ProductGrid({ products, isLoading, onAddToCart }: ProductGridPro
                       <Tag className="h-3 w-3 text-red-500 flex-shrink-0" />
                     )}
                   </div>
+                  {product.description && (
+                    <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5 leading-tight">
+                      {product.description}
+                    </p>
+                  )}
                 </div>
               </div>
             </CardHeader>

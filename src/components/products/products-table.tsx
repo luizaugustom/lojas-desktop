@@ -12,6 +12,7 @@ import { formatCurrency, formatDate } from '../../lib/utils';
 import { getImageUrl } from '../../lib/image-utils';
 import { ProductImage } from './ProductImage';
 import { ProductDetailsModal } from './product-details-modal';
+import { PaginationControls } from '../ui/pagination-controls';
 import type { Product } from '../../types';
 
 interface ProductsTableProps {
@@ -21,9 +22,26 @@ interface ProductsTableProps {
   onRefetch: () => void;
   canManage?: boolean;
   onRegisterLoss?: (product: Product) => void;
+  page?: number;
+  totalPages?: number;
+  totalItems?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
 }
 
-export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManage = true, onRegisterLoss }: ProductsTableProps) {
+export function ProductsTable({
+  products,
+  isLoading,
+  onEdit,
+  onRefetch,
+  canManage = true,
+  onRegisterLoss,
+  page = 1,
+  totalPages = 1,
+  totalItems,
+  pageSize = 20,
+  onPageChange,
+}: ProductsTableProps) {
   const { api } = useAuth();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<{ images: string[]; index: number } | null>(null);
@@ -98,7 +116,10 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
     );
   }
 
-  if (products.length === 0) {
+  const isEmpty = products.length === 0;
+  const showEmptyStateOnly = isEmpty && !(totalItems && totalItems > 0);
+
+  if (showEmptyStateOnly) {
     return (
       <Card>
         <div className="p-4 sm:p-8 text-center">
@@ -132,7 +153,14 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
           </TableRow>
         </TableHeader>
         <TableBody>
-          {products.map((product) => {
+          {isEmpty ? (
+            <TableRow>
+              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                Nenhum produto nesta página corresponde aos filtros.
+              </TableCell>
+            </TableRow>
+          ) : (
+          products.map((product) => {
             const stockNum = Number(product.stockQuantity ?? 0);
             const threshold = product.lowStockAlertThreshold ?? 3;
             const isLowStock = !Number.isNaN(stockNum) && stockNum <= threshold;
@@ -144,7 +172,16 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
                 <TableCell>
                   <ProductImage photos={product.photos} name={product.name} size="md" onClick={() => handleImageClick(product)} />
                 </TableCell>
-                <TableCell className="font-medium">{product.name}</TableCell>
+                <TableCell>
+                  <div>
+                    <div className="font-medium">{product.name}</div>
+                    {product.description && (
+                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                        {product.description}
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>{product.barcode}</TableCell>
                 <TableCell>{formatCurrency(product.price)}</TableCell>
                 <TableCell>
@@ -207,9 +244,20 @@ export function ProductsTable({ products, isLoading, onEdit, onRefetch, canManag
                 </TableCell>
               </TableRow>
             );
-          })}
+          })
+          )}
         </TableBody>
       </Table>
+
+      {totalPages > 1 && onPageChange && (
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          onPageChange={onPageChange}
+          pageSize={pageSize}
+          totalItems={totalItems}
+        />
+      )}
 
       <ConfirmationModal
         open={confirmationModal.open}

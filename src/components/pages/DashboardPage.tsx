@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingCart, Package, Users, DollarSign, TrendingUp, TrendingDown, AlertTriangle, Building2, HelpCircle } from 'lucide-react';
+import { ShoppingCart, Package, Users, DollarSign, TrendingUp, TrendingDown, AlertTriangle, Building2, HelpCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
@@ -8,11 +8,13 @@ import { handleApiError } from '../../lib/handleApiError';
 import { formatCurrency, formatDate, toLocalISOString } from '../../lib/utils';
 import { ProductImage } from '../products/ProductImage';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { companyApi, customerApi } from '../../lib/api-endpoints';
+import { companyApi, customerApi, dashboardApi, managerApi } from '../../lib/api-endpoints';
 import { useDevices } from '../../contexts/DeviceContext';
 import { Button } from '../ui/button';
+import { Label } from '../ui/label';
 import { PageHelpModal } from '../help/page-help-modal';
 import { dashboardHelpTitle, dashboardHelpDescription, dashboardHelpIcon, getDashboardHelpTabs } from '../help/contents/dashboard-help';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 // PrinterDriverSetup removido - funcionalidades de impressão removidas
 
 interface MetricCardProps {
@@ -21,13 +23,28 @@ interface MetricCardProps {
   change?: number;
   icon: React.ElementType;
   trend?: 'up' | 'down' | 'neutral';
+  infoTooltip?: string;
+  onInfoClick?: () => void;
 }
 
-function MetricCard({ title, value, change, icon: Icon, trend = 'neutral' }: MetricCardProps) {
+function MetricCard({ title, value, change, icon: Icon, trend = 'neutral', infoTooltip, onInfoClick }: MetricCardProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <div className="flex items-center gap-1.5">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          {onInfoClick && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onInfoClick(); }}
+              title={infoTooltip ?? 'Ver detalhes'}
+              className="inline-flex shrink-0 rounded-full p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+              aria-label={infoTooltip ?? 'Ver detalhes do cálculo'}
+            >
+              <Info className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
@@ -84,6 +101,8 @@ export default function DashboardPage() {
   const { api, isAuthenticated, user } = useAuth();
   const { queryParams, queryKeyPart, dateRange } = useDateRange();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [netProfitModalOpen, setNetProfitModalOpen] = useState(false);
+  const [gestorCompanyId, setGestorCompanyId] = useState('');
   const { printers, scales } = useDevices();
   // Variáveis de impressora removidas - funcionalidades de impressão removidas
 
@@ -181,6 +200,18 @@ export default function DashboardPage() {
       return response.data || response || [];
     },
     enabled: isAuthenticated && user?.role === 'admin',
+  });
+
+  const { data: myCompaniesData } = useQuery({
+    queryKey: ['manager', 'my-companies'],
+    queryFn: () => managerApi.myCompanies().then((r) => r.data),
+    enabled: isAuthenticated && user?.role === 'gestor',
+  });
+  const gestorCompanies = Array.isArray(myCompaniesData) ? myCompaniesData : [];
+  const { data: gestorMetrics, isLoading: isGestorMetricsLoading } = useQuery({
+    queryKey: ['dashboard', 'metrics', 'gestor', gestorCompanyId],
+    queryFn: () => dashboardApi.metrics(gestorCompanyId || undefined).then((r) => r.data),
+    enabled: isAuthenticated && user?.role === 'gestor',
   });
 
   // Clientes com dívidas a prazo em atraso (> 30 dias)
@@ -312,11 +343,13 @@ export default function DashboardPage() {
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, 5);
 
-  // Different loading states for admin vs company
   const isAdmin = user?.role === 'admin';
-  const loading = isAdmin 
-    ? isCompaniesLoading 
-    : isSalesLoading || isProductsLoading || isCustomersLoading;
+  const isGestor = user?.role === 'gestor';
+  const loading = isAdmin
+    ? isCompaniesLoading
+    : isGestor
+      ? isGestorMetricsLoading
+      : isSalesLoading || isProductsLoading || isCustomersLoading;
 
   if (loading) {
     return (
@@ -393,6 +426,100 @@ export default function DashboardPage() {
           icon={dashboardHelpIcon}
           tabs={getDashboardHelpTabs()}
         />
+      </div>
+    );
+  }
+
+  if (isGestor && gestorMetrics) {
+    const m = gestorMetrics as any;
+    const companyName = gestorCompanyId
+      ? (gestorCompanies.find((c: any) => c.id === gestorCompanyId) as any)?.name || gestorCompanyId
+      : (m.company?.name || 'Todas as lojas');
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard Multilojas</h1>
+            <p className="text-muted-foreground">Métricas das lojas que você gerencia</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm font-medium text-muted-foreground">Loja:</Label>
+            <select
+              value={gestorCompanyId}
+              onChange={(e) => setGestorCompanyId(e.target.value)}
+              className="rounded-md border border-input bg-background px-3 py-2 text-sm min-w-[200px]"
+            >
+              <option value="">Todas as lojas</option>
+              {gestorCompanies.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.fantasyName || c.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <MetricCard title="Vendas (total)" value={m.counts?.sales ?? 0} icon={ShoppingCart} />
+          <MetricCard title="Receita total" value={formatCurrency(m.financial?.totalSalesValue ?? 0)} icon={DollarSign} />
+          <MetricCard
+            title="Lucro líquido"
+            value={formatCurrency(m.financial?.netProfit ?? 0)}
+            icon={TrendingUp}
+            infoTooltip="Ver cálculo detalhado do lucro líquido"
+            onInfoClick={() => setNetProfitModalOpen(true)}
+          />
+          <MetricCard title="Produtos" value={m.counts?.products ?? 0} icon={Package} />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <MetricCard title="Vendas este mês" value={formatCurrency(m.sales?.thisMonth?.value ?? 0)} change={m.sales?.growth?.valuePercentage} trend={m.sales?.growth?.valuePercentage >= 0 ? 'up' : 'down'} icon={DollarSign} />
+          <MetricCard title="Clientes" value={m.counts?.customers ?? 0} icon={Users} />
+          <MetricCard title="Estoque baixo" value={m.products?.lowStock ?? 0} icon={AlertTriangle} />
+          <MetricCard title="Valor em estoque" value={formatCurrency(m.financial?.stockValue ?? 0)} icon={Package} />
+        </div>
+        <Dialog open={netProfitModalOpen} onOpenChange={setNetProfitModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Cálculo do lucro líquido</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">
+                O lucro líquido é obtido a partir da receita total, descontando custos, contas a pagar, perdas, taxas de cartão e juros de parcelamento.
+              </p>
+              <dl className="space-y-2 border-t pt-3">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Receita total (vendas)</dt>
+                  <dd className="font-medium tabular-nums">{formatCurrency(m.financial?.totalSalesValue ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
+                  <dt>(−) Custo das vendas</dt>
+                  <dd className="tabular-nums">− {formatCurrency(m.financial?.totalCostOfSales ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
+                  <dt>(−) Contas a pagar este mês</dt>
+                  <dd className="tabular-nums">− {formatCurrency(m.financial?.billsToPayThisMonth ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
+                  <dt>(−) Perdas</dt>
+                  <dd className="tabular-nums">− {formatCurrency(m.financial?.totalLossesValue ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
+                  <dt>(−) Taxas de cartão</dt>
+                  <dd className="tabular-nums">− {formatCurrency(m.financial?.totalCardFees ?? 0)}</dd>
+                </div>
+                <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
+                  <dt>(−) Juros de parcelamento</dt>
+                  <dd className="tabular-nums">
+                    − {formatCurrency(Math.max(0, (m.financial?.totalSalesValue ?? 0) - (m.financial?.totalCostOfSales ?? 0) - (m.financial?.billsToPayThisMonth ?? 0) - (m.financial?.totalLossesValue ?? 0) - (m.financial?.totalCardFees ?? 0) - (m.financial?.netProfit ?? 0)))}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 border-t pt-3 font-semibold">
+                  <dt>Lucro líquido</dt>
+                  <dd className={`tabular-nums ${(m.financial?.netProfit ?? 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {formatCurrency(m.financial?.netProfit ?? 0)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

@@ -4,8 +4,8 @@ import { FeatureCard, StepItem, TipItem, TroubleshootItem, type PageHelpTab } fr
 
 const STAGGER = 50;
 
-export const billsHelpTitle = 'Central de Ajuda - Contas a Pagar';
-export const billsHelpDescription = 'Cadastre contas a pagar, filtre por vencimento e registre pagamentos.';
+export const billsHelpTitle = 'Central de Ajuda - Contas e Gastos';
+export const billsHelpDescription = 'Registre todos os gastos da empresa, filtre por vencimento e acompanhe os pagamentos.';
 export const billsHelpIcon = <CreditCard className="h-6 w-6 text-blue-600 dark:text-blue-400" />;
 
 export function getBillsHelpTabs(): PageHelpTab[] {
@@ -17,7 +17,7 @@ export function getBillsHelpTabs(): PageHelpTab[] {
         <div className="space-y-6">
           <Card className="border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-transparent dark:from-blue-900/20">
             <CardHeader>
-              <CardTitle className="text-xl">Contas a Pagar</CardTitle>
+              <CardTitle className="text-xl">Contas e Gastos</CardTitle>
               <CardDescription>Controle de despesas e obrigações com vencimento. Filtre por período e pague.</CardDescription>
             </CardHeader>
           </Card>

@@ -20,7 +20,8 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { handleApiError } from '@/lib/handleApiError';
-import { companyApi, notificationApi, adminApi, cardAcquirerRateApi } from '@/lib/api-endpoints';
+import { useQuery } from '@tanstack/react-query';
+import { companyApi, notificationApi, adminApi, cardAcquirerRateApi, managerApi, authApi } from '@/lib/api-endpoints';
 import { getImageUrl } from '@/lib/image-utils';
 import { useUIStore } from '@/store/ui-store';
 import { useQueryClient } from '@tanstack/react-query';
@@ -29,7 +30,7 @@ import { getAcquirerList } from '@/lib/acquirer-cnpj-list';
 import { PageHelpModal } from '../help/page-help-modal';
 import { settingsHelpTitle, settingsHelpDescription, settingsHelpIcon, getSettingsHelpTabs } from '../help/contents/settings-help';
 
-const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL || 'https://montshop.vercel.app').replace(/\/+$/, '');
+const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL || 'https://montshop.app').replace(/\/+$/, '');
 
 const withPublicSiteUrl = (path?: string | null) => {
   if (!path) {
@@ -68,6 +69,11 @@ export default function SettingsPage() {
     newPassword: '',
     confirmPassword: '',
   });
+
+  // Gestor: trocar senha de login das empresas
+  const [companyPasswordModal, setCompanyPasswordModal] = useState<{ companyId: string; companyName: string } | null>(null);
+  const [companyPasswordForm, setCompanyPasswordForm] = useState({ newPassword: '', confirmPassword: '' });
+  const [savingCompanyPassword, setSavingCompanyPassword] = useState(false);
 
   // Estado das preferências de notificação
   const [notificationPreferences, setNotificationPreferences] = useState<any>(null);
@@ -431,6 +437,37 @@ export default function SettingsPage() {
     } catch (error: any) {
       console.error('Erro ao alterar senha:', error);
       toast.error(error.response?.data?.message || 'Erro ao alterar senha');
+    }
+  };
+
+  // Gestor: listar empresas para trocar senha de login
+  const { data: gestorCompaniesData } = useQuery({
+    queryKey: ['manager', 'my-companies'],
+    queryFn: () => managerApi.myCompanies().then((r) => r.data),
+    enabled: user?.role === 'gestor',
+  });
+  const gestorCompanies = Array.isArray(gestorCompaniesData) ? gestorCompaniesData : [];
+
+  const handleChangeCompanyPassword = async () => {
+    if (!companyPasswordModal) return;
+    try {
+      if (!companyPasswordForm.newPassword || companyPasswordForm.newPassword.length < 6) {
+        toast.error('Nova senha deve ter no mínimo 6 caracteres');
+        return;
+      }
+      if (companyPasswordForm.newPassword !== companyPasswordForm.confirmPassword) {
+        toast.error('As senhas não coincidem');
+        return;
+      }
+      setSavingCompanyPassword(true);
+      await authApi.changeCompanyPassword(companyPasswordModal.companyId, companyPasswordForm.newPassword);
+      toast.success('Senha de login da empresa alterada com sucesso.');
+      setCompanyPasswordModal(null);
+      setCompanyPasswordForm({ newPassword: '', confirmPassword: '' });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Erro ao alterar senha da empresa');
+    } finally {
+      setSavingCompanyPassword(false);
     }
   };
 
@@ -1418,6 +1455,97 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Senha de login das empresas - Apenas para Gestor */}
+        {user?.role === 'gestor' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Store className="h-5 w-5" />
+                Senha de login das empresas
+              </CardTitle>
+              <CardDescription>
+                Altere a senha de login das empresas que você gerencia. A empresa precisará usar a nova senha no próximo acesso.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {gestorCompanies.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma empresa vinculada ao seu perfil.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {gestorCompanies.map((c: { id: string; name?: string; fantasyName?: string }) => (
+                    <li key={c.id} className="flex items-center justify-between gap-4 py-2 border-b last:border-0">
+                      <span className="font-medium">{c.name || c.fantasyName || c.id}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setCompanyPasswordModal({
+                            companyId: c.id,
+                            companyName: (c.name || c.fantasyName || c.id) as string,
+                          });
+                          setCompanyPasswordForm({ newPassword: '', confirmPassword: '' });
+                        }}
+                      >
+                        <Lock className="mr-2 h-4 w-4" />
+                        Alterar senha
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Modal: Alterar senha de login da empresa */}
+        <Dialog open={!!companyPasswordModal} onOpenChange={(open) => !open && setCompanyPasswordModal(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Alterar senha de login</DialogTitle>
+              <DialogDescription>
+                Definir nova senha de login para {companyPasswordModal?.companyName}. A empresa precisará usar esta senha no próximo acesso.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="companyNewPassword">Nova senha *</Label>
+                <Input
+                  id="companyNewPassword"
+                  type="password"
+                  value={companyPasswordForm.newPassword}
+                  onChange={(e) => setCompanyPasswordForm((f) => ({ ...f, newPassword: e.target.value }))}
+                  placeholder="••••••••"
+                />
+                <p className="text-xs text-muted-foreground">Mínimo de 6 caracteres</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="companyConfirmPassword">Confirmar nova senha *</Label>
+                <Input
+                  id="companyConfirmPassword"
+                  type="password"
+                  value={companyPasswordForm.confirmPassword}
+                  onChange={(e) => setCompanyPasswordForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCompanyPasswordModal(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleChangeCompanyPassword} disabled={savingCompanyPassword}>
+                {savingCompanyPassword ? (
+                  <>
+                    <span className="animate-spin mr-2">⏳</span>
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar senha'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Mensagens Automáticas - Apenas para Empresas */}
         {user?.role === 'empresa' && (

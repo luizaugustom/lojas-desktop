@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Plus, Filter, X, HelpCircle } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, Filter, X, HelpCircle, Repeat, Trash2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import {
@@ -16,15 +17,28 @@ import { BillsTable } from '../bills/bills-table';
 import { BillDialog } from '../bills/bill-dialog';
 import { PageHelpModal } from '../help/page-help-modal';
 import { billsHelpTitle, billsHelpDescription, billsHelpIcon, getBillsHelpTabs } from '../help/contents/bills-help';
+import { handleApiError } from '../../lib/handleApiError';
+import { formatCurrency } from '../../lib/utils-clean';
+import { formatDate } from '../../lib/utils';
+import { ConfirmationModal } from '../ui/confirmation-modal';
+import type { BillRecurrence } from '../../types';
 
-type DateFilter = 'all' | 'this-week' | 'next-week' | 'next-month' | 'this-year';
+const RECURRENCE_LABELS: Record<string, string> = {
+  WEEKLY: '1 vez por semana',
+  BIWEEKLY: '1 vez a cada 15 dias',
+  MONTHLY: '1 vez por mês',
+};
+
+type DateFilter = 'all' | 'this-week' | 'this-month' | 'next-week' | 'next-month' | 'this-year';
 
 export default function BillsPage() {
   const { api } = useAuth();
-  const { queryParams, queryKeyPart, dateRange } = useDateRange();
+  const queryClient = useQueryClient();
+  const { queryParams, queryKeyPart } = useDateRange();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [recurrenceToRemove, setRecurrenceToRemove] = useState<BillRecurrence | null>(null);
 
   // Calcular datas baseadas no filtro da página
   const pageDateRange = useMemo(() => {
@@ -47,6 +61,14 @@ export default function BillsPage() {
         start.setDate(now.getDate() - now.getDay() + 7);
         const end = new Date(start);
         end.setDate(start.getDate() + 6);
+        return {
+          startDate: start.toISOString().split('T')[0],
+          endDate: end.toISOString().split('T')[0],
+        };
+      }
+      case 'this-month': {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0); // último dia do mês
         return {
           startDate: start.toISOString().split('T')[0],
           endDate: end.toISOString().split('T')[0],
@@ -118,7 +140,32 @@ export default function BillsPage() {
     },
   });
 
+  const { data: recurrences = [], refetch: refetchRecurrences } = useQuery({
+    queryKey: ['bills-recurrences'],
+    queryFn: async () => {
+      const { data } = await api.get<BillRecurrence[]>('/bill-to-pay/recurrences');
+      return Array.isArray(data) ? data : [];
+    },
+  });
+
+  const removeRecurrenceMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/bill-to-pay/recurrences/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bills-recurrences'] });
+      refetchRecurrences();
+      refetch();
+      setRecurrenceToRemove(null);
+      toast.success('Recorrência cancelada.');
+    },
+    onError: handleApiError,
+  });
+
   const bills = billsResponse?.bills || [];
+
+  const totalAmount = useMemo(
+    () => bills.reduce((sum, b) => sum + Number(b?.amount ?? 0), 0),
+    [bills]
+  );
 
   const handleCreate = () => {
     setDialogOpen(true);
@@ -127,13 +174,14 @@ export default function BillsPage() {
   const handleClose = () => {
     setDialogOpen(false);
     refetch();
+    refetchRecurrences();
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Contas a Pagar</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Contas e Gastos</h1>
           <p className="text-muted-foreground">Gerencie suas contas e despesas</p>
         </div>
         <div className="flex items-center gap-2">
@@ -148,7 +196,7 @@ export default function BillsPage() {
       </div>
 
       <Card className="p-4">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Filtrar por vencimento:</span>
@@ -160,6 +208,7 @@ export default function BillsPage() {
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
               <SelectItem value="this-week">Esta semana</SelectItem>
+              <SelectItem value="this-month">Este mês</SelectItem>
               <SelectItem value="next-week">Próxima semana</SelectItem>
               <SelectItem value="next-month">Próximo mês</SelectItem>
               <SelectItem value="this-year">Este ano</SelectItem>
@@ -176,12 +225,68 @@ export default function BillsPage() {
               Limpar
             </Button>
           )}
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Total:</span>
+            <span className="text-lg font-semibold">{formatCurrency(totalAmount)}</span>
+          </div>
         </div>
       </Card>
+
+      {recurrences.length > 0 && (
+        <Card className="p-4">
+          <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
+            <Repeat className="h-4 w-4" />
+            Recorrências ativas
+          </h2>
+          <ul className="space-y-2">
+            {recurrences.map((rec) => (
+              <li
+                key={rec.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-border last:border-0"
+              >
+                <div>
+                  <span className="font-medium">{rec.title}</span>
+                  <span className="text-muted-foreground text-sm ml-2">
+                    {RECURRENCE_LABELS[rec.recurrenceType] ?? rec.recurrenceType} · Próxima: {formatDate(rec.nextDueDate)}
+                    {rec.endDate ? ` · Até ${formatDate(rec.endDate)}` : ''}
+                  </span>
+                  <span className="text-muted-foreground text-sm block">
+                    {formatCurrency(Number(rec.amount))}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRecurrenceToRemove(rec)}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Cancelar recorrência
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <BillsTable bills={bills || []} isLoading={isLoading} onRefetch={refetch} />
 
       <BillDialog open={dialogOpen} onClose={handleClose} />
+
+      <ConfirmationModal
+        open={!!recurrenceToRemove}
+        onClose={() => setRecurrenceToRemove(null)}
+        onConfirm={() => recurrenceToRemove && removeRecurrenceMutation.mutate(recurrenceToRemove.id)}
+        title="Cancelar recorrência"
+        description={
+          recurrenceToRemove
+            ? `Deseja cancelar a recorrência "${recurrenceToRemove.title}"? As contas já geradas permanecem; apenas não serão criadas novas ocorrências.`
+            : ''
+        }
+        confirmText="Cancelar recorrência"
+        variant="destructive"
+        loading={removeRecurrenceMutation.isPending}
+      />
 
       <PageHelpModal
         open={helpOpen}

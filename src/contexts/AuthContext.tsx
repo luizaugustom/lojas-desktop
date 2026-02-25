@@ -114,13 +114,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           'admin': 'admin',
           'company': 'empresa',
           'seller': 'vendedor',
+          'manager': 'gestor',
         };
         normalizedRole = roleMap[normalizedRole] || normalizedRole;
       }
-      
+
       const normalizedUser = {
         ...data.user,
-        role: normalizedRole
+        role: normalizedRole,
+        companyIds: data.user?.companyIds,
       };
       
       console.log('[AuthContext] Login realizado:', { 

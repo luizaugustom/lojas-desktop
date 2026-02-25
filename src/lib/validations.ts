@@ -216,12 +216,15 @@ export const customerSchema = z.object({
     }),
 });
 
+export const billRecurrenceTypeEnum = z.enum(['WEEKLY', 'BIWEEKLY', 'MONTHLY']);
 export const billSchema = z.object({
   title: z.string().min(2, 'Título deve ter no mínimo 2 caracteres'),
   amount: z.number().positive('Valor deve ser positivo'),
   dueDate: z.string().min(1, 'Data de vencimento é obrigatória'),
   barcode: z.string().optional(),
   paymentInfo: z.string().optional(),
+  recurrenceType: billRecurrenceTypeEnum.optional(),
+  recurrenceEndDate: z.string().optional(),
 });
 
 export const openCashClosureSchema = z.object({
@@ -322,7 +325,7 @@ export const updateSellerSchema = z.object({
 // Report Schemas
 export const reportSchema = z
   .object({
-    reportType: z.enum(['sales', 'products', 'invoices', 'complete']),
+    reportType: z.enum(['sales', 'products', 'invoices', 'inbound_invoices', 'complete', 'cancelled_sales']),
     format: z.enum(['json', 'xml', 'excel']),
     startDate: z.string().optional(),
     endDate: z.string().optional(),

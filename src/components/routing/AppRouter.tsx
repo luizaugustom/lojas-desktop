@@ -20,6 +20,9 @@ import SettingsPage from '../pages/SettingsPage';
 import BudgetsPage from '../pages/BudgetsPage';
 import SellerProfilePage from '../pages/SellerProfilePage';
 import CardRatesPage from '../pages/CardRatesPage';
+import StockTransferPage from '../pages/StockTransferPage';
+import GestoresPage from '../pages/GestoresPage';
+import MetricsPage from '../pages/MetricsPage';
 
 export default function AppRouter() {
   const { isAuthenticated, loading, user } = useAuth();
@@ -97,6 +100,12 @@ export default function AppRouter() {
         return <InboundInvoicesPage />;
       case 'companies':
         return <CompaniesPage />;
+      case 'stock-transfer':
+        return <StockTransferPage />;
+      case 'metrics':
+        return <MetricsPage />;
+      case 'gestores':
+        return <GestoresPage />;
       case 'devices':
         return <DevicesPage />;
       case 'settings':

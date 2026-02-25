@@ -63,6 +63,23 @@ export default function InboundInvoicesPage() {
   const [deletingDoc, setDeletingDoc] = useState<InboundDoc | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [returnModalDoc, setReturnModalDoc] = useState<InboundDoc | null>(null);
+  const [returnPreview, setReturnPreview] = useState<{
+    accessKey: string;
+    supplierName: string;
+    totalValue: number;
+    items: Array<{ description: string; quantity: number; unitPrice: number; totalPrice: number; unitOfMeasure: string; ncm?: string; cfop: string }>;
+  } | null>(null);
+  const [returnPreviewLoading, setReturnPreviewLoading] = useState(false);
+  const [returnPreviewError, setReturnPreviewError] = useState<string | null>(null);
+
+  const [returnsDialogOpen, setReturnsDialogOpen] = useState(false);
+  const [returnsDialogDoc, setReturnsDialogDoc] = useState<InboundDoc | null>(null);
+  const [returnsList, setReturnsList] = useState<Array<{ id: string; documentNumber: string; accessKey: string | null; status: string; totalValue: number | null; emissionDate: string; pdfUrl: string | null }>>([]);
+  const [returnsLoading, setReturnsLoading] = useState(false);
+  const [returnsByDocId, setReturnsByDocId] = useState<Record<string, Array<{ id: string; documentNumber: string; accessKey: string | null; status: string; emissionDate: string }>>>({});
+
   const [accessKey, setAccessKey] = useState('');
   const [supplierName, setSupplierName] = useState('');
   const [totalValue, setTotalValue] = useState('');
@@ -216,18 +233,86 @@ export default function InboundInvoicesPage() {
     }
   };
 
-  const handleEmitReturn = async (doc: InboundDoc) => {
+  useEffect(() => {
+    if (!returnModalOpen || !returnModalDoc) {
+      setReturnPreview(null);
+      setReturnPreviewError(null);
+      return;
+    }
+    let cancelled = false;
+    setReturnPreviewLoading(true);
+    setReturnPreviewError(null);
+    fiscalApi
+      .getInboundReturnPreview(returnModalDoc.id)
+      .then(({ data }) => {
+        if (!cancelled) {
+          setReturnPreview(data);
+          setReturnPreviewError(null);
+        }
+      })
+      .catch((err: any) => {
+        if (!cancelled) {
+          const msg = err.response?.data?.message || err.message || 'Não foi possível carregar o preview da devolução.';
+          setReturnPreviewError(msg);
+          setReturnPreview(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReturnPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [returnModalOpen, returnModalDoc?.id]);
+
+  const handleOpenReturnModal = (doc: InboundDoc) => {
     if (!doc.hasXml || !doc.accessKey) return;
-    setEmittingReturnId(doc.id);
+    setReturnModalDoc(doc);
+    setReturnModalOpen(true);
+  };
+
+  const handleConfirmEmitReturn = async () => {
+    if (!returnModalDoc) return;
+    setEmittingReturnId(returnModalDoc.id);
     try {
-      await fiscalApi.generateReturnNFe(doc.id);
+      await fiscalApi.generateReturnNFe(returnModalDoc.id);
       toast.success('NFe de devolução emitida com sucesso');
+      setReturnModalOpen(false);
+      setReturnModalDoc(null);
+      setReturnPreview(null);
       refetch();
+      setReturnsByDocId((prev) => {
+        const next = { ...prev };
+        delete next[returnModalDoc.id];
+        return next;
+      });
     } catch (error: any) {
       const msg = error.response?.data?.message || error.message || 'Falha ao emitir NFe de devolução';
       toast.error(msg);
     } finally {
       setEmittingReturnId(null);
+    }
+  };
+
+  const handleOpenReturnsDialog = async (doc: InboundDoc) => {
+    setReturnsDialogDoc(doc);
+    setReturnsDialogOpen(true);
+    const cached = returnsByDocId[doc.id];
+    if (cached) {
+      setReturnsList(cached.map((r) => ({ ...r, totalValue: null, pdfUrl: null })));
+      return;
+    }
+    setReturnsLoading(true);
+    try {
+      const { data } = await fiscalApi.getInboundReturns(doc.id);
+      setReturnsList(data);
+      setReturnsByDocId((prev) => ({ ...prev, [doc.id]: data }));
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Falha ao carregar devoluções';
+      toast.error(msg);
+      setReturnsList([]);
+    } finally {
+      setReturnsLoading(false);
     }
   };
 
@@ -324,11 +409,11 @@ export default function InboundInvoicesPage() {
                           </>
                         )}
                       </Button>
-                      {user?.role === 'empresa' && doc.hasXml && doc.accessKey && (
+                      {user?.role === 'empresa' && (doc.hasXml && doc.accessKey ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleEmitReturn(doc)}
+                          onClick={() => handleOpenReturnModal(doc)}
                           disabled={emittingReturnId === doc.id}
                           title="Emitir NFe de devolução referenciando esta nota de entrada"
                         >
@@ -341,6 +426,29 @@ export default function InboundInvoicesPage() {
                             <>
                               <RotateCcw className="mr-2 h-4 w-4" /> Emitir Devolução
                             </>
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          title="É necessário ter o XML e a chave de 44 dígitos para emitir a devolução."
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" /> Emitir Devolução
+                        </Button>
+                      ))}
+                      {user?.role === 'empresa' && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleOpenReturnsDialog(doc)}
+                          title="Ver NFe de devolução emitidas para esta nota"
+                        >
+                          {returnsByDocId[doc.id]?.length ? (
+                            <>Devoluções ({returnsByDocId[doc.id].length})</>
+                          ) : (
+                            <>Ver devoluções</>
                           )}
                         </Button>
                       )}
@@ -462,6 +570,168 @@ export default function InboundInvoicesPage() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={returnModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReturnModalOpen(false);
+            setReturnModalDoc(null);
+            setReturnPreview(null);
+            setReturnPreviewError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Emitir nota de devolução</DialogTitle>
+            <DialogDescription>
+              Confira os dados da nota de entrada que será referenciada na NFe de devolução.
+            </DialogDescription>
+          </DialogHeader>
+          {returnPreviewLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {returnPreviewError && !returnPreviewLoading && (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+              {returnPreviewError}
+            </div>
+          )}
+          {returnPreview && !returnPreviewLoading && (
+            <>
+              <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                <div className="grid gap-2 text-sm">
+                  <div>
+                    <span className="font-medium text-foreground">Fornecedor:</span>
+                    <span className="ml-2 text-muted-foreground">{returnPreview.supplierName}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">Chave de acesso:</span>
+                    <div className="mt-0.5 font-mono text-xs break-all text-muted-foreground">
+                      {returnPreview.accessKey}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-foreground">Valor total:</span>
+                    <span className="ml-2 text-muted-foreground">{formatCurrency(returnPreview.totalValue)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-foreground">Descrição</th>
+                      <th className="px-3 py-2 text-right font-medium text-foreground">Qtd</th>
+                      <th className="px-3 py-2 text-right font-medium text-foreground">Valor unit.</th>
+                      <th className="px-3 py-2 text-right font-medium text-foreground">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {returnPreview.items.map((item, idx) => (
+                      <tr key={idx} className="border-t">
+                        <td className="px-3 py-2 text-foreground">{item.description}</td>
+                        <td className="px-3 py-2 text-right text-foreground">{item.quantity} {item.unitOfMeasure}</td>
+                        <td className="px-3 py-2 text-right text-foreground">{formatCurrency(item.unitPrice)}</td>
+                        <td className="px-3 py-2 text-right text-foreground">{formatCurrency(item.totalPrice)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                A NFe de devolução será emitida referenciando esta nota. Deseja continuar?
+              </p>
+            </>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReturnModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!returnPreview || returnPreviewLoading || !!returnPreviewError || emittingReturnId === returnModalDoc?.id}
+              onClick={handleConfirmEmitReturn}
+            >
+              {emittingReturnId === returnModalDoc?.id ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Emitindo...
+                </>
+              ) : (
+                <>Confirmar e emitir</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={returnsDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReturnsDialogOpen(false);
+            setReturnsDialogDoc(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Devoluções desta nota de entrada</DialogTitle>
+            <DialogDescription>
+              {returnsDialogDoc && (
+                <>Fornecedor: {returnsDialogDoc.supplierName || '-'} — Chave: {returnsDialogDoc.accessKey ? `${returnsDialogDoc.accessKey.slice(0, 10)}...` : '-'}</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {returnsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : returnsList.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">Nenhuma NFe de devolução emitida para esta nota.</p>
+          ) : (
+            <div className="space-y-2">
+              {returnsList.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between rounded-md border p-3"
+                >
+                  <div className="text-sm">
+                    <span className="font-medium text-foreground">NFe {r.documentNumber}</span>
+                    <span className="ml-2 text-muted-foreground">{r.status}</span>
+                    {r.emissionDate && (
+                      <span className="ml-2 text-muted-foreground">
+                        {formatDateTime(r.emissionDate)}
+                      </span>
+                    )}
+                    {r.accessKey && (
+                      <div className="mt-0.5 font-mono text-xs text-muted-foreground truncate max-w-[280px]">
+                        {r.accessKey}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDownload({ id: r.id } as InboundDoc)}
+                    disabled={downloadingId === r.id}
+                  >
+                    {downloadingId === r.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Download className="mr-2 h-4 w-4" /> Download
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

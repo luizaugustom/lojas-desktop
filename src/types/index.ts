@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'empresa' | 'vendedor';
+export type UserRole = 'admin' | 'empresa' | 'vendedor' | 'gestor';
 
 export type DataPeriodFilter =
   | 'ALL'
@@ -57,6 +57,7 @@ export interface User {
   login?: string;
   role: UserRole;
   companyId?: string | null;
+  companyIds?: string[];
   plan?: PlanType;
   dataPeriod?: DataPeriodFilter | null;
   nfeEmissionEnabled?: boolean;
@@ -405,7 +406,7 @@ export interface CashClosure {
   updatedAt: string;
 }
 
-export type ReportType = 'sales' | 'products' | 'invoices' | 'complete';
+export type ReportType = 'sales' | 'products' | 'invoices' | 'inbound_invoices' | 'complete' | 'cancelled_sales';
 export type ReportFormat = 'json' | 'xml' | 'excel';
 
 export interface GenerateReportDto {
@@ -587,12 +588,30 @@ export interface UpdateSellerProfileDto {
   phone?: string;
 }
 
+export type BillRecurrenceType = 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
+
 export interface CreateBillDto {
   title: string;
   amount: number;
   dueDate: string;
   barcode?: string;
   paymentInfo?: string;
+  recurrenceType?: BillRecurrenceType;
+  recurrenceEndDate?: string;
+}
+
+export interface BillRecurrence {
+  id: string;
+  companyId: string;
+  title: string;
+  barcode?: string | null;
+  paymentInfo?: string | null;
+  amount: number;
+  recurrenceType: BillRecurrenceType;
+  endDate?: string | null;
+  nextDueDate: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateCompanyDto {

@@ -34,9 +34,18 @@ import { CardBrandSelect } from '../ui/card-brand-select';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import type { CreateSaleDto, PaymentMethod, PaymentMethodDetail, InstallmentData, Seller } from '../../types';
 
+export interface InitialClientForCheckout {
+  name?: string;
+  cpfCnpj?: string;
+}
+
 interface CheckoutDialogProps {
   open: boolean;
   onClose: () => void;
+  /** Cliente inicial (ex.: ao abrir a partir de um orçamento) */
+  initialClient?: InitialClientForCheckout;
+  /** Chamado quando a venda é criada e o fluxo de impressão termina (ex.: para marcar orçamento como aprovado) */
+  onSaleCreated?: (saleId: string) => void;
 }
 
 const paymentMethods: { value: PaymentMethod; label: string }[] = [
@@ -47,7 +56,7 @@ const paymentMethods: { value: PaymentMethod; label: string }[] = [
   { value: 'installment', label: 'A prazo' },
 ];
 
-export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
+export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: CheckoutDialogProps) {
   const [loading, setLoading] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState<PaymentMethodDetail[]>([]);
   const [paymentInputValues, setPaymentInputValues] = useState<Record<number, string>>({});
@@ -140,6 +149,18 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
       setLoadingFiscalConfig(false);
     }
   };
+
+  // Preencher cliente inicial quando abrir com initialClient (ex.: aprovação de orçamento)
+  useEffect(() => {
+    if (open && initialClient) {
+      const name = initialClient.name ?? '';
+      const cpfCnpj = initialClient.cpfCnpj ?? '';
+      setValue('clientName', name);
+      setValue('clientCpfCnpj', cpfCnpj);
+      setSelectedCustomerName(name);
+      setSelectedCustomerCpfCnpj(cpfCnpj);
+    }
+  }, [open, initialClient, setValue]);
 
   useEffect(() => {
     if (!open) {
@@ -769,6 +790,9 @@ export function CheckoutDialog({ open, onClose }: CheckoutDialogProps) {
   };
 
   const handlePrintComplete = () => {
+    if (onSaleCreated && createdSaleId) {
+      onSaleCreated(createdSaleId);
+    }
     clearCart();
     reset();
     setPaymentDetails([]);

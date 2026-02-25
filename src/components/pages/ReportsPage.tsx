@@ -16,9 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
 import { handleApiError } from '../../lib/handleApiError';
+import { managerApi } from '../../lib/api-endpoints';
 import { reportSchema } from '../../lib/validations';
 import { downloadFile, getFileExtension } from '../../lib/utils';
 import type { GenerateReportDto, Seller } from '../../types';
@@ -29,7 +30,8 @@ const reportTypes = [
   { value: 'sales', label: 'Relatório de Vendas', icon: ShoppingCart },
   { value: 'cancelled_sales', label: 'Relatório de Vendas Canceladas', icon: XCircle },
   { value: 'products', label: 'Relatório de Produtos', icon: Package },
-  { value: 'invoices', label: 'Relatório de Notas Fiscais', icon: FileText },
+  { value: 'invoices', label: 'Relatório de Notas Fiscais (Saída)', icon: FileText },
+  { value: 'inbound_invoices', label: 'Relatório de Notas Fiscais de Entrada', icon: FileText },
   { value: 'complete', label: 'Relatório Completo', icon: FileBarChart },
 ];
 
@@ -44,14 +46,29 @@ export default function ReportsPage() {
   const { queryKeyPart } = useDateRange();
   const [loading, setLoading] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [reportCompanyId, setReportCompanyId] = useState('');
+
+  const { data: myCompaniesData } = useQuery({
+    queryKey: ['manager', 'my-companies'],
+    queryFn: () => managerApi.myCompanies().then((r) => r.data),
+    enabled: user?.role === 'gestor',
+  });
+  const reportCompanies = Array.isArray(myCompaniesData) ? myCompaniesData : [];
 
   const { data: sellersData } = useQuery({
-    queryKey: ['sellers', queryKeyPart],
-    queryFn: async () => (await api.get('/seller')).data,
-    enabled: user?.role === 'empresa',
+    queryKey: ['sellers', user?.role === 'gestor' ? reportCompanyId : queryKeyPart],
+    queryFn: async () => {
+      if (user?.role === 'gestor' && reportCompanyId) {
+        const res = await api.get('/seller', { params: { companyId: reportCompanyId } });
+        return res.data;
+      }
+      const res = await api.get('/seller');
+      return res.data;
+    },
+    enabled: user?.role === 'empresa' || (user?.role === 'gestor' && !!reportCompanyId),
   });
 
-  const sellers: Seller[] = sellersData || [];
+  const sellers: Seller[] = Array.isArray(sellersData) ? sellersData : [];
 
   const {
     handleSubmit,
@@ -75,13 +92,16 @@ export default function ReportsPage() {
     setLoading(true);
     try {
       const includeDocuments = data.includeDocuments === true;
-      const payload = {
+      const payload: any = {
         ...data,
         startDate: data.startDate || undefined,
         endDate: data.endDate || undefined,
         sellerId: data.sellerId === 'all' ? undefined : data.sellerId || undefined,
         includeDocuments,
       };
+      if (user?.role === 'gestor') {
+        payload.companyId = reportCompanyId || reportCompanies[0]?.id; // 'all' = relatório mesclado de todas as lojas
+      }
 
       const response = await api.post('/reports/generate', payload, {
         responseType: 'blob',
@@ -143,12 +163,12 @@ export default function ReportsPage() {
     return null;
   }
 
-  if (user.role !== 'empresa') {
+  if (user.role !== 'empresa' && user.role !== 'gestor') {
     return (
       <Card className="p-6 text-center">
         <CardTitle className="text-xl font-semibold text-destructive">Acesso não permitido</CardTitle>
         <CardDescription className="mt-2">
-          Apenas contas do tipo <strong>empresa</strong> podem gerar relatórios contábeis.
+          Apenas contas do tipo <strong>empresa</strong> ou <strong>gestor</strong> podem gerar relatórios contábeis.
         </CardDescription>
       </Card>
     );
@@ -182,6 +202,27 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent className="pb-4">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
+              {user?.role === 'gestor' && reportCompanies.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Loja</Label>
+                  <Select value={reportCompanyId || reportCompanies[0]?.id} onValueChange={setReportCompanyId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a loja" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as lojas (relatório mesclado)</SelectItem>
+                      {reportCompanies.map((c: { id: string; name?: string; fantasyName?: string }) => (
+                        <SelectItem key={c.id} value={c.id}>{c.fantasyName || c.name || c.id}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {reportCompanyId === 'all'
+                      ? 'Relatório único com todos os produtos e dados das suas lojas (coluna Loja em cada seção).'
+                      : 'Relatório será gerado para a loja selecionada.'}
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Tipo de Relatório</Label>
                 <Controller
@@ -282,38 +323,42 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Filtrar por Vendedor (Opcional)
-                </Label>
-                <Controller
-                  name="sellerId"
-                  control={control}
-                  render={({ field }) => (
-                    <Select
-                      value={field.value ?? 'all'}
-                      onValueChange={(value) => field.onChange(value)}
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Todos os vendedores" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos os vendedores</SelectItem>
-                        {sellers.map((seller) => (
-                          <SelectItem key={seller.id} value={seller.id}>
-                            {seller.name} {seller.commissionRate && seller.commissionRate > 0 ? `(${seller.commissionRate}%)` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Deixe vazio para incluir todos os vendedores
-                </p>
-              </div>
+              {(user?.role === 'empresa' || (user?.role === 'gestor' && reportCompanyId)) && (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Filtrar por Vendedor (Opcional)
+                  </Label>
+                  <Controller
+                    name="sellerId"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value ?? 'all'}
+                        onValueChange={(value) => field.onChange(value)}
+                        disabled={loading}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Todos os vendedores" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos os vendedores</SelectItem>
+                          {sellers.map((seller) => (
+                            <SelectItem key={seller.id} value={seller.id}>
+                              {seller.name} {seller.commissionRate && seller.commissionRate > 0 ? `(${seller.commissionRate}%)` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {user?.role === 'gestor' && reportCompanyId === 'all'
+                      ? 'Vendedores de todas as lojas selecionadas.'
+                      : 'Deixe em "Todos" para incluir todos os vendedores.'}
+                  </p>
+                </div>
+              )}
 
               <Controller
                 name="includeDocuments"
@@ -373,7 +418,8 @@ export default function ReportsPage() {
                 <ul className="space-y-0 text-xs text-blue-800 dark:text-blue-300 leading-tight">
                   <li>✓ <strong>Vendas:</strong> Todas as vendas do período com detalhes</li>
                   <li>✓ <strong>Produtos:</strong> Estoque, preços e movimentações</li>
-                  <li>✓ <strong>Notas Fiscais:</strong> Documentos emitidos</li>
+                  <li>✓ <strong>Notas Fiscais (Saída):</strong> Documentos emitidos pela empresa</li>
+                  <li>✓ <strong>Notas Fiscais de Entrada:</strong> Documentos recebidos (em página separada)</li>
                   <li>✓ <strong>Contas a Pagar:</strong> Obrigações financeiras</li>
                   <li>✓ <strong>Fechamentos de Caixa:</strong> Histórico de fechamentos</li>
                   <li>✓ <strong>💰 Comissões:</strong> Cálculo detalhado por vendedor</li>

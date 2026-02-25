@@ -20,6 +20,9 @@ import {
   Printer,
   FileText,
   User,
+  ArrowLeftRight,
+  Briefcase,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/ui-store';
@@ -27,7 +30,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import logoImage from '@/logosvg.svg';
 
 const navigation = [
-  { name: 'Dashboard', route: 'dashboard', icon: LayoutDashboard, roles: ['admin', 'empresa'] },
+  { name: 'Dashboard', route: 'dashboard', icon: LayoutDashboard, roles: ['admin', 'empresa', 'gestor'] },
   { name: 'Produtos', route: 'products', icon: Package, roles: ['admin', 'empresa', 'vendedor'] },
   { name: 'Vendas', route: 'sales', icon: ShoppingCart, roles: ['admin', 'empresa', 'vendedor'] },
   { name: 'Orçamentos', route: 'budgets', icon: FileText, roles: ['empresa', 'vendedor'] },
@@ -35,15 +38,18 @@ const navigation = [
   { name: 'Clientes', route: 'customers', icon: Users, roles: ['admin', 'empresa', 'vendedor'] },
   { name: 'Vendedores', route: 'sellers', icon: UserCheck, roles: ['admin', 'empresa'] },
   { name: 'Pagamentos a Prazo', route: 'installments', icon: CalendarClock, roles: ['empresa', 'vendedor'] },
-  { name: 'Contas a Pagar', route: 'bills', icon: CreditCard, roles: ['admin', 'empresa'] },
+  { name: 'Contas e Gastos', route: 'bills', icon: CreditCard, roles: ['admin', 'empresa'] },
   { name: 'Fechamento de Caixa', route: 'cash-closure', icon: DollarSign, roles: ['admin', 'empresa', 'vendedor'] },
-  { name: 'Relatórios', route: 'reports', icon: FileBarChart, roles: ['admin', 'empresa'] },
+  { name: 'Relatórios', route: 'reports', icon: FileBarChart, roles: ['admin', 'empresa', 'gestor'] },
+  { name: 'Métricas', route: 'metrics', icon: BarChart3, roles: ['gestor'] },
+  { name: 'Transferência de estoque', route: 'stock-transfer', icon: ArrowLeftRight, roles: ['gestor'] },
   { name: 'Notas Fiscais', route: 'invoices', icon: Receipt, roles: ['empresa'] },
   { name: 'Notas de Entrada', route: 'inbound-invoices', icon: FileDown, roles: ['empresa'] },
   { name: 'Empresas', route: 'companies', icon: Building2, roles: ['admin'] },
+  { name: 'Gestores', route: 'gestores', icon: Briefcase, roles: ['admin'] },
   { name: 'Testes da API', route: 'test-api', icon: TestTube, roles: ['admin'] },
   { name: 'Dispositivos', route: 'devices', icon: Printer, roles: ['empresa', 'vendedor'] },
-  { name: 'Configurações', route: 'settings', icon: Settings, roles: ['admin', 'empresa'] },
+  { name: 'Configurações', route: 'settings', icon: Settings, roles: ['admin', 'empresa', 'gestor'] },
 ];
 
 interface SidebarProps {
@@ -61,16 +67,11 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
       return false;
     }
 
-    // Normalizar role (caso venha como 'company' ao invés de 'empresa')
     const normalizedRole = user.role;
-    
-    console.log('[Sidebar] Filtrando item:', {
-      name: item.name,
-      itemRoles: item.roles,
-      userRole: user.role,
-      normalizedRole,
-      shouldInclude: item.roles.includes(normalizedRole)
-    });
+
+    if (normalizedRole === 'gestor') {
+      return item.roles.includes('gestor');
+    }
 
     const adminExcluded = new Set([
       'Dashboard',
@@ -78,7 +79,7 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
       'Vendas',
       'Clientes',
       'Vendedores',
-      'Contas a Pagar',
+      'Contas e Gastos',
       'Relatórios',
       'Fechamento de Caixa',
     ]);
@@ -92,10 +93,7 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
       return normalizedRole === 'empresa' || (normalizedRole === 'vendedor' && user.nfeEmissionEnabled === true);
     }
 
-    const shouldInclude = item.roles.includes(normalizedRole);
-    console.log('[Sidebar] Item', item.name, shouldInclude ? 'INCLUÍDO' : 'EXCLUÍDO');
-    
-    return shouldInclude;
+    return item.roles.includes(normalizedRole);
   });
   
   console.log('[Sidebar] Navegação filtrada:', filteredNavigation.map(n => n.name));

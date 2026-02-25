@@ -1,6 +1,12 @@
 import { api } from './apiClient';
 import type { DataPeriodFilter } from '../types';
 
+/** Auth - alterar senha de login de empresa (admin ou gestor) */
+export const authApi = {
+  changeCompanyPassword: (companyId: string, newPassword: string) =>
+    api.post(`/auth/company/${companyId}/change-password`, { newPassword }),
+};
+
 /** GET /ncm - Lista códigos NCM (proxy da API Receita Federal, evita CORS) */
 export const ncmApi = {
   list: () => api.get('/ncm'),
@@ -11,7 +17,7 @@ export const productApi = {
   createWithPhotos: (formData: FormData) => api.post('/product/upload-and-create', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
-  list: (params?: { page?: number; limit?: number; search?: string }) =>
+  list: (params?: { page?: number; limit?: number; search?: string; companyId?: string }) =>
     api.get('/product', { params }),
   stats: () => api.get('/product/stats'),
   lowStock: (threshold?: number) => api.get('/product/low-stock', { params: { threshold } }),
@@ -115,6 +121,10 @@ export const fiscalApi = {
   generateNFe: (data: any) => api.post('/fiscal/nfe', data),
   generateReturnNFe: (inboundDocumentId: string) =>
     api.post('/fiscal/nfe-devolucao', { inboundDocumentId }),
+  getInboundReturnPreview: (inboundDocumentId: string) =>
+    api.get(`/fiscal/inbound-invoice/${inboundDocumentId}/return-preview`),
+  getInboundReturns: (inboundDocumentId: string) =>
+    api.get(`/fiscal/inbound-invoice/${inboundDocumentId}/returns`),
   parseInboundXml: (xml: string) => api.post('/fiscal/parse-inbound-xml', { xml }),
   uploadXml: (file: File) => {
     const formData = new FormData();
@@ -368,7 +378,30 @@ export const adminApi = {
 };
 
 export const dashboardApi = {
-  metrics: () => api.get('/dashboard/metrics'),
+  metrics: (companyId?: string) =>
+    api.get('/dashboard/metrics', { params: companyId ? { companyId } : {} }),
+  trends: (params?: { companyId?: string; period?: '7d' | '30d' | '90d' }) =>
+    api.get('/dashboard/metrics/trends', { params: params ?? {} }),
+  metricsByStore: (params: { startDate: string; endDate: string }) =>
+    api.get('/dashboard/metrics/by-store', { params }),
+};
+
+export const managerApi = {
+  myCompanies: () => api.get('/manager/my-companies'),
+  list: () => api.get('/manager'),
+  getOne: (id: string) => api.get(`/manager/${id}`),
+  create: (data: { login: string; password: string; name?: string }) => api.post('/manager', data),
+  update: (id: string, data: { login?: string; password?: string; name?: string }) => api.patch(`/manager/${id}`, data),
+  delete: (id: string) => api.delete(`/manager/${id}`),
+  setCompanies: (id: string, companyIds: string[]) => api.put(`/manager/${id}/companies`, { companyIds }),
+};
+
+export const stockTransferApi = {
+  create: (data: { fromCompanyId: string; toCompanyId: string; productId: string; quantity: number }) =>
+    api.post('/stock-transfer', data),
+  list: (params?: { page?: number; limit?: number; fromCompanyId?: string; toCompanyId?: string }) =>
+    api.get('/stock-transfer', { params }),
+  getPdf: (id: string) => api.get(`/stock-transfer/${id}/pdf`, { responseType: 'blob' }),
 };
 
 export const cardAcquirerRateApi = {

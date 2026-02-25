@@ -53,6 +53,7 @@ export function ProductDetailsModal({
   canEdit = false
 }: ProductDetailsModalProps) {
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
   const { user } = useAuth();
 
   if (!product) return null;
@@ -103,7 +104,7 @@ export function ProductDetailsModal({
                 {productImages.length > 0 ? (
                   <div
                     className="w-full md:w-80 h-64 md:h-80 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity border border-border"
-                    onClick={() => setImageViewerOpen(true)}
+                    onClick={() => { setViewerInitialIndex(0); setImageViewerOpen(true); }}
                   >
                     <img
                       src={productImages[0]}
@@ -126,7 +127,7 @@ export function ProductDetailsModal({
                     {productImages.map((image, index) => (
                       <button
                         key={index}
-                        onClick={() => setImageViewerOpen(true)}
+                        onClick={() => { setViewerInitialIndex(index); setImageViewerOpen(true); }}
                         className="flex-shrink-0 w-16 h-16 rounded-md overflow-hidden border-2 border-border hover:border-primary transition-colors"
                       >
                         <img
@@ -268,8 +269,8 @@ export function ProductDetailsModal({
               <h3 className="text-sm font-semibold text-foreground mb-2 uppercase tracking-wide">
                 Descrição
               </h3>
-              {product.description && product.description !== 'null' ? (
-                <p className="text-sm text-foreground leading-relaxed">
+              {product.description && product.description !== 'null' && String(product.description).trim() ? (
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                   {product.description}
                 </p>
               ) : (
@@ -301,7 +302,7 @@ export function ProductDetailsModal({
           open={imageViewerOpen}
           onClose={() => setImageViewerOpen(false)}
           images={productImages}
-          initialIndex={0}
+          initialIndex={viewerInitialIndex}
           alt={product.name}
         />
       )}
