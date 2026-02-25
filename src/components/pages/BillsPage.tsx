@@ -21,7 +21,7 @@ import { handleApiError } from '../../lib/handleApiError';
 import { formatCurrency } from '../../lib/utils-clean';
 import { formatDate } from '../../lib/utils';
 import { ConfirmationModal } from '../ui/confirmation-modal';
-import type { BillRecurrence } from '../../types';
+import type { BillRecurrence, BillToPay } from '../../types';
 
 const RECURRENCE_LABELS: Record<string, string> = {
   WEEKLY: '1 vez por semana',
@@ -157,13 +157,13 @@ export default function BillsPage() {
       setRecurrenceToRemove(null);
       toast.success('Recorrência cancelada.');
     },
-    onError: handleApiError,
+    onError: (err) => handleApiError(err),
   });
 
   const bills = billsResponse?.bills || [];
 
   const totalAmount = useMemo(
-    () => bills.reduce((sum, b) => sum + Number(b?.amount ?? 0), 0),
+    () => (bills as BillToPay[]).reduce((sum: number, b: BillToPay) => sum + Number(b?.amount ?? 0), 0),
     [bills]
   );
 

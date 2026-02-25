@@ -112,6 +112,15 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
   const total = Math.round((baseTotal - creditToApply + Number.EPSILON) * 100) / 100; // Total com desconto de crédito
   const isCompany = user?.role === 'empresa';
 
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+    setValue,
+    watch,
+  } = useForm<{ clientName?: string; clientCpfCnpj?: string }>({});
+
   // Carregar configuração da empresa
   const loadCompanyConfig = async () => {
     if (!isCompany) return;
@@ -381,15 +390,6 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
     
     toast.success(`Venda a prazo configurada para ${data.installments}x de ${formatCurrency(data.installmentValue)}`);
   };
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-    setValue,
-    watch,
-  } = useForm<{ clientName?: string; clientCpfCnpj?: string }>({});
 
   const watchedCpfCnpj = watch('clientCpfCnpj');
   
