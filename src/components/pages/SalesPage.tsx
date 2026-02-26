@@ -74,7 +74,7 @@ export default function SalesPage() {
   });
 
   // Buscar caixa atual para verificar se está aberto
-  const { data: currentClosure } = useQuery({
+  const { data: currentClosure, isFetched: currentClosureFetched } = useQuery({
     queryKey: ['current-cash-closure', user?.id],
     queryFn: async () => {
       try {
@@ -153,15 +153,15 @@ export default function SalesPage() {
     });
   }, []);
 
+  // Mostrar modal de abrir caixa apenas quando a query já carregou e não há caixa aberto (não reexecutar ao digitar)
   useEffect(() => {
-    // Ao montar, verificar se existe fechamento de caixa atual. Se não, pedir saldo inicial.
-    if (user && currentClosure !== undefined) {
-      // Se não houver um current válido, abrir diálogo
-      if (!currentClosure || !currentClosure.id) {
-        setOpeningDialogOpen(true);
-      }
+    if (!user || !currentClosureFetched) return;
+    if (!currentClosure || !currentClosure.id) {
+      setOpeningDialogOpen(true);
     }
+  }, [user, currentClosureFetched, currentClosure?.id]);
 
+  useEffect(() => {
     setScannerActive(true);
 
     const scanStartedAtRef = { current: null as number | null };
@@ -201,7 +201,7 @@ export default function SalesPage() {
       window.removeEventListener('keydown', onKey);
       setScannerActive(false);
     };
-  }, [barcodeBuffer, lastScanned, setScannerActive, setBarcodeBuffer, user, currentClosure]);
+  }, [barcodeBuffer, lastScanned, setScannerActive, setBarcodeBuffer]);
 
   const handleCheckout = () => {
     if (items.length === 0) return;

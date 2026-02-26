@@ -497,7 +497,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
     ],
     enabled: open && !showPrintConfirmation && !showCustomerCopyConfirmation && !showBilletPrintConfirmation && !showStoreCreditVoucherConfirmation,
     context: 'checkout',
-    ignoreInputs: false,
+    ignoreInputs: true, // Quando focado em input (valor, etc.), dígitos devem ir para o campo; atalhos 1-5 só fora de inputs
   });
 
   const handlePrintConfirm = async () => {
