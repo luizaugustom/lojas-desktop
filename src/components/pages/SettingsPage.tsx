@@ -2574,42 +2574,40 @@ export default function SettingsPage() {
                         onCheckedChange={(checked) => setBoletoConfig((c) => ({ ...c, useBankBoletoForInstallments: checked }))}
                       />
                     </div>
-                    {boletoConfig.useBankBoletoForInstallments && (
-                      <>
-                        <div className="space-y-2">
-                          <Label>Provedor de boleto bancário</Label>
-                          <Select
-                            value={boletoConfig.bankBoletoProvider || 'none'}
-                            onValueChange={(v) => setBoletoConfig((c) => ({ ...c, bankBoletoProvider: v === 'none' ? '' : v }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o banco ou agregador" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Selecione...</SelectItem>
-                              <SelectItem value="BB">Banco do Brasil</SelectItem>
-                              <SelectItem value="BRADESCO">Bradesco</SelectItem>
-                              <SelectItem value="ITAU">Itaú</SelectItem>
-                              <SelectItem value="CAIXA">Caixa</SelectItem>
-                              <SelectItem value="INTER">Inter</SelectItem>
-                              <SelectItem value="SANTANDER">Santander</SelectItem>
-                              <SelectItem value="SICOOB">Sicoob</SelectItem>
-                              <SelectItem value="SICREDI">Sicredi</SelectItem>
-                              <SelectItem value="C6">C6 Bank</SelectItem>
-                              <SelectItem value="BOLETO_CLOUD">Boleto Cloud</SelectItem>
-                              <SelectItem value="ASAAS">Asaas</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
-                          <Label className="text-sm font-medium">Configuração da API do banco (opcional)</Label>
-                          {boletoConfig.bankBoletoProvider === 'BOLETO_CLOUD' && (
-                            <p className="text-xs text-muted-foreground">A API Key é configurada pelo administrador. Preencha apenas o token da sua conta bancária abaixo.</p>
-                          )}
-                          {boletoConfig.bankBoletoProvider !== 'BOLETO_CLOUD' && (
-                            <p className="text-xs text-muted-foreground">Preencha conforme a documentação do seu banco. Os dados são armazenados de forma segura.</p>
-                          )}
-                          <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Provedor de boleto bancário</Label>
+                      <Select
+                        value={boletoConfig.bankBoletoProvider || 'none'}
+                        onValueChange={(v) => setBoletoConfig((c) => ({ ...c, bankBoletoProvider: v === 'none' ? '' : v }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o banco ou agregador" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione...</SelectItem>
+                          <SelectItem value="BB">Banco do Brasil</SelectItem>
+                          <SelectItem value="BRADESCO">Bradesco</SelectItem>
+                          <SelectItem value="ITAU">Itaú</SelectItem>
+                          <SelectItem value="CAIXA">Caixa</SelectItem>
+                          <SelectItem value="INTER">Inter</SelectItem>
+                          <SelectItem value="SANTANDER">Santander</SelectItem>
+                          <SelectItem value="SICOOB">Sicoob</SelectItem>
+                          <SelectItem value="SICREDI">Sicredi</SelectItem>
+                          <SelectItem value="C6">C6 Bank</SelectItem>
+                          <SelectItem value="BOLETO_CLOUD">Boleto Cloud</SelectItem>
+                          <SelectItem value="ASAAS">Asaas</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
+                      <Label className="text-sm font-medium">Configuração da API do banco (opcional)</Label>
+                      {boletoConfig.bankBoletoProvider === 'BOLETO_CLOUD' && (
+                        <p className="text-xs text-muted-foreground">A API Key é configurada pelo administrador. Preencha apenas o token da sua conta bancária abaixo.</p>
+                      )}
+                      {boletoConfig.bankBoletoProvider !== 'BOLETO_CLOUD' && (
+                        <p className="text-xs text-muted-foreground">Preencha conforme a documentação do seu banco. Os dados são armazenados de forma segura.</p>
+                      )}
+                      <div className="grid gap-2 sm:grid-cols-2">
                             {boletoConfig.bankBoletoProvider !== 'BOLETO_CLOUD' && (
                               <>
                                 <div className="space-y-1">
@@ -2683,8 +2681,6 @@ export default function SettingsPage() {
                             )}
                           </div>
                         </div>
-                      </>
-                    )}
                   </>
                 )}
               </div>
