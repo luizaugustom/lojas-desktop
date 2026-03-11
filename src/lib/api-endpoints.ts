@@ -117,6 +117,24 @@ export const companyApi = {
   acceptTerms: (data: { accepted: boolean }) => api.post('/company/terms', data),
 };
 
+export const billetApi = {
+  list: (params?: { page?: number; limit?: number; status?: string; customerId?: string; startDate?: string; endDate?: string }) =>
+    api.get('/billet', { params }),
+  get: (id: string) => api.get(`/billet/${id}`),
+  getPdf: (id: string) => api.get(`/billet/${id}/pdf`, { responseType: 'arraybuffer' }),
+  cancel: (id: string) => api.post(`/billet/${id}/cancel`),
+  markAsPaid: (id: string) => api.post(`/billet/${id}/mark-paid`),
+  sendWhatsApp: (id: string) => api.post(`/billet/${id}/send-whatsapp`),
+  processCnabReturn: (file: File) => {
+    const form = new FormData();
+    form.append('arquivo', file);
+    return api.post<{ processed: boolean; markedAsPaid: number; titlesInFile: number; message: string }>(
+      '/billet/cnab/process-return',
+      form,
+    );
+  },
+};
+
 export const fiscalApi = {
   generateNFe: (data: any) => api.post('/fiscal/nfe', data),
   generateReturnNFe: (inboundDocumentId: string) =>
@@ -133,7 +151,7 @@ export const fiscalApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  list: (params?: { page?: number; limit?: number; search?: string; documentType?: string }) =>
+  list: (params?: { page?: number; limit?: number; search?: string; documentType?: string; startDate?: string; endDate?: string }) =>
     api.get('/fiscal', { params }),
   stats: () => api.get('/fiscal/stats'),
   validateCompany: () => api.get('/fiscal/validate-company'),
@@ -164,7 +182,8 @@ export const cashClosureApi = {
   list: (params?: { page?: number; limit?: number; isClosed?: boolean }) =>
     api.get('/cash-closure', { params }),
   current: () => api.get('/cash-closure/current'),
-  stats: () => api.get('/cash-closure/stats'),
+  stats: (params?: { startDate?: string; endDate?: string }) =>
+    api.get('/cash-closure/stats', { params }),
   createWithdrawal: (data: { amount: number; reason: string }) =>
     api.post('/cash-closure/withdrawals', data),
   getWithdrawals: () => api.get('/cash-closure/withdrawals'),
@@ -242,11 +261,13 @@ export const budgetApi = {
 
 export const installmentApi = {
   create: (data: any) => api.post('/installment', data),
-  list: (params?: { isPaid?: boolean; page?: number; limit?: number }) =>
+  list: (params?: { isPaid?: boolean; page?: number; limit?: number; startDate?: string; endDate?: string }) =>
     api.get('/installment', { params }),
   get: (id: string) => api.get(`/installment/${id}`),
-  overdue: () => api.get('/installment/overdue'),
-  stats: () => api.get('/installment/stats'),
+  overdue: (params?: { startDate?: string; endDate?: string }) =>
+    api.get('/installment/overdue', { params }),
+  stats: (params?: { startDate?: string; endDate?: string }) =>
+    api.get('/installment/stats', { params }),
   pay: (id: string, data: any) => api.post(`/installment/${id}/pay`, data),
 };
 
@@ -340,6 +361,7 @@ export const notificationApi = {
     systemUpdates?: boolean;
     emailEnabled?: boolean;
     inAppEnabled?: boolean;
+    desktopNotificationsEnabled?: boolean;
   }) => api.put('/notification/preferences', data),
 };
 
@@ -375,12 +397,35 @@ export const adminApi = {
    * Roles: ADMIN - Obter configuração global do Focus NFe
    */
   getFocusNfeConfig: () => api.get('/admin/focus-nfe-config'),
+
+  /**
+   * PATCH /admin/boleto-cloud-config
+   * Roles: ADMIN - Atualizar configuração global do Boleto Cloud
+   */
+  updateBoletoCloudConfig: (data: any) => api.patch('/admin/boleto-cloud-config', data),
+
+  /**
+   * GET /admin/boleto-cloud-config
+   * Roles: ADMIN - Obter configuração global do Boleto Cloud
+   */
+  getBoletoCloudConfig: () => api.get('/admin/boleto-cloud-config'),
 };
 
 export const dashboardApi = {
-  metrics: (companyId?: string) =>
-    api.get('/dashboard/metrics', { params: companyId ? { companyId } : {} }),
-  trends: (params?: { companyId?: string; period?: '7d' | '30d' | '90d' }) =>
+  metrics: (companyId?: string, startDate?: string, endDate?: string) =>
+    api.get('/dashboard/metrics', {
+      params: {
+        ...(companyId ? { companyId } : {}),
+        ...(startDate ? { startDate } : {}),
+        ...(endDate ? { endDate } : {}),
+      },
+    }),
+  trends: (params?: {
+    companyId?: string;
+    period?: '7d' | '30d' | '90d';
+    startDate?: string;
+    endDate?: string;
+  }) =>
     api.get('/dashboard/metrics/trends', { params: params ?? {} }),
   metricsByStore: (params: { startDate: string; endDate: string }) =>
     api.get('/dashboard/metrics/by-store', { params }),
@@ -399,7 +444,7 @@ export const managerApi = {
 export const stockTransferApi = {
   create: (data: { fromCompanyId: string; toCompanyId: string; productId: string; quantity: number }) =>
     api.post('/stock-transfer', data),
-  list: (params?: { page?: number; limit?: number; fromCompanyId?: string; toCompanyId?: string }) =>
+  list: (params?: { page?: number; limit?: number; fromCompanyId?: string; toCompanyId?: string; startDate?: string; endDate?: string }) =>
     api.get('/stock-transfer', { params }),
   getPdf: (id: string) => api.get(`/stock-transfer/${id}/pdf`, { responseType: 'blob' }),
 };

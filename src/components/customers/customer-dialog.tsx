@@ -175,6 +175,7 @@ export function CustomerDialog({ open, onClose, customer }: CustomerDialogProps)
 
             <div className="col-span-2 mt-6">
               <h3 className="text-lg font-medium text-foreground mb-4">Endereço</h3>
+              <p className="text-sm text-muted-foreground mb-2">Para emissão de boletos, é necessário CPF/CNPJ e endereço completo (logradouro, número, bairro, cidade, estado, CEP).</p>
             </div>
 
             <div className="space-y-2">

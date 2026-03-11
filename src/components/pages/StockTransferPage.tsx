@@ -14,6 +14,7 @@ import {
   DialogDescription,
 } from '../ui/dialog';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDateRange } from '../../hooks/useDateRange';
 import { managerApi, productApi, stockTransferApi } from '../../lib/api-endpoints';
 import { handleApiError } from '../../lib/handleApiError';
 import { downloadFile } from '../../lib/utils';
@@ -27,6 +28,7 @@ import {
 
 export default function StockTransferPage() {
   const { user } = useAuth();
+  const { queryParams, queryKeyPart } = useDateRange();
   const queryClient = useQueryClient();
   const [fromCompanyId, setFromCompanyId] = useState('');
   const [toCompanyId, setToCompanyId] = useState('');
@@ -63,8 +65,15 @@ export default function StockTransferPage() {
   const modalTotal = (modalProductsData as any)?.total ?? modalProducts.length;
 
   const { data: transfersData } = useQuery({
-    queryKey: ['stock-transfer', 'list'],
-    queryFn: () => stockTransferApi.list({ page: 1, limit: 30 }).then((r) => r.data),
+    queryKey: ['stock-transfer', 'list', queryKeyPart, queryParams.startDate, queryParams.endDate],
+    queryFn: () =>
+      stockTransferApi
+        .list({
+          page: 1,
+          limit: 30,
+          ...(queryParams.startDate && queryParams.endDate ? { startDate: queryParams.startDate, endDate: queryParams.endDate } : {}),
+        })
+        .then((r) => r.data),
     enabled: user?.role === 'gestor',
   });
   const transfers = (transfersData as any)?.data ?? [];

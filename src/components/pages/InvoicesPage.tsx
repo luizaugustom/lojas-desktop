@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Switch } from '../ui/switch';
 import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency, formatDateTime, downloadFile } from '@/lib/utils';
-import { fiscalApi } from '@/lib/api-endpoints';
+import { fiscalApi, customerApi } from '@/lib/api-endpoints';
 import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import { isValidCPF, isValidCNPJ, isValidCPFOrCNPJ } from '@/lib/validations';
 import { InvoiceHelpModal } from '../invoices/InvoiceHelpModal';
@@ -52,7 +53,7 @@ interface Product {
 
 export default function InvoicesPage() {
   const { api, user } = useAuth();
-  const { queryKeyPart } = useDateRange();
+  const { queryParams, queryKeyPart } = useDateRange();
   const [search, setSearch] = useState('');
   const [emitOpen, setEmitOpen] = useState(false);
   const [emitType, setEmitType] = useState<'nfe' | null>(null);
@@ -96,6 +97,10 @@ export default function InvoicesPage() {
   const [cardBrand, setCardBrand] = useState<string>('');
   const [cardOperationType, setCardOperationType] = useState<string>('');
   const [additionalInfo, setAdditionalInfo] = useState('');
+  const [emitBoleto, setEmitBoleto] = useState(false);
+  const [boletoCustomerId, setBoletoCustomerId] = useState('');
+  const [boletoDueDate, setBoletoDueDate] = useState('');
+  const [boletoAmount, setBoletoAmount] = useState<number | ''>('');
 
   // Estados para o diálogo de busca de produtos
   const [productSearchOpen, setProductSearchOpen] = useState(false);
@@ -144,11 +149,16 @@ export default function InvoicesPage() {
   const contingenciaEnabled = contingenciaData?.contingenciaEnabled ?? false;
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['fiscal-outbound', search],
+    queryKey: ['fiscal-outbound', queryKeyPart, search],
     queryFn: async () =>
       (
         await api.get('/fiscal', {
-          params: { page: 1, limit: 100, documentType: 'outbound' },
+          params: {
+            page: 1,
+            limit: 100,
+            documentType: 'outbound',
+            ...(queryParams.startDate && queryParams.endDate ? { startDate: queryParams.startDate, endDate: queryParams.endDate } : {}),
+          },
         })
       ).data,
   });
@@ -167,6 +177,15 @@ export default function InvoicesPage() {
       return response.data;
     },
     enabled: productSearchOpen,
+  });
+
+  const { data: boletoCustomersData } = useQuery({
+    queryKey: ['customers-boleto-nfe', user?.companyId],
+    queryFn: async () => {
+      const res = await customerApi.list({ limit: 500, companyId: user?.companyId ?? undefined });
+      return res.data as { data?: { id: string; name: string; cpfCnpj?: string }[] };
+    },
+    enabled: emitOpen && !!user?.companyId,
   });
 
   // Protege rota: empresa ou vendedor com nfeEmissionEnabled
@@ -302,6 +321,10 @@ export default function InvoicesPage() {
     setCardBrand('');
     setCardOperationType('');
     setAdditionalInfo('');
+    setEmitBoleto(false);
+    setBoletoCustomerId('');
+    setBoletoDueDate('');
+    setBoletoAmount('');
     setEmitOpen(true);
   };
 
@@ -311,6 +334,11 @@ export default function InvoicesPage() {
     // Validações básicas
     if (emissionMode === 'sale' && !saleId.trim()) {
       toast.error('Informe o ID da venda');
+      return;
+    }
+
+    if (emitBoleto && !boletoCustomerId) {
+      toast.error('Para emitir boleto, selecione o cliente cadastrado');
       return;
     }
     
@@ -494,6 +522,13 @@ export default function InvoicesPage() {
         if (additionalInfo.trim()) {
           payload.additionalInfo = additionalInfo.trim();
         }
+      }
+
+      if (emitBoleto && boletoCustomerId) {
+        payload.emitBoleto = true;
+        payload.boletoCustomerId = boletoCustomerId;
+        if (boletoDueDate) payload.boletoDueDate = new Date(boletoDueDate).toISOString();
+        if (boletoAmount !== '' && typeof boletoAmount === 'number') payload.boletoAmount = boletoAmount;
       }
       
       await api.post('/fiscal/nfe', payload);
@@ -1237,6 +1272,59 @@ export default function InvoicesPage() {
               </Card>
             </TabsContent>
           </Tabs>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="font-semibold">Emitir boleto para esta nota</h3>
+                <p className="text-sm text-muted-foreground">Gera um boleto vinculado à NFe (cliente cadastrado com CPF/CNPJ e endereço).</p>
+              </div>
+              <Switch checked={emitBoleto} onCheckedChange={setEmitBoleto} />
+            </div>
+            {emitBoleto && (
+              <div className="mt-4 pt-4 border-t space-y-4">
+                <div className="space-y-2">
+                  <Label>Cliente para o boleto *</Label>
+                  <Select value={boletoCustomerId || '_'} onValueChange={(v) => setBoletoCustomerId(v === '_' ? '' : v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o cliente cadastrado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_">Selecione...</SelectItem>
+                      {(boletoCustomersData?.data ?? []).map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name || c.cpfCnpj || c.id}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Vencimento (opcional)</Label>
+                    <Input
+                      type="date"
+                      value={boletoDueDate}
+                      onChange={(e) => setBoletoDueDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor do boleto (opcional, padrão: total da nota)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder={formatCurrency(calculateTotal())}
+                      value={boletoAmount === '' ? '' : boletoAmount}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const n = parseFloat(v);
+                        setBoletoAmount(v === '' ? '' : (isNaN(n) ? '' : n));
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </Card>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEmitOpen(false)} disabled={submitting}>

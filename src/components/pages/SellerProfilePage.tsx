@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '../ui/select';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDateRange } from '../../hooks/useDateRange';
 import { formatDate, formatCurrency } from '../../lib/utils';
 import { SellerCharts } from '../sellers/seller-charts';
 import { sellerApi } from '../../lib/api-endpoints';
@@ -106,7 +107,15 @@ export default function SellerProfilePage() {
     }
   }, [user?.dataPeriod]);
 
-  const { startDate, endDate } = useMemo(() => getPeriodRange(dataPeriod), [dataPeriod]);
+  const periodRange = useMemo(() => getPeriodRange(dataPeriod), [dataPeriod]);
+  const { queryParams, queryKeyPart } = useDateRange();
+  // Filtro do header tem prioridade quando ativo; senão usa período local do vendedor
+  const { startDate, endDate } = useMemo(() => {
+    if (queryParams.startDate && queryParams.endDate) {
+      return { startDate: queryParams.startDate, endDate: queryParams.endDate };
+    }
+    return { startDate: periodRange.startDate, endDate: periodRange.endDate };
+  }, [queryParams.startDate, queryParams.endDate, periodRange]);
 
   const {
     register,
@@ -138,7 +147,7 @@ export default function SellerProfilePage() {
   });
 
   const { data: statsData, isLoading: isLoadingStats, refetch: refetchStats } = useQuery({
-    queryKey: ['seller-stats', startDate, endDate],
+    queryKey: ['seller-stats', queryKeyPart, startDate, endDate],
     queryFn: async () => {
       try {
         const response = await sellerApi.myStats({ startDate, endDate });
@@ -152,7 +161,7 @@ export default function SellerProfilePage() {
   });
 
   const { data: salesData, isLoading: isLoadingSales, refetch: refetchSales } = useQuery({
-    queryKey: ['seller-sales', startDate, endDate],
+    queryKey: ['seller-sales', queryKeyPart, startDate, endDate],
     queryFn: async () => {
       try {
         const response = await sellerApi.mySales({ page: 1, limit: 10, startDate, endDate });

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, Download, Filter, TrendingUp, Wallet, HelpCircle } from 'lucide-react';
+import { Calendar, Download, Filter, Info, TrendingUp, Wallet, HelpCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../../hooks/useAuth';
@@ -8,6 +8,12 @@ import { useDateRange } from '../../hooks/useDateRange';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { Input } from '../ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../ui/dialog';
 import {
   Select,
   SelectContent,
@@ -59,6 +65,7 @@ export default function SalesHistoryPage() {
   const [filterPayment, setFilterPayment] = useState('');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
+  const [netProfitModalOpen, setNetProfitModalOpen] = useState(false);
 
   // Verificar se é vendedor
   const isSeller = user?.role === 'vendedor';
@@ -547,12 +554,68 @@ export default function SalesHistoryPage() {
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">Receita - COGS - Contas - Perdas - Juros</p>
                 </div>
-                <div className={`h-12 w-12 rounded-full flex items-center justify-center ${netProfit >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                  <Wallet className={`h-6 w-6 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => setNetProfitModalOpen(true)}
+                    title="Ver cálculo detalhado do lucro líquido"
+                  >
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  <div className={`h-12 w-12 rounded-full flex items-center justify-center ${netProfit >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                    <Wallet className={`h-6 w-6 ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                  </div>
                 </div>
               </div>
             </Card>
           )}
+
+          {/* Modal de detalhes do lucro líquido */}
+          <Dialog open={netProfitModalOpen} onOpenChange={setNetProfitModalOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Cálculo do lucro líquido</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <p className="text-muted-foreground">
+                  Detalhamento do lucro líquido no período selecionado: o que entrou (receita) e o que foi descontado.
+                </p>
+                <dl className="space-y-2 border-t pt-3">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted-foreground">Receita total (vendas)</dt>
+                    <dd className="font-medium tabular-nums text-green-600 dark:text-green-400">
+                      + {formatCurrency(netProfitData?.totalRevenue ?? 0)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
+                    <dt>(−) Custo das vendas (CMV)</dt>
+                    <dd className="tabular-nums">− {formatCurrency(netProfitData?.totalCostOfGoods ?? 0)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
+                    <dt>(−) Contas a pagar (pagas no período)</dt>
+                    <dd className="tabular-nums">− {formatCurrency(netProfitData?.totalBills ?? 0)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
+                    <dt>(−) Perdas de produtos</dt>
+                    <dd className="tabular-nums">− {formatCurrency(netProfitData?.totalLosses ?? 0)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
+                    <dt>(−) Juros de parcelamento</dt>
+                    <dd className="tabular-nums">− {formatCurrency(netProfitData?.totalInstallmentInterest ?? 0)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 border-t pt-3 font-semibold">
+                    <dt>Lucro líquido</dt>
+                    <dd className={`tabular-nums ${(netProfitData?.netProfit ?? 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {formatCurrency(netProfitData?.netProfit ?? 0)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       )}
 

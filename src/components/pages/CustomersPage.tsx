@@ -5,7 +5,6 @@ import { Button } from '../ui/button';
 import { InputWithIcon } from '../ui/input';
 import { Card } from '../ui/card';
 import { useAuth } from '../../hooks/useAuth';
-import { useDateRange } from '../../hooks/useDateRange';
 import { customerApi } from '../../lib/api-endpoints';
 import { CustomersTable } from '../customers/customers-table';
 import { CustomerDialog } from '../customers/customer-dialog';
@@ -15,21 +14,20 @@ import { customersHelpTitle, customersHelpDescription, customersHelpIcon, getCus
 
 export default function CustomersPage() {
   const { user, api } = useAuth();
-  const { queryKeyPart } = useDateRange();
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
 
   const { data: customersResponse, isLoading, refetch, error } = useQuery({
-    queryKey: ['customers', queryKeyPart, search, user?.companyId],
+    queryKey: ['customers', search, user?.companyId],
     queryFn: async () => {
       console.log('[CustomersPage] Buscando clientes com search:', search, 'companyId:', user?.companyId);
       console.log('[CustomersPage] Usuário completo:', user);
       try {
         const response = await customerApi.list({
           search,
-          companyId: user?.companyId ?? undefined
+          companyId: user?.companyId ?? undefined,
         });
         console.log('[CustomersPage] Resposta da API:', response);
         return response;

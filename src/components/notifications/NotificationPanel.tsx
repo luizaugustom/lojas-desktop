@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NotificationItem } from './NotificationItem';
+import { NotificationDetailModal } from './NotificationDetailModal';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -24,6 +25,7 @@ export function NotificationPanel() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
+  const [detailNotification, setDetailNotification] = useState<Notification | null>(null);
 
   useEffect(() => {
     loadNotifications();
@@ -133,26 +135,24 @@ export function NotificationPanel() {
             <RefreshCw className="h-4 w-4" />
           </Button>
           {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleMarkAllAsRead}
-              title="Marcar todas como lidas"
-            >
-              <CheckCheck className="h-4 w-4 mr-2" />
-              Marcar todas
-            </Button>
+<Button
+            variant="ghost"
+            size="sm"
+            onClick={handleMarkAllAsRead}
+            title="Marcar todas como lidas"
+          >
+            <CheckCheck className="h-4 w-4" />
+          </Button>
           )}
           {readCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDeleteRead}
-              title="Remover notificações lidas"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Remover lidas
-            </Button>
+<Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDeleteRead}
+            title="Remover notificações lidas"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
           )}
         </div>
       </div>
@@ -192,6 +192,7 @@ export function NotificationPanel() {
                     onRead={handleMarkAsRead}
                     onDelete={handleDelete}
                     onAction={handleAction}
+                    onClick={() => setDetailNotification(notification)}
                   />
                 ))}
               </div>
@@ -199,6 +200,13 @@ export function NotificationPanel() {
           )}
         </TabsContent>
       </Tabs>
+
+      <NotificationDetailModal
+        notification={detailNotification}
+        open={!!detailNotification}
+        onClose={() => setDetailNotification(null)}
+        onAction={handleAction}
+      />
     </div>
   );
 }

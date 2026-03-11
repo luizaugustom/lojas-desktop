@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'react-hot-toast';
-import { Trash2, Plus, AlertTriangle } from 'lucide-react';
+import { Trash2, Plus, AlertTriangle, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { handleApiError } from '../../lib/handleApiError';
-import { saleApi, sellerApi, companyApi, storeCreditApi } from '../../lib/api-endpoints';
+import { saleApi, sellerApi, companyApi, storeCreditApi, customerApi } from '../../lib/api-endpoints';
 import { saleSchema } from '../../lib/validations';
 import { formatCurrency, calculateChange, calculateMultiplePaymentChange, isValidId, validateUUID } from '../../lib/utils-clean';
 import { useCartStore } from '../../store/cart-store';
@@ -31,8 +31,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { printContent as printContentService } from '../../lib/print-service';
 import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import { CardBrandSelect } from '../ui/card-brand-select';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
-import type { CreateSaleDto, PaymentMethod, PaymentMethodDetail, InstallmentData, Seller } from '../../types';
+import type { CreateSaleDto, PaymentMethod, PaymentMethodDetail, InstallmentData, Seller, Customer } from '../../types';
 
 export interface InitialClientForCheckout {
   name?: string;
@@ -77,6 +78,9 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
   const [hasValidFiscalConfig, setHasValidFiscalConfig] = useState<boolean | null>(null);
   const [loadingFiscalConfig, setLoadingFiscalConfig] = useState(false);
   const [companyConfig, setCompanyConfig] = useState<{ maxInstallments?: number }>({ maxInstallments: 12 });
+  const [emitOnlyNfe, setEmitOnlyNfe] = useState(false);
+  const [emitBoleto, setEmitBoleto] = useState(false);
+  const [boletoDueDate, setBoletoDueDate] = useState('');
   // Cache do conteúdo de impressão para reimpressão
   const [cachedPrintContent, setCachedPrintContent] = useState<{ content: string | { storeCopy: string; customerCopy: string; isInstallmentSale: boolean }; type: string } | null>(null);
   const [currentPrintType, setCurrentPrintType] = useState<string | null>(null);
@@ -101,6 +105,11 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
     remainingBalance: number;
     customerId: string;
   } | null>(null);
+  // Busca de clientes no checkout
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([]);
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const { items, discount, getTotal, getSubtotal, clearCart } = useCartStore();
   const { user, isAuthenticated, api } = useAuth();
 
@@ -136,11 +145,24 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
     }
   };
 
+  const loadFiscalConfigForCheckout = async () => {
+    if (!isCompany) return;
+    try {
+      const response = await companyApi.getFiscalConfig();
+      const config = response.data;
+      setEmitOnlyNfe(!!config?.emitOnlyNfe);
+    } catch (error) {
+      console.error('Erro ao carregar configuração fiscal:', error);
+      setEmitOnlyNfe(false);
+    }
+  };
+
   useEffect(() => {
     if (open && isCompany) {
       loadSellers();
       checkFiscalConfig();
       loadCompanyConfig();
+      loadFiscalConfigForCheckout();
     }
   }, [open, isCompany]);
 
@@ -168,6 +190,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       setValue('clientCpfCnpj', cpfCnpj);
       setSelectedCustomerName(name);
       setSelectedCustomerCpfCnpj(cpfCnpj);
+      setCustomerSearchTerm(name);
     }
   }, [open, initialClient, setValue]);
 
@@ -180,6 +203,10 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       setShowCreditCardInstallmentModal(false);
       setCreditCardInstallmentPaymentIndex(null);
       setSelectedCustomerId('');
+      setSelectedCustomerName('');
+      setSelectedCustomerCpfCnpj('');
+      setValue('clientName', '');
+      setValue('clientCpfCnpj', '');
       setSelectedSellerId('');
       setShowPrintConfirmation(false);
       setCreatedSaleId(null);
@@ -197,6 +224,12 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       setShowBillets(false);
       setShowBilletPrintConfirmation(false);
       setPendingPrintContent(null);
+      setEmitBoleto(false);
+      setBoletoDueDate('');
+      // Resetar busca de clientes
+      setCustomerSearchTerm('');
+      setCustomerSearchResults([]);
+      setCustomerSearchOpen(false);
     }
   }, [open]);
 
@@ -212,6 +245,65 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       setStoreCreditAmount(0);
     }
   }, [selectedCustomerCpfCnpj]);
+
+  // Busca de clientes com debounce (300 ms)
+  useEffect(() => {
+    if (customerSearchTerm.length < 2) {
+      setCustomerSearchResults([]);
+      setCustomerSearchLoading(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setCustomerSearchLoading(true);
+      try {
+        const response = await customerApi.list({ search: customerSearchTerm, limit: 10 });
+        const data = response.data;
+        const list = Array.isArray(data)
+          ? data
+          : data?.data
+            ? data.data
+            : data?.customers
+              ? data.customers
+              : Array.isArray(data?.items)
+                ? data.items
+                : [];
+        setCustomerSearchResults(list as Customer[]);
+      } catch (error) {
+        console.error('Erro ao buscar clientes:', error);
+        setCustomerSearchResults([]);
+      } finally {
+        setCustomerSearchLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [customerSearchTerm]);
+
+  const handleSelectCustomer = useCallback(
+    (customer: Customer) => {
+      const name = customer.name || '';
+      const cpfCnpj = customer.cpfCnpj ?? '';
+      setValue('clientName', name);
+      setValue('clientCpfCnpj', cpfCnpj);
+      setSelectedCustomerId(customer.id);
+      setSelectedCustomerName(name);
+      setSelectedCustomerCpfCnpj(cpfCnpj);
+      setCustomerSearchTerm(name);
+      setCustomerSearchResults([]);
+      setCustomerSearchOpen(false);
+    },
+    [setValue]
+  );
+
+  const handleClearCustomer = useCallback(() => {
+    setValue('clientName', '');
+    setValue('clientCpfCnpj', '');
+    setSelectedCustomerId('');
+    setSelectedCustomerName('');
+    setSelectedCustomerCpfCnpj('');
+    setCustomerSearchTerm('');
+    setCustomerSearchResults([]);
+    setCustomerSearchOpen(false);
+  }, [setValue]);
 
   const loadStoreCreditBalance = async (cpfCnpj: string) => {
     setLoadingStoreCredit(true);
@@ -899,6 +991,22 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       return;
     }
 
+    // Emissão somente NFe: cliente obrigatório
+    if (emitOnlyNfe) {
+      if (!data.clientName?.trim() || !data.clientCpfCnpj?.trim()) {
+        toast.error('Para emissão somente NFe, informe o nome e CPF/CNPJ do cliente.');
+        return;
+      }
+      if (emitBoleto && !selectedCustomerId) {
+        toast.error('Para emitir boleto, selecione um cliente cadastrado.');
+        return;
+      }
+      if (emitBoleto && !boletoDueDate.trim()) {
+        toast.error('Informe a data de vencimento preferencial do boleto.');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const saleData: CreateSaleDto = {
@@ -985,6 +1093,11 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         clientName: data.clientName,
         clientCpfCnpj: data.clientCpfCnpj,
         sellerId: selectedSellerId || undefined,
+        ...(emitOnlyNfe && {
+          emitBoleto: emitBoleto,
+          boletoDueDate: emitBoleto && boletoDueDate ? boletoDueDate : undefined,
+          boletoCustomerId: emitBoleto && selectedCustomerId ? selectedCustomerId : undefined,
+        }),
       };
       
       if (selectedSellerId) {
@@ -1041,6 +1154,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       const printContent = saleData_resp?.printContent;
       const printType = saleData_resp?.printType || 'nfce';
       const billetsPdfBase64 = saleData_resp?.billetsPdf;
+      const boletoPdfBase64 = saleData_resp?.boletoPdf;
       
       if (!saleId) {
         console.error('[Checkout] Venda criada mas ID não foi retornado:', response);
@@ -1052,6 +1166,20 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       toast.success('Venda realizada com sucesso!');
       
       setCreatedSaleId(saleId);
+
+      // Resposta em modo NFe: não abrir fluxo de impressão NFC-e; opção de download do boleto
+      if (printType === 'nfe') {
+        if (saleData_resp?.warning) {
+          toast(saleData_resp.warning, { icon: '⚠️', duration: 5000 });
+        }
+        if (boletoPdfBase64) {
+          setBilletsPdf(boletoPdfBase64);
+          setShowBilletPrintConfirmation(true);
+        } else {
+          handlePrintComplete();
+        }
+        return;
+      }
 
       // Se houver saldo restante de crédito, mostrar modal de confirmação PRIMEIRO
       if (creditUsed > 0 && remainingCreditBalance > 0.01 && storeCreditCustomerId) {
@@ -1154,12 +1282,83 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="clientName">Nome do Cliente (Opcional)</Label>
-              <Input id="clientName" {...register('clientName')} disabled={loading} />
+              <Label htmlFor="clientName">
+                Nome do Cliente {emitOnlyNfe ? '*' : '(Opcional)'}
+              </Label>
+              <div className="flex gap-2">
+                <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <div className="flex-1 relative">
+                      <Input
+                        id="clientName"
+                        type="text"
+                        placeholder="Buscar cliente por nome ou CPF (ou digite um nome)..."
+                        value={customerSearchTerm}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setCustomerSearchTerm(value);
+                          setValue('clientName', value);
+                          setCustomerSearchOpen(true);
+                          if (value.length < 2) setCustomerSearchResults([]);
+                          if (selectedCustomerId && value !== selectedCustomerName) {
+                            setSelectedCustomerId('');
+                            setSelectedCustomerName('');
+                            setSelectedCustomerCpfCnpj('');
+                          }
+                        }}
+                        onFocus={() => customerSearchTerm.length >= 2 && customerSearchResults.length > 0 && setCustomerSearchOpen(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') setCustomerSearchOpen(false);
+                        }}
+                        disabled={loading}
+                        className="pr-8"
+                      />
+                    </div>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    {customerSearchLoading ? (
+                      <div className="p-3 text-sm text-muted-foreground">Buscando...</div>
+                    ) : customerSearchResults.length === 0 ? (
+                      customerSearchTerm.length >= 2 ? (
+                        <div className="p-3 text-sm text-muted-foreground">Nenhum cliente encontrado. O nome digitado será usado.</div>
+                      ) : null
+                    ) : (
+                      <ul className="max-h-60 overflow-auto py-1">
+                        {customerSearchResults.map((c) => (
+                          <li key={c.id}>
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+                              onClick={() => handleSelectCustomer(c)}
+                            >
+                              <span className="font-medium">{c.name}</span>
+                              {c.cpfCnpj ? (
+                                <span className="block text-xs text-muted-foreground">{c.cpfCnpj}</span>
+                              ) : null}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleClearCustomer}
+                  disabled={loading}
+                  title="Limpar cliente"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="clientCpfCnpj">CPF/CNPJ do Cliente (Opcional)</Label>
+              <Label htmlFor="clientCpfCnpj">
+                CPF/CNPJ do Cliente {emitOnlyNfe ? '*' : '(Opcional)'}
+              </Label>
               <Input
                 id="clientCpfCnpj"
                 placeholder="000.000.000-00"
@@ -1202,6 +1401,42 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
                 </div>
               )}
             </div>
+
+            {emitOnlyNfe && (
+              <div className="rounded-lg border p-4 space-y-4 bg-muted/30">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="emitBoleto"
+                    checked={emitBoleto}
+                    onChange={(e) => setEmitBoleto(e.target.checked)}
+                    disabled={loading}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="emitBoleto" className="text-sm font-medium cursor-pointer">
+                    Emitir boleto para esta venda?
+                  </Label>
+                </div>
+                {emitBoleto && (
+                  <div className="space-y-2">
+                    <Label htmlFor="boletoDueDate">Data de vencimento preferencial *</Label>
+                    <Input
+                      id="boletoDueDate"
+                      type="date"
+                      value={boletoDueDate}
+                      onChange={(e) => setBoletoDueDate(e.target.value)}
+                      disabled={loading}
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                    {emitBoleto && !selectedCustomerId && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Selecione um cliente cadastrado (busque pelo CPF/CNPJ) para emitir o boleto.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isCompany && (
               <div className="space-y-2">

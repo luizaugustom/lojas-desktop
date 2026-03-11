@@ -31,6 +31,7 @@ const lossFormSchema = z.object({
   reason: z.string().min(1, 'Motivo é obrigatório'),
   notes: z.string().optional(),
   sellerId: z.string().optional(),
+  lossDate: z.string().min(1, 'Data da perda é obrigatória'),
 });
 
 type LossFormData = z.infer<typeof lossFormSchema>;
@@ -54,6 +55,9 @@ export function ProductLossDialog({ open, onClose, initialProduct }: ProductLoss
     watch,
   } = useForm<LossFormData>({
     resolver: zodResolver(lossFormSchema),
+    defaultValues: {
+      lossDate: new Date().toISOString().slice(0, 10),
+    },
   });
 
   const selectedProductId = watch('productId');
@@ -82,9 +86,12 @@ export function ProductLossDialog({ open, onClose, initialProduct }: ProductLoss
   useEffect(() => {
     if (!open) {
       reset();
-    } else if (initialProduct) {
-      // Se houver um produto inicial, pré-selecionar
-      setValue('productId', initialProduct.id);
+    } else {
+      const today = new Date().toISOString().slice(0, 10);
+      setValue('lossDate', today);
+      if (initialProduct) {
+        setValue('productId', initialProduct.id);
+      }
     }
   }, [open, reset, initialProduct, setValue]);
 
@@ -92,12 +99,14 @@ export function ProductLossDialog({ open, onClose, initialProduct }: ProductLoss
     try {
       setLoading(true);
 
+      const lossDateISO = data.lossDate ? new Date(data.lossDate + 'T12:00:00.000Z').toISOString() : undefined;
       await api.post('/product-losses', {
         productId: data.productId,
         quantity: data.quantity,
         reason: data.reason,
         notes: data.notes || undefined,
         sellerId: data.sellerId || undefined,
+        lossDate: lossDateISO,
       });
 
       toast.success('Perda registrada com sucesso!');
@@ -144,6 +153,19 @@ export function ProductLossDialog({ open, onClose, initialProduct }: ProductLoss
               <p className="text-sm text-muted-foreground">
                 Estoque disponível: {selectedProduct.stockQuantity} unidades
               </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="lossDate">Data da perda *</Label>
+            <Input
+              id="lossDate"
+              type="date"
+              {...register('lossDate')}
+              disabled={loading}
+            />
+            {errors.lossDate && (
+              <p className="text-sm text-destructive">{errors.lossDate.message}</p>
             )}
           </div>
 

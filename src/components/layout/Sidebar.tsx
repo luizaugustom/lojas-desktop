@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Package,
@@ -23,10 +24,12 @@ import {
   ArrowLeftRight,
   Briefcase,
   BarChart3,
+  Banknote,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/ui-store';
 import { useAuth } from '@/contexts/AuthContext';
+import { companyApi } from '@/lib/api-endpoints';
 import logoImage from '@/logosvg.svg';
 
 const navigation = [
@@ -45,6 +48,7 @@ const navigation = [
   { name: 'Transferência de estoque', route: 'stock-transfer', icon: ArrowLeftRight, roles: ['gestor'] },
   { name: 'Notas Fiscais', route: 'invoices', icon: Receipt, roles: ['empresa'] },
   { name: 'Notas de Entrada', route: 'inbound-invoices', icon: FileDown, roles: ['empresa'] },
+  { name: 'Boletos', route: 'boletos', icon: Banknote, roles: ['empresa', 'vendedor'] },
   { name: 'Empresas', route: 'companies', icon: Building2, roles: ['admin'] },
   { name: 'Gestores', route: 'gestores', icon: Briefcase, roles: ['admin'] },
   { name: 'Testes da API', route: 'test-api', icon: TestTube, roles: ['admin'] },
@@ -60,6 +64,16 @@ interface SidebarProps {
 export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
   const { sidebarOpen, setSidebarOpen, sidebarCollapsed, toggleSidebarCollapsed } = useUIStore();
   const { user } = useAuth();
+
+  const { data: companyData } = useQuery({
+    queryKey: ['my-company-sidebar', user?.companyId],
+    queryFn: async () => {
+      const res = await companyApi.myCompany();
+      return res.data as { boletoEnabled?: boolean };
+    },
+    enabled: !!user && (user.role === 'empresa' || user.role === 'vendedor'),
+  });
+  const boletoEnabled = companyData?.boletoEnabled === true;
 
   const filteredNavigation = navigation.filter((item) => {
     if (!user) {
@@ -91,6 +105,11 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
     // Notas Fiscais: empresa sempre; vendedor apenas se nfeEmissionEnabled
     if (item.name === 'Notas Fiscais') {
       return normalizedRole === 'empresa' || (normalizedRole === 'vendedor' && user.nfeEmissionEnabled === true);
+    }
+
+    // Boletos: apenas se empresa/vendedor e company.boletoEnabled
+    if (item.name === 'Boletos') {
+      return item.roles.includes(normalizedRole) && boletoEnabled === true;
     }
 
     return item.roles.includes(normalizedRole);

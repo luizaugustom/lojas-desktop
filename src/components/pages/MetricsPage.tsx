@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDateRange } from '../../hooks/useDateRange';
 import { formatCurrency } from '../../lib/utils';
 import {
   LineChart,
@@ -92,10 +93,17 @@ function MetricCard({ title, value, change, icon: Icon, trend = 'neutral' }: Met
 
 export default function MetricsPage() {
   const { user } = useAuth();
+  const { queryParams, queryKeyPart, dateRange: headerDateRange, isActive: isHeaderFilterActive } = useDateRange();
   const [companyId, setCompanyId] = useState('');
   const [period, setPeriod] = useState<PeriodKey>('30d');
 
-  const dateRange = useMemo(() => getPeriodDateRange(period), [period]);
+  // Usar período do header quando filtro ativo; senão usar o período local (7d/30d/90d)
+  const dateRange = useMemo(() => {
+    if (isHeaderFilterActive && queryParams.startDate && queryParams.endDate) {
+      return { startDate: queryParams.startDate, endDate: queryParams.endDate };
+    }
+    return getPeriodDateRange(period);
+  }, [isHeaderFilterActive, queryParams.startDate, queryParams.endDate, period]);
 
   const { data: companiesData } = useQuery({
     queryKey: ['manager', 'my-companies'],
@@ -105,15 +113,25 @@ export default function MetricsPage() {
   const gestorCompanies = Array.isArray(companiesData) ? companiesData : [];
 
   const { data: metrics, isLoading: metricsLoading, error: metricsError } = useQuery({
-    queryKey: ['dashboard', 'metrics', 'gestor', companyId],
-    queryFn: () => dashboardApi.metrics(companyId || undefined).then((r) => r.data),
+    queryKey: ['dashboard', 'metrics', 'gestor', companyId, dateRange.startDate, dateRange.endDate],
+    queryFn: () =>
+      dashboardApi
+        .metrics(companyId || undefined, dateRange.startDate, dateRange.endDate)
+        .then((r) => r.data),
     enabled: user?.role === 'gestor',
   });
 
   const { data: trendsData, isLoading: trendsLoading } = useQuery({
-    queryKey: ['dashboard', 'metrics', 'trends', companyId, period],
+    queryKey: ['dashboard', 'metrics', 'trends', companyId, period, dateRange.startDate, dateRange.endDate],
     queryFn: () =>
-      dashboardApi.trends({ companyId: companyId || undefined, period }).then((r) => r.data),
+      dashboardApi
+        .trends({
+          companyId: companyId || undefined,
+          period: isHeaderFilterActive ? undefined : period,
+          startDate: isHeaderFilterActive ? dateRange.startDate : undefined,
+          endDate: isHeaderFilterActive ? dateRange.endDate : undefined,
+        })
+        .then((r) => r.data),
     enabled: user?.role === 'gestor',
   });
 
@@ -183,25 +201,35 @@ export default function MetricsPage() {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Período:</span>
-            <div className="flex rounded-md border border-input bg-background overflow-hidden">
-              {PERIOD_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setPeriod(opt.value)}
-                  className={`px-3 py-2 text-sm font-medium transition-colors ${
-                    period === opt.value
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+          {isHeaderFilterActive && headerDateRange.startDate && headerDateRange.endDate ? (
+            <p className="text-sm text-muted-foreground">
+              Período: filtro do header (
+              {headerDateRange.startDate.getDate().toString().padStart(2, '0')}/
+              {(headerDateRange.startDate.getMonth() + 1).toString().padStart(2, '0')} -{' '}
+              {headerDateRange.endDate.getDate().toString().padStart(2, '0')}/
+              {(headerDateRange.endDate.getMonth() + 1).toString().padStart(2, '0')})
+            </p>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Período:</span>
+              <div className="flex rounded-md border border-input bg-background overflow-hidden">
+                {PERIOD_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPeriod(opt.value)}
+                    className={`px-3 py-2 text-sm font-medium transition-colors ${
+                      period === opt.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -231,10 +259,10 @@ export default function MetricsPage() {
               icon={ShoppingCart}
             />
             <MetricCard
-              title="Vendas este mês"
+              title={isHeaderFilterActive ? 'Vendas no período' : 'Vendas este mês'}
               value={formatCurrency(m.sales?.thisMonth?.value ?? 0)}
               change={m.sales?.growth?.valuePercentage}
-              trend={m.sales?.growth?.valuePercentage >= 0 ? 'up' : 'down'}
+              trend={m.sales?.growth?.valuePercentage != null ? (m.sales.growth.valuePercentage >= 0 ? 'up' : 'down') : 'neutral'}
               icon={TrendingUp}
             />
             <MetricCard
@@ -366,7 +394,12 @@ export default function MetricsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Resumo por loja</CardTitle>
-            <CardDescription>Período: {PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? period}</CardDescription>
+            <CardDescription>
+              Período:{' '}
+              {isHeaderFilterActive && headerDateRange.startDate && headerDateRange.endDate
+                ? `${headerDateRange.startDate.getDate().toString().padStart(2, '0')}/${(headerDateRange.startDate.getMonth() + 1).toString().padStart(2, '0')} - ${headerDateRange.endDate.getDate().toString().padStart(2, '0')}/${(headerDateRange.endDate.getMonth() + 1).toString().padStart(2, '0')}`
+                : PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? period}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>

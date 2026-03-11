@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Bell, Lock, Save, Upload, X, Image, MessageSquare, Store, ExternalLink, Settings as SettingsIcon, Percent, CreditCard, Plus, Edit2, Trash2, AlertCircle, HelpCircle } from 'lucide-react';
+import { User, Bell, Lock, Save, Upload, X, Image, MessageSquare, Store, ExternalLink, Settings as SettingsIcon, Percent, CreditCard, Plus, Edit2, Trash2, AlertCircle, HelpCircle, Banknote, FileText } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -138,6 +138,15 @@ export default function SettingsPage() {
     ibptToken: '',
   });
 
+  // Estado das configurações globais Boleto Cloud (apenas para admin)
+  const [adminBoletoCloudConfig, setAdminBoletoCloudConfig] = useState<any>(null);
+  const [loadingAdminBoletoCloud, setLoadingAdminBoletoCloud] = useState(false);
+  const [savingAdminBoletoCloud, setSavingAdminBoletoCloud] = useState(false);
+  const [adminBoletoCloudForm, setAdminBoletoCloudForm] = useState({
+    boletoCloudApiKey: '',
+    boletoCloudSandbox: 'false' as 'true' | 'false',
+  });
+
   // Estado das configurações de parcelamento
   const [installmentConfig, setInstallmentConfig] = useState<{
     installmentInterestRates: Record<string, number | undefined>;
@@ -147,6 +156,15 @@ export default function SettingsPage() {
     maxInstallments: 12,
   });
   const [savingInstallmentConfig, setSavingInstallmentConfig] = useState(false);
+
+  // Estado das configurações de boleto
+  const [boletoConfig, setBoletoConfig] = useState({
+    boletoEnabled: false,
+    useBankBoletoForInstallments: false,
+    bankBoletoProvider: '' as string,
+    bankBoletoConfigForm: {} as Record<string, string>,
+  });
+  const [savingBoletoConfig, setSavingBoletoConfig] = useState(false);
 
   // Estado das taxas de cartão
   interface CardAcquirerRate {
@@ -292,12 +310,44 @@ export default function SettingsPage() {
     }
   };
 
+  const loadAdminBoletoCloudConfig = async () => {
+    try {
+      setLoadingAdminBoletoCloud(true);
+      const response = await adminApi.getBoletoCloudConfig();
+      setAdminBoletoCloudConfig(response.data);
+      setAdminBoletoCloudForm({
+        boletoCloudApiKey: response.data?.boletoCloudApiKey || '',
+        boletoCloudSandbox: (response.data?.boletoCloudSandbox || 'false') as 'true' | 'false',
+      });
+    } catch (error) {
+      console.error('Erro ao carregar configuração Boleto Cloud:', error);
+      setAdminBoletoCloudConfig(null);
+    } finally {
+      setLoadingAdminBoletoCloud(false);
+    }
+  };
+
+  const handleSaveAdminBoletoCloudConfig = async () => {
+    try {
+      setSavingAdminBoletoCloud(true);
+      await adminApi.updateBoletoCloudConfig(adminBoletoCloudForm);
+      toast.success('Configuração global do Boleto Cloud salva com sucesso!');
+      await loadAdminBoletoCloudConfig();
+    } catch (error: any) {
+      console.error('Erro ao salvar configuração Boleto Cloud:', error);
+      handleApiError(error);
+    } finally {
+      setSavingAdminBoletoCloud(false);
+    }
+  };
+
   // Carregar preferências na montagem
   useEffect(() => {
     if (user) {
       loadNotificationPreferences();
       if (user.role === 'admin') {
         loadAdminFocusNfeConfig();
+        loadAdminBoletoCloudConfig();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -497,6 +547,7 @@ export default function SettingsPage() {
           systemUpdates: false,
           emailEnabled: false,
           inAppEnabled: false,
+          desktopNotificationsEnabled: false,
         });
         return;
       }
@@ -510,7 +561,9 @@ export default function SettingsPage() {
   const handleToggleNotification = async (field: string, value: boolean) => {
     try {
       setUpdatingPreferences(true);
-      
+      if (field === 'desktopNotificationsEnabled' && value && 'Notification' in window && Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
       const updates = { [field]: value };
       console.log('Atualizando preferência:', { field, value, updates });
       
@@ -837,8 +890,41 @@ export default function SettingsPage() {
         installmentInterestRates: defaultRates,
         maxInstallments: data?.maxInstallments ?? 12,
       });
+      setBoletoConfig((prev) => ({
+        ...prev,
+        boletoEnabled: !!data?.boletoEnabled,
+        useBankBoletoForInstallments: !!data?.useBankBoletoForInstallments,
+        bankBoletoProvider: data?.bankBoletoProvider || '',
+      }));
     } catch (error) {
       console.error('Erro ao carregar configurações de parcelamento:', error);
+    }
+  };
+
+  const handleSaveBoletoConfig = async () => {
+    try {
+      setSavingBoletoConfig(true);
+      const payload: Record<string, unknown> = {
+        boletoEnabled: boletoConfig.boletoEnabled,
+        useBankBoletoForInstallments: boletoConfig.useBankBoletoForInstallments,
+        bankBoletoProvider: boletoConfig.bankBoletoProvider || undefined,
+      };
+      const form = boletoConfig.bankBoletoConfigForm;
+      if (Object.keys(form).length > 0) {
+        const cleaned: Record<string, string> = {};
+        for (const [k, v] of Object.entries(form)) {
+          if (v != null && String(v).trim() !== '') cleaned[k] = String(v).trim();
+        }
+        if (Object.keys(cleaned).length > 0) payload.bankBoletoConfig = cleaned;
+      }
+      await companyApi.updateMyCompany(payload);
+      toast.success('Configurações de boleto salvas!');
+      loadCompanyData();
+      loadInstallmentConfig();
+    } catch (error: any) {
+      handleApiError(error);
+    } finally {
+      setSavingBoletoConfig(false);
     }
   };
 
@@ -1170,6 +1256,7 @@ export default function SettingsPage() {
             <a href="#catalogo-titulo"><Button variant="outline" size="sm">Catálogo</Button></a>
             <a href="#mensagem-cobranca"><Button variant="outline" size="sm">Mensagem de Cobrança</Button></a>
             <a href="#parcelamento"><Button variant="outline" size="sm">Configurações de Parcelamento</Button></a>
+            <a href="#boletos"><Button variant="outline" size="sm">Boletos</Button></a>
             <a href="#taxas-cartao"><Button variant="outline" size="sm">Taxas de Cartão</Button></a>
             <a href="#notificacoes-fim"><Button variant="outline" size="sm">Notificações</Button></a>
           </div>
@@ -1304,6 +1391,82 @@ export default function SettingsPage() {
                           Salvar Configuração Global
                         </>
                       )}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Configuração Global Boleto Cloud - Apenas para Admin */}
+        {user?.role === 'admin' && (
+          <Card className="scroll-mt-24" id="admin-boleto-cloud">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Configuração Boleto Cloud
+              </CardTitle>
+              <CardDescription>
+                API Key global do Boleto Cloud. Cada empresa configura apenas o token da sua conta bancária nas suas próprias configurações.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {loadingAdminBoletoCloud ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                  <p className="mt-2 text-sm text-muted-foreground">Carregando configuração...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <p className="text-sm text-blue-900 dark:text-blue-100 font-semibold mb-1">
+                      Sobre a Configuração Global
+                    </p>
+                    <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
+                      <li>• Esta API Key será usada por todas as empresas ao emitir boletos via Boleto Cloud</li>
+                      <li>• Cada empresa configura apenas o token da sua conta bancária (painel Boleto Cloud)</li>
+                      <li>• Uma única conta Boleto Cloud pode ter várias contas bancárias (uma por empresa)</li>
+                    </ul>
+                  </div>
+                  <div className="grid gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-boletoCloudApiKey">API Key Boleto Cloud *</Label>
+                      <Input
+                        id="admin-boletoCloudApiKey"
+                        type="password"
+                        value={adminBoletoCloudForm.boletoCloudApiKey}
+                        onChange={(e) => setAdminBoletoCloudForm({ ...adminBoletoCloudForm, boletoCloudApiKey: e.target.value })}
+                        placeholder="Digite a API Key do Boleto Cloud"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Obtenha em: painel Boleto Cloud → Dados do usuário → Gerar token da API
+                      </p>
+                      {adminBoletoCloudConfig?.hasBoletoCloudApiKey && (
+                        <p className="text-xs text-green-600 dark:text-green-400">API Key global configurada</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Ambiente Sandbox</Label>
+                      <Select
+                        value={adminBoletoCloudForm.boletoCloudSandbox}
+                        onValueChange={(value) => setAdminBoletoCloudForm({ ...adminBoletoCloudForm, boletoCloudSandbox: value as 'true' | 'false' })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="false">Produção</SelectItem>
+                          <SelectItem value="true">Sandbox (testes)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      onClick={handleSaveAdminBoletoCloudConfig}
+                      disabled={savingAdminBoletoCloud}
+                      className="w-full"
+                    >
+                      {savingAdminBoletoCloud ? 'Salvando...' : 'Salvar Configuração Boleto Cloud'}
                     </Button>
                   </div>
                 </>
@@ -2066,6 +2229,28 @@ export default function SettingsPage() {
                     )}
                   </Button>
 
+                  {/* Toggle Emitir somente NFe */}
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Emitir somente NFe nas vendas</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Quando ativo, todas as vendas emitirão NFe em vez de NFC-e. Na finalização será perguntado se deseja emitir boleto e a data de vencimento.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={fiscalConfig?.emitOnlyNfe ?? false}
+                      onCheckedChange={async (checked) => {
+                        try {
+                          await companyApi.updateFiscalConfig({ emitOnlyNfe: checked });
+                          setFiscalConfig((prev: any) => (prev ? { ...prev, emitOnlyNfe: checked } : prev));
+                          toast.success(checked ? 'Emissão somente NFe ativada' : 'Emissão somente NFe desativada');
+                        } catch (err: any) {
+                          handleApiError(err);
+                        }
+                      }}
+                    />
+                  </div>
+
                   {/* Informação sobre campos obrigatórios */}
                   <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                     <p className="text-sm text-blue-900 dark:text-blue-100 font-semibold mb-2">
@@ -2349,6 +2534,163 @@ export default function SettingsPage() {
                   <li>• O limite de parcelas será validado ao criar vendas a prazo</li>
                 </ul>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Configurações de Boletos - Apenas para Empresas */}
+        {user?.role === 'empresa' && (
+          <Card id="boletos" className="scroll-mt-24">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Banknote className="h-5 w-5" />
+                Configurações de Boletos
+              </CardTitle>
+              <CardDescription>
+                Ative o módulo de boletos e opcionalmente use boletos bancários reais nas vendas a prazo. Se desativado, as vendas a prazo usam boletos locais (PDF gerado no sistema).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Ativar boletos</Label>
+                    <p className="text-sm text-muted-foreground">Habilita a página de gestão de boletos e a opção de emitir boleto junto à nota fiscal.</p>
+                  </div>
+                  <Switch
+                    checked={boletoConfig.boletoEnabled}
+                    onCheckedChange={(checked) => setBoletoConfig((c) => ({ ...c, boletoEnabled: checked }))}
+                  />
+                </div>
+                {boletoConfig.boletoEnabled && (
+                  <>
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <Label className="text-base">Usar boletos bancários reais nas vendas a prazo</Label>
+                        <p className="text-sm text-muted-foreground">Se ativado, as parcelas das vendas a prazo geram boletos no banco. Se desativado, continua usando boletos locais (PDF).</p>
+                      </div>
+                      <Switch
+                        checked={boletoConfig.useBankBoletoForInstallments}
+                        onCheckedChange={(checked) => setBoletoConfig((c) => ({ ...c, useBankBoletoForInstallments: checked }))}
+                      />
+                    </div>
+                    {boletoConfig.useBankBoletoForInstallments && (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Provedor de boleto bancário</Label>
+                          <Select
+                            value={boletoConfig.bankBoletoProvider || 'none'}
+                            onValueChange={(v) => setBoletoConfig((c) => ({ ...c, bankBoletoProvider: v === 'none' ? '' : v }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o banco ou agregador" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Selecione...</SelectItem>
+                              <SelectItem value="BB">Banco do Brasil</SelectItem>
+                              <SelectItem value="BRADESCO">Bradesco</SelectItem>
+                              <SelectItem value="ITAU">Itaú</SelectItem>
+                              <SelectItem value="CAIXA">Caixa</SelectItem>
+                              <SelectItem value="INTER">Inter</SelectItem>
+                              <SelectItem value="SANTANDER">Santander</SelectItem>
+                              <SelectItem value="SICOOB">Sicoob</SelectItem>
+                              <SelectItem value="SICREDI">Sicredi</SelectItem>
+                              <SelectItem value="C6">C6 Bank</SelectItem>
+                              <SelectItem value="BOLETO_CLOUD">Boleto Cloud</SelectItem>
+                              <SelectItem value="ASAAS">Asaas</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
+                          <Label className="text-sm font-medium">Configuração da API do banco (opcional)</Label>
+                          {boletoConfig.bankBoletoProvider === 'BOLETO_CLOUD' && (
+                            <p className="text-xs text-muted-foreground">A API Key é configurada pelo administrador. Preencha apenas o token da sua conta bancária abaixo.</p>
+                          )}
+                          {boletoConfig.bankBoletoProvider !== 'BOLETO_CLOUD' && (
+                            <p className="text-xs text-muted-foreground">Preencha conforme a documentação do seu banco. Os dados são armazenados de forma segura.</p>
+                          )}
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {boletoConfig.bankBoletoProvider !== 'BOLETO_CLOUD' && (
+                              <>
+                                <div className="space-y-1">
+                                  <Label htmlFor="boleto-clientId" className="text-xs">Client ID / API Key</Label>
+                                  <Input
+                                    id="boleto-clientId"
+                                    type="password"
+                                    placeholder="••••••••"
+                                    value={boletoConfig.bankBoletoConfigForm.clientId ?? ''}
+                                    onChange={(e) => setBoletoConfig((c) => ({ ...c, bankBoletoConfigForm: { ...c.bankBoletoConfigForm, clientId: e.target.value } }))}
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label htmlFor="boleto-clientSecret" className="text-xs">Client Secret / Secret Key</Label>
+                                  <Input
+                                    id="boleto-clientSecret"
+                                    type="password"
+                                    placeholder="••••••••"
+                                    value={boletoConfig.bankBoletoConfigForm.clientSecret ?? ''}
+                                    onChange={(e) => setBoletoConfig((c) => ({ ...c, bankBoletoConfigForm: { ...c.bankBoletoConfigForm, clientSecret: e.target.value } }))}
+                                  />
+                                </div>
+                              </>
+                            )}
+                            {boletoConfig.bankBoletoProvider !== 'BOLETO_CLOUD' && (
+                              <>
+                                <div className="space-y-1">
+                                  <Label htmlFor="boleto-convenio" className="text-xs">Convênio</Label>
+                                  <Input
+                                    id="boleto-convenio"
+                                    value={boletoConfig.bankBoletoConfigForm.convenio ?? ''}
+                                    onChange={(e) => setBoletoConfig((c) => ({ ...c, bankBoletoConfigForm: { ...c.bankBoletoConfigForm, convenio: e.target.value } }))}
+                                    placeholder="Ex: 123456"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label htmlFor="boleto-carteira" className="text-xs">Carteira</Label>
+                                  <Input
+                                    id="boleto-carteira"
+                                    value={boletoConfig.bankBoletoConfigForm.carteira ?? ''}
+                                    onChange={(e) => setBoletoConfig((c) => ({ ...c, bankBoletoConfigForm: { ...c.bankBoletoConfigForm, carteira: e.target.value } }))}
+                                    placeholder="Ex: 09"
+                                  />
+                                </div>
+                              </>
+                            )}
+                            {boletoConfig.bankBoletoProvider === 'BOLETO_CLOUD' && (
+                              <>
+                                <div className="space-y-1 sm:col-span-2">
+                                  <Label htmlFor="boleto-contaToken" className="text-xs">Token da conta (Boleto Cloud) *</Label>
+                                  <Input
+                                    id="boleto-contaToken"
+                                    type="password"
+                                    placeholder="Token da conta bancária (painel Boleto Cloud → Conta → Gerar Token)"
+                                    value={boletoConfig.bankBoletoConfigForm.contaToken ?? ''}
+                                    onChange={(e) => setBoletoConfig((c) => ({ ...c, bankBoletoConfigForm: { ...c.bankBoletoConfigForm, contaToken: e.target.value } }))}
+                                  />
+                                  <p className="text-xs text-muted-foreground">Obrigatório para Boleto Cloud. Obtenha em: Conta → Consultar → Editar → Gerar Token.</p>
+                                </div>
+                                <div className="space-y-1 flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    id="boleto-sandbox"
+                                    checked={boletoConfig.bankBoletoConfigForm.sandbox === 'true'}
+                                    onChange={(e) => setBoletoConfig((c) => ({ ...c, bankBoletoConfigForm: { ...c.bankBoletoConfigForm, sandbox: e.target.checked ? 'true' : 'false' } }))}
+                                    className="rounded border-input"
+                                  />
+                                  <Label htmlFor="boleto-sandbox" className="text-xs cursor-pointer">Usar ambiente de testes (Sandbox)</Label>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+              <Button onClick={handleSaveBoletoConfig} disabled={savingBoletoConfig}>
+                {savingBoletoConfig ? 'Salvando...' : 'Salvar configurações de boleto'}
+              </Button>
             </CardContent>
           </Card>
         )}
@@ -2916,7 +3258,7 @@ export default function SettingsPage() {
                   </div>
 
                   {/* In-App */}
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-4">
                     <div>
                       <p className="font-medium">Notificações In-App</p>
                       <p className="text-sm text-muted-foreground">
@@ -2929,6 +3271,23 @@ export default function SettingsPage() {
                       disabled={updatingPreferences}
                     >
                       {notificationPreferences.inAppEnabled ? 'Ativado' : 'Desativado'}
+                    </Button>
+                  </div>
+
+                  {/* Notificações na área de trabalho */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Notificações na área de trabalho</p>
+                      <p className="text-sm text-muted-foreground">
+                        Exibir notificações do sistema na área de trabalho, mesmo com o app em segundo plano
+                      </p>
+                    </div>
+                    <Button
+                      variant={notificationPreferences.desktopNotificationsEnabled ?? false ? "default" : "outline"}
+                      onClick={() => handleToggleNotification('desktopNotificationsEnabled', !(notificationPreferences.desktopNotificationsEnabled ?? false))}
+                      disabled={updatingPreferences}
+                    >
+                      {notificationPreferences.desktopNotificationsEnabled ?? false ? 'Ativado' : 'Desativado'}
                     </Button>
                   </div>
                 </div>

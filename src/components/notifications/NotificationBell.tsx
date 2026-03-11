@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -13,25 +13,7 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [lastNotifiedAt, setLastNotifiedAt] = useState<string | null>(null);
-
-  useEffect(() => {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('lastNotificationAt') : null;
-    const initial = stored || new Date().toISOString();
-    setLastNotifiedAt(initial);
-
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-
-    loadUnreadCount();
-    checkNewNotifications(initial);
-
-    const interval = setInterval(() => {
-      loadUnreadCount();
-      checkNewNotifications();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const desktopNotificationsEnabledRef = useRef(false);
 
   const loadUnreadCount = async () => {
     try {
@@ -54,7 +36,7 @@ export function NotificationBell() {
         .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
       if (newOnes.length > 0) {
-        if ('Notification' in window && Notification.permission === 'granted') {
+        if (desktopNotificationsEnabledRef.current && 'Notification' in window && Notification.permission === 'granted') {
           newOnes.forEach((notification: any) => {
             new Notification(notification.title, { body: notification.message });
           });
@@ -69,6 +51,41 @@ export function NotificationBell() {
       console.error('Erro ao verificar novas notificações:', error);
     }
   };
+
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('lastNotificationAt') : null;
+    const initial = stored || new Date().toISOString();
+    setLastNotifiedAt(initial);
+
+    let mounted = true;
+    (async () => {
+      try {
+        const response = await notificationApi.getPreferences();
+        const prefs = response.data ?? response;
+        const enabled = prefs?.desktopNotificationsEnabled === true;
+        if (mounted) {
+          desktopNotificationsEnabledRef.current = enabled;
+          if (enabled && 'Notification' in window && Notification.permission === 'default') {
+            await Notification.requestPermission();
+          }
+        }
+      } catch {
+        if (mounted) desktopNotificationsEnabledRef.current = false;
+      }
+
+      loadUnreadCount();
+      checkNewNotifications(initial);
+    })();
+
+    const interval = setInterval(() => {
+      loadUnreadCount();
+      checkNewNotifications();
+    }, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);

@@ -540,6 +540,12 @@ export interface CreateSaleDto {
   clientCpfCnpj?: string;
   sellerId?: string;
   discount?: number; // Valor do desconto aplicado na venda
+  /** Usado quando emitOnlyNfe está ativo: emitir boleto para esta venda */
+  emitBoleto?: boolean;
+  /** Data de vencimento preferencial do boleto (ISO date). Obrigatório se emitBoleto = true. */
+  boletoDueDate?: string;
+  /** ID do cliente cadastrado para o boleto. Obrigatório se emitBoleto = true. */
+  boletoCustomerId?: string;
 }
 
 export interface CreateCustomerDto {

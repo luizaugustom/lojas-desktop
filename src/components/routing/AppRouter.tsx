@@ -14,6 +14,7 @@ import InstallmentsPage from '../pages/InstallmentsPage';
 import CashClosurePage from '../pages/CashClosurePage';
 import InvoicesPage from '../pages/InvoicesPage';
 import InboundInvoicesPage from '../pages/InboundInvoicesPage';
+import BoletosPage from '../pages/BoletosPage';
 import CompaniesPage from '../pages/CompaniesPage';
 import DevicesPage from '../pages/DevicesPage';
 import SettingsPage from '../pages/SettingsPage';
@@ -98,6 +99,8 @@ export default function AppRouter() {
         return <InvoicesPage />;
       case 'inbound-invoices':
         return <InboundInvoicesPage />;
+      case 'boletos':
+        return <BoletosPage />;
       case 'companies':
         return <CompaniesPage />;
       case 'stock-transfer':

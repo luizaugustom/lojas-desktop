@@ -19,6 +19,7 @@ interface NotificationItemProps {
   onRead?: (id: string) => void;
   onDelete?: (id: string) => void;
   onAction?: (url: string) => void;
+  onClick?: (notification: NotificationItemProps['notification']) => void;
 }
 
 const priorityConfig = {
@@ -63,12 +64,14 @@ export function NotificationItem({
   onRead,
   onDelete,
   onAction,
+  onClick,
 }: NotificationItemProps) {
   const config = priorityConfig[notification.priority as keyof typeof priorityConfig] || priorityConfig.normal;
   const typeInfo = typeConfig[notification.type] || typeConfig.general;
   const Icon = typeInfo.icon;
 
   const handleClick = () => {
+    onClick?.(notification);
     if (!notification.isRead && onRead) {
       onRead(notification.id);
     }

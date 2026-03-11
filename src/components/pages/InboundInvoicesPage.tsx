@@ -51,7 +51,7 @@ type ParsedData = { form: ParsedForm; items: ParsedItem[]; duplicatas: ParsedDup
 
 export default function InboundInvoicesPage() {
   const { api, user } = useAuth();
-  const { queryKeyPart } = useDateRange();
+  const { queryParams, queryKeyPart } = useDateRange();
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -102,11 +102,16 @@ export default function InboundInvoicesPage() {
   }, [user]);
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['inbound-fiscal', search],
+    queryKey: ['inbound-fiscal', queryKeyPart, search],
     queryFn: async () =>
       (
         await api.get('/fiscal', {
-          params: { page: 1, limit: 100, documentType: 'inbound' },
+          params: {
+            page: 1,
+            limit: 100,
+            documentType: 'inbound',
+            ...(queryParams.startDate && queryParams.endDate ? { startDate: queryParams.startDate, endDate: queryParams.endDate } : {}),
+          },
         })
       ).data,
   });
