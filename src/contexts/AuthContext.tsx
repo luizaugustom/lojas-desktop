@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { authLogin, authLogout, getAccessToken, setAccessToken, api, type DeviceInfo } from '../lib/apiClient';
+import { authLogin, authLogout, getAccessToken, getAccessTokenAsync, setAccessToken, api, type DeviceInfo } from '../lib/apiClient';
 import toast from 'react-hot-toast';
 import type { User } from '../types';
 import { getComputerId, detectAllDevices } from '../lib/device-detection';
@@ -27,7 +27,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listener para logout automático (login em outro dispositivo)
     const handleAutoLogout = (event: CustomEvent) => {
       if (event.detail?.reason === 'login-em-outro-dispositivo') {
-        console.log('[AuthContext] Logout automático detectado: login em outro dispositivo');
         setAccessToken(null);
         setUser(null);
         toast.error('Você foi desconectado porque fez login em outro dispositivo');
@@ -38,16 +37,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.addEventListener('auth:auto-logout', handleAutoLogout as EventListener);
     }
 
-    // Tentar recuperar sessão
+    // Hidratar token do armazenamento seguro (Electron) ou localStorage (migração) e recuperar sessão
     const init = async () => {
-      const token = getAccessToken();
+      const token = await getAccessTokenAsync();
       if (token) {
-        // Verificar se token ainda é válido fazendo refresh
+        setAccessToken(token);
         try {
-          const data = await authLogin('', ''); // Isso vai falhar, mas vamos fazer refresh
-          // Se chegou aqui, token é válido (não deveria)
+          const { data } = await api.get<{ role: string; id: string; login: string; name?: string; companyId?: string; companyIds?: string[] }>('/auth/profile');
+          if (data) {
+            const roleMap: Record<string, string> = {
+              admin: 'admin',
+              company: 'empresa',
+              seller: 'vendedor',
+              manager: 'gestor',
+            };
+            setUser({
+              ...data,
+              name: data.name ?? data.login,
+              role: (roleMap[data.role] || data.role) as User['role'],
+            });
+          }
         } catch {
-          // Token inválido, limpar
           setAccessToken(null);
         }
       }
@@ -125,19 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         companyIds: data.user?.companyIds,
       };
       
-      console.log('[AuthContext] Login realizado:', { 
-        originalRole: data.user?.role, 
-        normalizedRole: normalizedUser.role, 
-        user: normalizedUser,
-        deviceInfo,
-      });
-      
       setUser(normalizedUser);
       toast.success('Login realizado com sucesso!');
       
       // Detectar e registrar dispositivos do computador após login bem-sucedido
       try {
-        console.log('[AuthContext.login] Detectando dispositivos do computador...');
         await detectAndRegisterDevices();
       } catch (deviceError) {
         console.error('[AuthContext.login] Erro ao detectar dispositivos:', deviceError);

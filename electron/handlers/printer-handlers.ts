@@ -751,17 +751,23 @@ export function registerPrinterHandlers() {
     }
   });
 
+  // Limite de tamanho para evitar abuso (DoS) – ~512 KB
+  const MAX_PRINT_CONTENT_LENGTH = 512 * 1024;
+
   // Imprimir conteúdo
   ipcMain.handle('print-content', async (_event, payload: PrintContentPayload) => {
     try {
       if (!payload || typeof payload.content !== 'string') {
         return { success: false, error: 'Conteúdo de impressão inválido' };
       }
+      if (payload.content.length > MAX_PRINT_CONTENT_LENGTH) {
+        return { success: false, error: 'Conteúdo de impressão muito grande' };
+      }
 
       const result = await performPrintJob(payload.content, payload.options);
       return result;
     } catch (error: any) {
-      return { success: false, error: error?.message || 'Erro desconhecido' };
+      return { success: false, error: 'Erro ao imprimir. Tente novamente.' };
     }
   });
 

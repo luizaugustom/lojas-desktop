@@ -80,7 +80,7 @@ export default function BoletosPage() {
     queryKey: ['my-company'],
     queryFn: async () => {
       const res = await companyApi.myCompany();
-      return res.data as { boletoEnabled?: boolean };
+      return res.data as { boletoAllowed?: boolean; boletoEnabled?: boolean };
     },
     enabled: !!user?.companyId && (user?.role === 'empresa' || user?.role === 'vendedor'),
   });
@@ -98,7 +98,8 @@ export default function BoletosPage() {
   const boletos = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 0;
-  const boletoEnabled = companyData?.boletoEnabled === true;
+  const boletoAllowed = companyData?.boletoAllowed === true;
+  const boletoEnabled = boletoAllowed && companyData?.boletoEnabled === true;
 
   const handleDownloadPdf = async (id: string) => {
     setDownloadingId(id);
@@ -226,7 +227,21 @@ export default function BoletosPage() {
         </Button>
       </div>
 
-      {user?.role === 'empresa' && !boletoEnabled && (
+      {user?.role === 'empresa' && !boletoAllowed && (
+        <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
+          <CardContent className="pt-6 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-amber-800 dark:text-amber-200">Módulo de boletos não liberado</p>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                O módulo de boletos não está liberado para sua empresa. Entre em contato com o administrador.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {user?.role === 'empresa' && boletoAllowed && !companyData?.boletoEnabled && (
         <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
           <CardContent className="pt-6 flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />

@@ -69,11 +69,11 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
     queryKey: ['my-company-sidebar', user?.companyId],
     queryFn: async () => {
       const res = await companyApi.myCompany();
-      return res.data as { boletoEnabled?: boolean };
+      return res.data as { boletoAllowed?: boolean; boletoEnabled?: boolean };
     },
     enabled: !!user && (user.role === 'empresa' || user.role === 'vendedor'),
   });
-  const boletoEnabled = companyData?.boletoEnabled === true;
+  const boletoEnabled = companyData?.boletoAllowed === true && companyData?.boletoEnabled === true;
 
   const filteredNavigation = navigation.filter((item) => {
     if (!user) {

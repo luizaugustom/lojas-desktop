@@ -445,8 +445,13 @@ export default function SettingsPage() {
         return;
       }
 
-      if (!passwordForm.newPassword || passwordForm.newPassword.length < 6) {
-        toast.error('Nova senha deve ter no mínimo 6 caracteres');
+      const pwd = passwordForm.newPassword;
+      if (!pwd || pwd.length < 8) {
+        toast.error('Nova senha deve ter no mínimo 8 caracteres');
+        return;
+      }
+      if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(pwd)) {
+        toast.error('Nova senha deve conter pelo menos uma letra maiúscula, uma minúscula e um número');
         return;
       }
 
@@ -501,8 +506,13 @@ export default function SettingsPage() {
   const handleChangeCompanyPassword = async () => {
     if (!companyPasswordModal) return;
     try {
-      if (!companyPasswordForm.newPassword || companyPasswordForm.newPassword.length < 6) {
-        toast.error('Nova senha deve ter no mínimo 6 caracteres');
+      const newPwd = companyPasswordForm.newPassword;
+      if (!newPwd || newPwd.length < 8) {
+        toast.error('Nova senha deve ter no mínimo 8 caracteres');
+        return;
+      }
+      if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPwd)) {
+        toast.error('Nova senha deve conter pelo menos uma letra maiúscula, uma minúscula e um número');
         return;
       }
       if (companyPasswordForm.newPassword !== companyPasswordForm.confirmPassword) {
@@ -1597,7 +1607,7 @@ export default function SettingsPage() {
                 onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                 placeholder="••••••••"
               />
-              <p className="text-xs text-muted-foreground">Mínimo de 6 caracteres</p>
+              <p className="text-xs text-muted-foreground">Mín. 8 caracteres, com uma maiúscula, uma minúscula e um número</p>
             </div>
             
             <div className="space-y-2">
@@ -1679,7 +1689,7 @@ export default function SettingsPage() {
                   onChange={(e) => setCompanyPasswordForm((f) => ({ ...f, newPassword: e.target.value }))}
                   placeholder="••••••••"
                 />
-                <p className="text-xs text-muted-foreground">Mínimo de 6 caracteres</p>
+                <p className="text-xs text-muted-foreground">Mín. 8 caracteres, com uma maiúscula, uma minúscula e um número</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="companyConfirmPassword">Confirmar nova senha *</Label>
@@ -2551,6 +2561,14 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {companyData?.boletoAllowed === false && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800 p-4 flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    Para ativar boletos, é necessária a liberação do administrador. Entre em contato com o suporte.
+                  </p>
+                </div>
+              )}
               <div className="space-y-4">
                 <div className="flex items-center justify-between rounded-lg border p-4">
                   <div className="space-y-0.5">
@@ -2560,6 +2578,7 @@ export default function SettingsPage() {
                   <Switch
                     checked={boletoConfig.boletoEnabled}
                     onCheckedChange={(checked) => setBoletoConfig((c) => ({ ...c, boletoEnabled: checked }))}
+                    disabled={companyData?.boletoAllowed === false}
                   />
                 </div>
                 {boletoConfig.boletoEnabled && (

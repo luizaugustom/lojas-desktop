@@ -40,6 +40,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
   },
 
+  // Token de acesso (armazenamento seguro no processo main)
+  auth: {
+    setToken: (token: string | null) => ipcRenderer.invoke('auth:set-token', token),
+    getToken: () => ipcRenderer.invoke('auth:get-token') as Promise<string | null>,
+  },
+
   // Impressoras
   printers: {
     list: () => ipcRenderer.invoke('printers-list'),

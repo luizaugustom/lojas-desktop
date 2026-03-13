@@ -3,13 +3,28 @@ import { getClientTimeContext } from './utils';
 
 const API_BASE_URL = 'https://montshop-api-qi3v4.ondigitalocean.app';
 
-// Armazenamento do access token
+// Armazenamento do access token: em Electron usa safeStorage no main; senão memória (e migração de localStorage)
 let accessToken: string | null = null;
+
+async function getSecureToken(): Promise<string | null> {
+  if (typeof window !== 'undefined' && window.electronAPI?.auth?.getToken) {
+    return await window.electronAPI.auth.getToken();
+  }
+  return null;
+}
+
+async function setSecureToken(token: string | null): Promise<void> {
+  if (typeof window !== 'undefined' && window.electronAPI?.auth?.setToken) {
+    await window.electronAPI.auth.setToken(token);
+  }
+}
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
   if (typeof window !== 'undefined') {
-    if (token) {
+    if (window.electronAPI?.auth?.setToken) {
+      setSecureToken(token);
+    } else if (token) {
       localStorage.setItem('access_token', token);
     } else {
       localStorage.removeItem('access_token');
@@ -17,23 +32,42 @@ export function setAccessToken(token: string | null) {
   }
 }
 
-export function getAccessToken(): string | null {
-  if (accessToken) {
-    return accessToken;
+export async function getAccessTokenAsync(): Promise<string | null> {
+  if (accessToken) return accessToken;
+  if (typeof window !== 'undefined' && window.electronAPI?.auth?.getToken) {
+    const stored = await getSecureToken();
+    if (stored) {
+      accessToken = stored;
+      return stored;
+    }
+    const fromLegacy = localStorage.getItem('access_token');
+    if (fromLegacy) {
+      await setSecureToken(fromLegacy);
+      localStorage.removeItem('access_token');
+      accessToken = fromLegacy;
+      return fromLegacy;
+    }
   }
   if (typeof window !== 'undefined') {
-    const storedToken = localStorage.getItem('access_token');
-    if (storedToken) {
-      accessToken = storedToken;
-      return storedToken;
+    const fromStorage = localStorage.getItem('access_token');
+    if (fromStorage) {
+      accessToken = fromStorage;
+      return fromStorage;
     }
   }
   return null;
 }
 
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
 export function clearAccessToken() {
   accessToken = null;
   if (typeof window !== 'undefined') {
+    if (window.electronAPI?.auth?.setToken) {
+      setSecureToken(null);
+    }
     localStorage.removeItem('access_token');
   }
 }
@@ -157,8 +191,17 @@ instance.interceptors.response.use(
         originalRequest.headers = originalRequest.headers ?? {};
         (originalRequest.headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
         return instance(originalRequest);
-      } catch (refreshErr) {
+      } catch (refreshErr: any) {
         clearAccessToken();
+        // Se o refresh falhou com token revogado ou inválido, disparar auto-logout
+        const message = refreshErr?.response?.data?.message as string | undefined;
+        if (refreshErr?.response?.status === 401 && message === 'Refresh token revoked') {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('auth:auto-logout', {
+              detail: { reason: 'login-em-outro-dispositivo' },
+            }));
+          }
+        }
         processRefreshQueue(null);
         return Promise.reject(refreshErr);
       } finally {

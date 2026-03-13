@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import { registerDeviceHandlers } from './handlers/device-handlers';
 import { registerPrinterHandlers } from './handlers/printer-handlers';
 import { registerScaleHandlers } from './handlers/scale-handlers';
+import { registerAuthHandlers } from './handlers/auth-handlers';
 // registerPrinterDriverHandlers removido - funcionalidades de impressão removidas
 // impressao-handler removido - funcionalidades de impressão removidas
 
@@ -366,6 +367,7 @@ function setupIpcHandlers() {
   registerDeviceHandlers();
   registerPrinterHandlers();
   registerScaleHandlers();
+  registerAuthHandlers();
 }
 
 // App lifecycle

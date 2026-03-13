@@ -31,6 +31,10 @@ export interface ElectronAPI {
     getComputerId: () => Promise<string>;
     getSystemInfo: () => Promise<any>;
   };
+  auth: {
+    setToken: (token: string | null) => Promise<boolean>;
+    getToken: () => Promise<string | null>;
+  };
   printers: {
     list: () => Promise<{ success: boolean; printers?: any[]; error?: string } | any[]>;
     getDefault: () => Promise<{ success: boolean; printerName?: string | null; port?: string | null; error?: string }>;
