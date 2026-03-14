@@ -27,6 +27,7 @@ import { formatDate, formatCurrency } from '../../lib/utils';
 import { companyApi } from '../../lib/api-endpoints';
 import { PageHelpModal } from '../help/page-help-modal';
 import { productsHelpTitle, productsHelpDescription, productsHelpIcon, getProductsHelpTabs } from '../help/contents/products-help';
+import { logger } from '@/lib/logger';
 
 export default function ProductsPage() {
   const { api, user } = useAuth();
@@ -83,20 +84,20 @@ export default function ProductsPage() {
     }
 
     try {
-      console.log('[ProductsPage] Buscando detalhes do produto:', product.id);
+      logger.log('[ProductsPage] Buscando detalhes do produto:', product.id);
       const response = await api.get(`/product/${product.id}`);
-      console.log('[ProductsPage] Resposta completa da API:', response);
-      console.log('[ProductsPage] Resposta data:', response.data);
+      logger.log('[ProductsPage] Resposta completa da API:', response);
+      logger.log('[ProductsPage] Resposta data:', response.data);
       
       const detailedProduct = (response.data as any)?.product ?? response.data;
-      console.log('[ProductsPage] Produto detalhado:', detailedProduct);
-      console.log('[ProductsPage] costPrice no detailedProduct:', detailedProduct?.costPrice);
+      logger.log('[ProductsPage] Produto detalhado:', detailedProduct);
+      logger.log('[ProductsPage] costPrice no detailedProduct:', detailedProduct?.costPrice);
 
       // Preenche com todos os campos disponíveis, garantindo custo
       if (detailedProduct) {
         const merged = { ...product, ...detailedProduct };
-        console.log('[ProductsPage] Produto merged:', merged);
-        console.log('[ProductsPage] costPrice no merged:', merged.costPrice);
+        logger.log('[ProductsPage] Produto merged:', merged);
+        logger.log('[ProductsPage] costPrice no merged:', merged.costPrice);
         setSelectedProduct(merged);
       } else {
         setSelectedProduct(product);

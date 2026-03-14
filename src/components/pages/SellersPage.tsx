@@ -14,6 +14,7 @@ import { formatCurrency } from '../../lib/utils';
 import type { Seller } from '../../types';
 import { PageHelpModal } from '../help/page-help-modal';
 import { sellersHelpTitle, sellersHelpDescription, sellersHelpIcon, getSellersHelpTabs } from '../help/contents/sellers-help';
+import { logger } from '@/lib/logger';
 
 export default function SellersPage() {
   const { user } = useAuth();
@@ -26,13 +27,13 @@ export default function SellersPage() {
   const { data: sellersResponse, isLoading, refetch } = useQuery({
     queryKey: ['sellers', search, user?.companyId],
     queryFn: async () => {
-      console.log('[SellersPage] Buscando vendedores com search:', search, 'companyId:', user?.companyId);
+      logger.log('[SellersPage] Buscando vendedores com search:', search, 'companyId:', user?.companyId);
       try {
         const response = await sellerApi.list({ 
           search,
           companyId: user?.companyId || undefined
         });
-        console.log('[SellersPage] Resposta da API:', response);
+        logger.log('[SellersPage] Resposta da API:', response);
         return response;
       } catch (error) {
         console.error('[SellersPage] Erro ao buscar vendedores:', error);

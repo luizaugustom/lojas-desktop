@@ -2,20 +2,8 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useAuth } from './AuthContext';
 import { scaleApi } from '../lib/api-endpoints';
 import { loadPrintSettings } from '../lib/print-settings';
-
-// Função para obter computerId
-async function getComputerId(): Promise<string> {
-  if (window.electronAPI) {
-    return await window.electronAPI.devices.getComputerId();
-  }
-  // Fallback: gerar um ID único se não houver Electron API
-  let id = localStorage.getItem('montshop_computer_id');
-  if (!id) {
-    id = `browser-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem('montshop_computer_id', id);
-  }
-  return id;
-}
+import { getComputerIdCached } from '../lib/computer-id-cache';
+import { logger } from '@/lib/logger';
 
 interface Printer {
   name: string;
@@ -89,7 +77,7 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
             lastStatusCheck: printer?.lastStatusCheck,
           }));
       } else {
-        console.warn('[DeviceContext] API de impressoras não disponível');
+        logger.warn('[DeviceContext] API de impressoras não disponível');
       }
 
       const formattedPrinters: Printer[] = discovered.map((printer: any) => ({
@@ -151,10 +139,10 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       try {
         // Obter computerId
-        const id = await getComputerId();
+        const id = await getComputerIdCached();
         setComputerId(id);
       } catch (error) {
-        console.error('Erro ao obter computerId:', error);
+        logger.error('Erro ao obter computerId:', error);
       } finally {
         setLoading(false);
       }

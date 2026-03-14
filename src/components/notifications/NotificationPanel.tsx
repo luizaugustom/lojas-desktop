@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { CheckCheck, RefreshCw, Bell, Trash2 } from 'lucide-react';
 import { notificationApi } from '../../lib/api-endpoints';
 import { toast } from 'react-hot-toast';
+import { logger } from '@/lib/logger';
 
 interface Notification {
   id: string;
@@ -97,7 +98,7 @@ export function NotificationPanel() {
       window.open(url, '_blank');
     } else {
       // Navegação interna pode ser implementada se necessário
-      console.log('Navegar para:', url);
+      logger.log('Navegar para:', url);
     }
   };
 

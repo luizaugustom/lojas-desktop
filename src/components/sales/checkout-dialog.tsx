@@ -34,6 +34,7 @@ import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import { CardBrandSelect } from '../ui/card-brand-select';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { logger } from '@/lib/logger';
 import type { CreateSaleDto, PaymentMethod, PaymentMethodDetail, InstallmentData, Seller, Customer } from '../../types';
 
 export interface InitialClientForCheckout {
@@ -604,7 +605,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
 
       // Primeiro, tentar usar conteúdo em cache se disponível
       if (cachedPrintContent?.content) {
-        console.log('[Checkout] Usando conteúdo de impressão em cache');
+        logger.log('[Checkout] Usando conteúdo de impressão em cache');
         // Se o conteúdo é uma string, pode ser JSON que precisa ser parseado
         if (typeof cachedPrintContent.content === 'string') {
           try {
@@ -625,7 +626,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         setCurrentPrintType(printType);
       } else {
         // Se não tem cache, buscar do backend
-        console.log('[Checkout] Buscando conteúdo de impressão do backend');
+        logger.log('[Checkout] Buscando conteúdo de impressão do backend');
         const response = await saleApi.getPrintContent(createdSaleId);
         const responseData = response.data?.data || response.data;
         
@@ -659,7 +660,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       // Verificar se é venda a prazo com vias separadas
       if (printContent && typeof printContent === 'object' && 'isInstallmentSale' in printContent) {
         // Venda a prazo - imprimir primeiro a via da loja
-        console.log('[Checkout] Venda a prazo detectada, imprimindo via da loja...');
+        logger.log('[Checkout] Venda a prazo detectada, imprimindo via da loja...');
         const printResult = await printContentService(printContent.storeCopy);
         
         if (printResult.success) {
@@ -685,7 +686,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         }
       } else if (printContent && typeof printContent === 'string') {
         // Venda normal - imprimir normalmente
-        console.log('[Checkout] Imprimindo localmente...');
+        logger.log('[Checkout] Imprimindo localmente...');
         const printResult = await printContentService(printContent);
         
         if (printResult.success) {
@@ -708,7 +709,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         }
       } else {
         // Se não conseguiu conteúdo, tentar impressão no servidor diretamente
-        console.log('[Checkout] Sem conteúdo local, tentando impressão no servidor...');
+        logger.log('[Checkout] Sem conteúdo local, tentando impressão no servidor...');
         await saleApi.reprint(createdSaleId);
         toast.success(`${printLabel} enviada para impressão!`);
         handlePrintComplete();
@@ -728,7 +729,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
     
     setPrinting(true);
     try {
-      console.log('[Checkout] Imprimindo via do cliente...');
+      logger.log('[Checkout] Imprimindo via do cliente...');
       const printResult = await printContentService(customerCopyContent);
       
       if (printResult.success) {
@@ -896,11 +897,11 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
   };
 
   const onSubmit = async (data: { clientName?: string; clientCpfCnpj?: string }) => {
-    console.log('[Checkout] Iniciando finalização de venda...');
+    logger.log('[Checkout] Iniciando finalização de venda...');
     
     for (const [index, item] of items.entries()) {
       const isValid = isValidId(item.product.id);
-      console.log(`[Checkout] Item ${index}: ${item.product.name}`, {
+      logger.log(`[Checkout] Item ${index}: ${item.product.name}`, {
         productId: item.product.id,
         isValidId: isValid
       });
@@ -1095,7 +1096,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       if (selectedSellerId) {
         try {
           validateUUID(selectedSellerId, 'Vendedor');
-          console.log('[Checkout] SellerId válido:', selectedSellerId);
+          logger.log('[Checkout] SellerId válido:', selectedSellerId);
         } catch (error) {
           throw new Error(`Vendedor selecionado tem ID inválido: ${selectedSellerId}`);
         }
@@ -1130,7 +1131,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         }
       }
       
-      console.log('[Checkout] Dados da venda (sem conversões):', {
+      logger.log('[Checkout] Dados da venda (sem conversões):', {
         itemCount: saleData.items.length,
         paymentMethodsCount: saleData.paymentMethods.length,
         sellerId: saleData.sellerId,
@@ -1154,7 +1155,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         return;
       }
       
-      console.log('[Checkout] Venda criada com sucesso:', saleId);
+      logger.log('[Checkout] Venda criada com sucesso:', saleId);
       toast.success('Venda realizada com sucesso!');
       
       setCreatedSaleId(saleId);

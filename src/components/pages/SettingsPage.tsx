@@ -29,6 +29,7 @@ import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import { getAcquirerList } from '@/lib/acquirer-cnpj-list';
 import { PageHelpModal } from '../help/page-help-modal';
 import { settingsHelpTitle, settingsHelpDescription, settingsHelpIcon, getSettingsHelpTabs } from '../help/contents/settings-help';
+import { logger } from '@/lib/logger';
 
 const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL || 'https://montshop.app').replace(/\/+$/, '');
 
@@ -362,9 +363,9 @@ export default function SettingsPage() {
       try {
         const response = await api.get('/auth/profile');
         data = response.data;
-        console.log('Perfil carregado da API:', data);
+        logger.log('Perfil carregado da API:', data);
       } catch (error) {
-        console.log('Erro ao carregar da API, usando dados do contexto:', error);
+        logger.log('Erro ao carregar da API, usando dados do contexto:', error);
         // Se falhar, usa os dados do contexto
         data = user;
       }
@@ -535,20 +536,20 @@ export default function SettingsPage() {
     try {
       setLoadingPreferences(true);
       const data = await notificationApi.getPreferences();
-      console.log('Preferências carregadas:', data);
+      logger.log('Preferências carregadas:', data);
       setNotificationPreferences(data);
     } catch (error: any) {
       console.error('Erro ao carregar preferências:', error);
       
       // Se o erro for 401 (não autorizado), não mostra erro
       if (error.response?.status === 401) {
-        console.log('Usuário não autenticado, ignorando erro de preferências');
+        logger.log('Usuário não autenticado, ignorando erro de preferências');
         return;
       }
       
       // Se o erro for 404, cria preferências padrão localmente
       if (error.response?.status === 404) {
-        console.log('Preferências não encontradas, criando padrões localmente');
+        logger.log('Preferências não encontradas, criando padrões localmente');
         setNotificationPreferences({
           stockAlerts: false,
           billReminders: false,
@@ -575,10 +576,10 @@ export default function SettingsPage() {
         await Notification.requestPermission();
       }
       const updates = { [field]: value };
-      console.log('Atualizando preferência:', { field, value, updates });
+      logger.log('Atualizando preferência:', { field, value, updates });
       
       const data = await notificationApi.updatePreferences(updates);
-      console.log('Preferência atualizada:', data);
+      logger.log('Preferência atualizada:', data);
       
       // Atualizar estado local
       setNotificationPreferences({

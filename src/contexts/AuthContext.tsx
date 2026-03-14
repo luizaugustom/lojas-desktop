@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import type { User } from '../types';
 import { getComputerId, detectAllDevices } from '../lib/device-detection';
 import { scaleApi } from '../lib/api-endpoints';
+import { logger } from '@/lib/logger';
 
 interface AuthContextValue {
   user: User | null;
@@ -76,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const detectAndRegisterDevices = useCallback(async () => {
     try {
       const computerId = getComputerId();
-      console.log('[AuthContext] Detectando dispositivos para computador:', computerId);
+      logger.log('[AuthContext] Detectando dispositivos para computador:', computerId);
 
       // Detecta todos os dispositivos disponíveis
       const { printers, scales } = await detectAllDevices();
@@ -84,21 +85,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Registra impressoras no backend - funcionalidade removida
       // Configuração de impressoras foi removida do sistema
       if (printers.length > 0) {
-        console.log(`[AuthContext] ${printers.length} impressora(s) detectada(s), mas registro removido`);
+        logger.log(`[AuthContext] ${printers.length} impressora(s) detectada(s), mas registro removido`);
       }
 
       // Registra balanças no backend
       if (scales.length > 0) {
         try {
           await scaleApi.registerDevices({ computerId, scales });
-          console.log(`[AuthContext] ${scales.length} balança(s) registrada(s)`);
+          logger.log(`[AuthContext] ${scales.length} balança(s) registrada(s)`);
         } catch (error) {
           console.error('[AuthContext] Erro ao registrar balanças:', error);
         }
       }
 
       if (printers.length === 0 && scales.length === 0) {
-        console.log('[AuthContext] Nenhum dispositivo detectado automaticamente. O usuário pode selecionar manualmente.');
+        logger.log('[AuthContext] Nenhum dispositivo detectado automaticamente. O usuário pode selecionar manualmente.');
       }
     } catch (error) {
       console.error('[AuthContext] Erro ao detectar dispositivos:', error);

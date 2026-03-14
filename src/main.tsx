@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { logger } from '@/lib/logger';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
@@ -18,7 +19,7 @@ class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Erro capturado pelo ErrorBoundary:', error, errorInfo);
+    logger.error('Erro capturado pelo ErrorBoundary:', error, errorInfo);
   }
 
   render() {
@@ -43,25 +44,25 @@ class ErrorBoundary extends React.Component<
 
 // Tratamento de erros globais
 window.addEventListener('error', (event) => {
-  console.error('Erro global:', event.error);
+  logger.error('Erro global:', event.error);
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('Promise rejeitada:', event.reason);
+  logger.error('Promise rejeitada:', event.reason);
 });
 
-console.log('main.tsx carregado');
-console.log('Document ready state:', document.readyState);
+logger.log('main.tsx carregado');
+logger.log('Document ready state:', document.readyState);
 
 const rootElement = document.getElementById('root');
-console.log('Root element:', rootElement);
+logger.log('Root element:', rootElement);
 
 if (!rootElement) {
-  console.error('Elemento root não encontrado!');
+  logger.error('Elemento root não encontrado!');
   throw new Error('Elemento root não encontrado');
 }
 
-console.log('Iniciando renderização do React...');
+logger.log('Iniciando renderização do React...');
 
 try {
   ReactDOM.createRoot(rootElement).render(
@@ -71,9 +72,9 @@ try {
       </ErrorBoundary>
     </React.StrictMode>
   );
-  console.log('React renderizado com sucesso');
+  logger.log('React renderizado com sucesso');
 } catch (error) {
-  console.error('Erro ao renderizar React:', error);
+  logger.error('Erro ao renderizar React:', error);
   rootElement.innerHTML = `
     <div style="padding: 20px; color: red; font-family: monospace; background: #fff; min-height: 100vh">
       <h1>Erro ao renderizar React</h1>

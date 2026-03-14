@@ -2,6 +2,8 @@
  * Utilitário para carregar e buscar dados de NCM da API da Receita Federal
  */
 
+import { logger } from '@/lib/logger';
+
 export interface NCMItem {
   codigo: string; // 8 dígitos
   descricao: string;
@@ -291,7 +293,7 @@ export async function loadNCMData(
         }
       }
     } catch (err) {
-      console.warn('Erro ao carregar NCM pelo backend:', err);
+      logger.warn('Erro ao carregar NCM pelo backend:', err);
     }
   }
 
@@ -329,10 +331,10 @@ export async function loadNCMData(
     console.error('Erro ao carregar dados NCM da API:', error);
     const cached = loadFromCache();
     if (cached && cached.data.length > 0) {
-      console.warn('Usando cache expirado devido a erro na API');
+      logger.warn('Usando cache expirado devido a erro na API');
       return cached.data;
     }
-    console.warn('API NCM indisponível. Usando lista de códigos mais usados.');
+    logger.warn('API NCM indisponível. Usando lista de códigos mais usados.');
     return NCM_FALLBACK;
   }
 }

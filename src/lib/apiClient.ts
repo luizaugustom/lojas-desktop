@@ -1,5 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { getClientTimeContext } from './utils';
+import { getComputerIdCached } from './computer-id-cache';
+import { logger } from '@/lib/logger';
 
 const API_BASE_URL = 'https://montshop-api-qi3v4.ondigitalocean.app';
 
@@ -72,15 +74,6 @@ export function clearAccessToken() {
   }
 }
 
-// Obter ID do computador
-async function getComputerId(): Promise<string> {
-  if (window.electronAPI) {
-    return await window.electronAPI.devices.getComputerId();
-  }
-  // Fallback para navegador
-  return 'browser-' + navigator.userAgent;
-}
-
 // Axios instance
 const instance: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -101,11 +94,11 @@ instance.interceptors.request.use(
 
     // Adicionar ID do computador
     try {
-      const computerId = await getComputerId();
+      const computerId = await getComputerIdCached();
       config.headers = config.headers ?? {};
       (config.headers as Record<string, string>)['x-computer-id'] = computerId;
     } catch (error) {
-      console.error('Erro ao obter computerId:', error);
+      logger.error('Erro ao obter computerId:', error);
     }
 
     if (typeof window !== 'undefined') {

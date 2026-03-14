@@ -19,6 +19,7 @@ import { useCartStore } from '../../store/cart-store';
 import { useAuth } from '../../contexts/AuthContext';
 import { budgetApi, sellerApi } from '../../lib/api-endpoints';
 import type { Seller } from '../../types';
+import { logger } from '@/lib/logger';
 
 interface BudgetDialogProps {
   open: boolean;
@@ -149,7 +150,7 @@ export function BudgetDialog({ open, onClose, onSuccess }: BudgetDialogProps) {
         budgetData.sellerId = user.id;
       }
 
-      console.log('[Budget] Criando orçamento:', budgetData);
+      logger.log('[Budget] Criando orçamento:', budgetData);
 
       await budgetApi.create(budgetData);
       toast.success('Orçamento criado com sucesso!');

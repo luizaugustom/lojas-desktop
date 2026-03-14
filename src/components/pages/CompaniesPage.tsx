@@ -14,6 +14,7 @@ import { toast } from 'react-hot-toast';
 import { convertPrismaIdToUUID, isValidId } from '../../lib/utils';
 import { PageHelpModal } from '../help/page-help-modal';
 import { companiesHelpTitle, companiesHelpDescription, companiesHelpIcon, getCompaniesHelpTabs } from '../help/contents/companies-help';
+import { logger } from '@/lib/logger';
 
 export default function CompaniesPage() {
   const { user } = useAuth();
@@ -67,7 +68,7 @@ export default function CompaniesPage() {
 
   const handleCreateCompany = async (data: CreateCompanyDto) => {
     try {
-      console.log('Dados sendo enviados para criação de empresa:', data);
+      logger.log('Dados sendo enviados para criação de empresa:', data);
       await companyApi.create(data);
       toast.success('Empresa criada com sucesso!');
       setIsDialogOpen(false);
@@ -97,19 +98,19 @@ export default function CompaniesPage() {
     
     try {
       // Debug: verificar se o ID é válido
-      console.log('[handleDeleteCompany] Tentando excluir empresa:', {
+      logger.log('[handleDeleteCompany] Tentando excluir empresa:', {
         id,
         isValidId: isValidId(id),
         idLength: id?.length
       });
       
       // Primeiro, verificar se a empresa existe fazendo uma busca
-      console.log('[handleDeleteCompany] Verificando se empresa existe...');
+      logger.log('[handleDeleteCompany] Verificando se empresa existe...');
       try {
         const companyExists = await companyApi.get(id);
-        console.log('[handleDeleteCompany] Empresa encontrada:', companyExists);
+        logger.log('[handleDeleteCompany] Empresa encontrada:', companyExists);
       } catch (getError: any) {
-        console.log('[handleDeleteCompany] Erro ao buscar empresa:', {
+        logger.log('[handleDeleteCompany] Erro ao buscar empresa:', {
           status: getError.response?.status,
           message: getError.message
         });
@@ -118,16 +119,16 @@ export default function CompaniesPage() {
       // Tentar diferentes abordagens baseadas no formato do ID
       if (/^[a-z0-9]{21}$/i.test(id)) {
         // ID do Prisma - tentar conversão para UUID
-        console.log('[handleDeleteCompany] ID é do Prisma, convertendo para UUID');
+        logger.log('[handleDeleteCompany] ID é do Prisma, convertendo para UUID');
         const uuidId = convertPrismaIdToUUID(id);
-        console.log('[handleDeleteCompany] UUID convertido:', uuidId);
+        logger.log('[handleDeleteCompany] UUID convertido:', uuidId);
         await companyApi.delete(uuidId);
       } else if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
         // UUID válido - usar diretamente
-        console.log('[handleDeleteCompany] ID é UUID válido, usando diretamente');
+        logger.log('[handleDeleteCompany] ID é UUID válido, usando diretamente');
         await companyApi.delete(id);
       } else {
-        console.log('[handleDeleteCompany] ID em formato desconhecido, tentando como está');
+        logger.log('[handleDeleteCompany] ID em formato desconhecido, tentando como está');
         await companyApi.delete(id);
       }
       toast.success('Empresa excluída com sucesso!');

@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUIStore } from '../store/ui-store';
 import { useQuery } from '@tanstack/react-query';
 import { companyApi } from '../lib/api-endpoints';
+import { logger } from '@/lib/logger';
 
 export function CompanyColorProvider({ children }: { children: React.ReactNode }) {
   const setCompanyColor = useUIStore((state) => state.setCompanyColor);
@@ -17,7 +18,7 @@ export function CompanyColorProvider({ children }: { children: React.ReactNode }
         const response = await companyApi.myCompany();
         return response.data || response;
       } catch (error) {
-        console.error('Erro ao buscar empresa:', error);
+        logger.error('Erro ao buscar empresa:', error);
         return null;
       }
     },
@@ -27,7 +28,7 @@ export function CompanyColorProvider({ children }: { children: React.ReactNode }
   // Atualiza a cor da empresa quando ela mudar
   useEffect(() => {
     if (companyData?.brandColor) {
-      console.log('Aplicando cor da empresa:', companyData.brandColor);
+      logger.log('Aplicando cor da empresa:', companyData.brandColor);
       setCompanyColor(companyData.brandColor);
     } else {
       setCompanyColor(null);

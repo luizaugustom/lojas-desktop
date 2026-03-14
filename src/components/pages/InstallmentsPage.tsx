@@ -22,6 +22,7 @@ import { useDeviceStore } from '../../store/device-store';
 import toast from 'react-hot-toast';
 import { PageHelpModal } from '../help/page-help-modal';
 import { installmentsHelpTitle, installmentsHelpDescription, installmentsHelpIcon, getInstallmentsHelpTabs } from '../help/contents/installments-help';
+import { logger } from '@/lib/logger';
 
 type DateFilter = 'all' | 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'this-year';
 
@@ -301,7 +302,7 @@ export default function InstallmentsPage() {
 
           const now = Date.now();
           if (isLikelyScanner && now - lastScannedRef.current > 500) {
-            console.log('[Installments Barcode Scanner] Código escaneado:', code);
+            logger.log('[Installments Barcode Scanner] Código escaneado:', code);
             handleBarcodeScanned(code);
             setLastScanned(now);
           }

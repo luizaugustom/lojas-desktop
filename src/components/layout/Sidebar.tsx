@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/ui-store';
 import { useAuth } from '@/contexts/AuthContext';
 import { companyApi } from '@/lib/api-endpoints';
+import { logger } from '@/lib/logger';
 import logoImage from '@/logosvg.svg';
 
 const navigation = [
@@ -77,7 +78,7 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
 
   const filteredNavigation = navigation.filter((item) => {
     if (!user) {
-      console.log('[Sidebar] Sem usuário, filtrando todos os itens');
+      logger.log('[Sidebar] Sem usuário, filtrando todos os itens');
       return false;
     }
 
@@ -115,8 +116,8 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
     return item.roles.includes(normalizedRole);
   });
   
-  console.log('[Sidebar] Navegação filtrada:', filteredNavigation.map(n => n.name));
-  console.log('[Sidebar] Usuário atual:', user);
+  logger.log('[Sidebar] Navegação filtrada:', filteredNavigation.map(n => n.name));
+  logger.log('[Sidebar] Usuário atual:', user);
 
   return (
     <>

@@ -35,6 +35,7 @@ import { PageHelpModal } from '../help/page-help-modal';
 import { budgetsHelpTitle, budgetsHelpDescription, budgetsHelpIcon, getBudgetsHelpTabs } from '../help/contents/budgets-help';
 import { useCartStore } from '@/store/cart-store';
 import { CheckoutDialog } from '../sales/checkout-dialog';
+import { logger } from '@/lib/logger';
 interface Budget {
   id: string;
   budgetNumber: number;
@@ -140,7 +141,7 @@ export default function BudgetsPage() {
         const data = response.data?.data || response.data;
         content = data?.content || data?.printContent || null;
       } catch (error) {
-        console.warn(`[Budgets] Falha ao obter conteúdo de impressão do orçamento ${budget.id}`, error);
+        logger.warn(`[Budgets] Falha ao obter conteúdo de impressão do orçamento ${budget.id}`, error);
       }
 
       if (content) {

@@ -3,6 +3,8 @@
  * Versão Desktop - usa Electron IPC para acessar APIs do sistema
  */
 
+import { logger } from '@/lib/logger';
+
 const COMPUTER_ID_KEY = 'montshop_computer_id';
 
 /**
@@ -50,7 +52,7 @@ export async function detectClientPrinters(): Promise<any[]> {
     //   return printers;
     // }
 
-    console.log('[DeviceDetection] Configuração de impressoras removida - não detectando mais');
+    logger.log('[DeviceDetection] Configuração de impressoras removida - não detectando mais');
     
     // Configuração de impressoras removida - não detectar mais
     const systemPrinters: any[] = [];
@@ -81,9 +83,9 @@ export async function detectClientPrinters(): Promise<any[]> {
         };
       }));
       
-      console.log(`[DeviceDetection] ${printers.length} impressora(s) detectada(s) via Electron`);
+      logger.log(`[DeviceDetection] ${printers.length} impressora(s) detectada(s) via Electron`);
     } else {
-      console.log('[DeviceDetection] Nenhuma impressora encontrada no sistema');
+      logger.log('[DeviceDetection] Nenhuma impressora encontrada no sistema');
     }
   } catch (error) {
     console.error('[DeviceDetection] Erro ao detectar impressoras:', error);
@@ -101,7 +103,7 @@ export async function detectClientScales(): Promise<any[]> {
   
   // TODO: Implementar detecção de balanças via Electron
   // Por enquanto retorna vazio
-  console.log('[DeviceDetection] Detecção de balanças ainda não implementada');
+  logger.log('[DeviceDetection] Detecção de balanças ainda não implementada');
   
   return scales;
 }
@@ -110,14 +112,14 @@ export async function detectClientScales(): Promise<any[]> {
  * Detecta todos os dispositivos disponíveis no computador
  */
 export async function detectAllDevices(): Promise<{ printers: any[]; scales: any[] }> {
-  console.log('[DeviceDetection] Iniciando detecção de dispositivos no desktop...');
+  logger.log('[DeviceDetection] Iniciando detecção de dispositivos no desktop...');
   
   const [printers, scales] = await Promise.all([
     detectClientPrinters(),
     detectClientScales(),
   ]);
 
-  console.log(`[DeviceDetection] Detectados: ${printers.length} impressora(s), ${scales.length} balança(s)`);
+  logger.log(`[DeviceDetection] Detectados: ${printers.length} impressora(s), ${scales.length} balança(s)`);
 
   return { printers, scales };
 }

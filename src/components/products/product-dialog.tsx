@@ -39,6 +39,7 @@ import {
   validateImageFile,
   UPLOAD_ERROR_MESSAGES,
 } from '../../lib/constants/upload.constants';
+import { logger } from '@/lib/logger';
 
 // Função utilitária para garantir conversão correta de dados
 function sanitizeProductData(data: any) {
@@ -168,11 +169,11 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
     if (!open) return; // Só resetar quando o modal estiver aberto
 
     if (product) {
-      console.log('[ProductDialog] Produto recebido:', product);
-      console.log('[ProductDialog] Fotos do produto:', product.photos);
-      console.log('[ProductDialog] Tipo das fotos:', typeof product.photos);
-      console.log('[ProductDialog] Array das fotos:', Array.isArray(product.photos));
-      console.log('[ProductDialog] costPrice recebido:', product.costPrice, 'tipo:', typeof product.costPrice);
+      logger.log('[ProductDialog] Produto recebido:', product);
+      logger.log('[ProductDialog] Fotos do produto:', product.photos);
+      logger.log('[ProductDialog] Tipo das fotos:', typeof product.photos);
+      logger.log('[ProductDialog] Array das fotos:', Array.isArray(product.photos));
+      logger.log('[ProductDialog] costPrice recebido:', product.costPrice, 'tipo:', typeof product.costPrice);
       
       reset({
         name: product.name,
@@ -448,25 +449,25 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
     setLoading(true);
     try {
       if (isEditing) {
-        console.log('[ProductDialog] Editando produto - ID original:', product!.id);
-        console.log('[ProductDialog] Produto completo:', product);
+        logger.log('[ProductDialog] Editando produto - ID original:', product!.id);
+        logger.log('[ProductDialog] Produto completo:', product);
         
         // Usar o ID original do produto (o backend espera o ID do Prisma)
         const productId = product!.id;
-        console.log('[ProductDialog] Usando ID original do Prisma:', productId);
-        console.log('[ProductDialog] Tipo do ID:', typeof productId);
-        console.log('[ProductDialog] Comprimento do ID:', productId.length);
+        logger.log('[ProductDialog] Usando ID original do Prisma:', productId);
+        logger.log('[ProductDialog] Tipo do ID:', typeof productId);
+        logger.log('[ProductDialog] Comprimento do ID:', productId.length);
         
         // Criar objeto limpo apenas com os campos necessários
         const dataToSend = sanitizeProductData(data);
         
         // Log detalhado
-        console.log('[ProductDialog] Dados originais do formulário:', data);
-        console.log('[ProductDialog] Dados limpos para envio:', dataToSend);
-        console.log('[ProductDialog] Tipo do name:', typeof dataToSend.name);
-        console.log('[ProductDialog] Valor do name:', dataToSend.name);
-        console.log('[ProductDialog] JSON.stringify do name:', JSON.stringify(dataToSend.name));
-        console.log('[ProductDialog] ID do produto:', productId);
+        logger.log('[ProductDialog] Dados originais do formulário:', data);
+        logger.log('[ProductDialog] Dados limpos para envio:', dataToSend);
+        logger.log('[ProductDialog] Tipo do name:', typeof dataToSend.name);
+        logger.log('[ProductDialog] Valor do name:', dataToSend.name);
+        logger.log('[ProductDialog] JSON.stringify do name:', JSON.stringify(dataToSend.name));
+        logger.log('[ProductDialog] ID do produto:', productId);
         
         try {
           // Verificar se o ID é válido antes de fazer a requisição
@@ -474,15 +475,15 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
             throw new Error('ID do produto inválido');
           }
           
-          console.log('[ProductDialog] Fazendo requisição de atualização para:', `/product/${productId}`);
-          console.log('[ProductDialog] Dados sendo enviados:', dataToSend);
+          logger.log('[ProductDialog] Fazendo requisição de atualização para:', `/product/${productId}`);
+          logger.log('[ProductDialog] Dados sendo enviados:', dataToSend);
           
           // Verificar se há fotos para adicionar ou remover
           const hasPhotoChanges = selectedPhotos.length > 0 || existingPhotosToDelete.length > 0;
           
           if (hasPhotoChanges) {
             // Usar endpoint upload-and-update quando há mudanças em fotos
-            console.log('[ProductDialog] Atualizando produto com fotos usando /product/:id/upload-and-update');
+            logger.log('[ProductDialog] Atualizando produto com fotos usando /product/:id/upload-and-update');
             
             const formData = new FormData();
             
@@ -520,14 +521,14 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
               });
             }
             
-            console.log('[ProductDialog] Fotos novas:', selectedPhotos.length);
-            console.log('[ProductDialog] Fotos para deletar:', existingPhotosToDelete.length);
+            logger.log('[ProductDialog] Fotos novas:', selectedPhotos.length);
+            logger.log('[ProductDialog] Fotos para deletar:', existingPhotosToDelete.length);
             
             await productApi.updateWithPhotos(productId, formData);
             toast.success('Produto atualizado com sucesso!');
           } else {
             // Usar endpoint padrão quando não há mudanças em fotos
-            console.log('[ProductDialog] Atualizando produto sem mudanças em fotos');
+            logger.log('[ProductDialog] Atualizando produto sem mudanças em fotos');
             await productApi.update(productId, dataToSend);
             toast.success('Produto atualizado com sucesso!');
           }
@@ -539,7 +540,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
         // Para criação de produto
         if (selectedPhotos.length > 0) {
           // Usar endpoint específico para upload e criação quando há fotos
-          console.log('[ProductDialog] Criando produto com fotos usando /product/upload-and-create');
+          logger.log('[ProductDialog] Criando produto com fotos usando /product/upload-and-create');
           
           const formData = new FormData();
           
@@ -568,8 +569,8 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
             formData.append(`photos`, photo);
           });
           
-          console.log('[ProductDialog] UUID gerado para novo produto com fotos:', generatedId);
-          console.log('[ProductDialog] Dados do FormData:', {
+          logger.log('[ProductDialog] UUID gerado para novo produto com fotos:', generatedId);
+          logger.log('[ProductDialog] Dados do FormData:', {
             id: generatedId,
             name: data.name,
             barcode: data.barcode,
@@ -582,18 +583,18 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
           await productApi.createWithPhotos(formData);
         } else {
           // Usar endpoint padrão quando não há fotos
-          console.log('[ProductDialog] Criando produto sem fotos usando /product');
+          logger.log('[ProductDialog] Criando produto sem fotos usando /product');
           
           const productData = {
             id: generateCoherentUUID(), // Gerar UUID coerente com backend
             ...sanitizeProductData(data),
           };
           
-          console.log('[ProductDialog] UUID gerado para novo produto:', productData.id);
-          console.log('[ProductDialog] Dados para criação:', productData);
-          console.log('[ProductDialog] Tipo do name:', typeof productData.name);
-          console.log('[ProductDialog] Valor do name:', productData.name);
-          console.log('[ProductDialog] JSON.stringify do name:', JSON.stringify(productData.name));
+          logger.log('[ProductDialog] UUID gerado para novo produto:', productData.id);
+          logger.log('[ProductDialog] Dados para criação:', productData);
+          logger.log('[ProductDialog] Tipo do name:', typeof productData.name);
+          logger.log('[ProductDialog] Valor do name:', productData.name);
+          logger.log('[ProductDialog] JSON.stringify do name:', JSON.stringify(productData.name));
           
           await productApi.create(productData);
         }
@@ -691,6 +692,34 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
               {errors.price && (
                 <p className="text-sm text-destructive">{errors.price.message}</p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="costPrice" className="text-foreground">Preço de Custo</Label>
+              <Input
+                id="costPrice"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                {...register('costPrice', {
+                  setValueAs: (v) =>
+                    v === '' || v === undefined
+                      ? undefined
+                      : (isNaN(Number(v)) ? undefined : Number(v)),
+                })}
+                onFocus={(e) => {
+                  if (Number(e.target.value) === 0) {
+                    e.target.value = '';
+                  }
+                }}
+                disabled={loading}
+                className="text-foreground"
+              />
+              {errors.costPrice && (
+                <p className="text-sm text-destructive">{errors.costPrice.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground">Opcional — valor pago na compra do produto</p>
             </div>
 
             <div className="space-y-2">
@@ -909,11 +938,11 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {product.photos.map((photoUrl, index) => {
-                    console.log(`[ProductDialog] Renderizando foto ${index}:`, photoUrl);
+                    logger.log(`[ProductDialog] Renderizando foto ${index}:`, photoUrl);
                     const isMarkedForDeletion = existingPhotosToDelete.includes(photoUrl);
                     
                     const fullImageUrl = getImageUrl(photoUrl);
-                    console.log(`[ProductDialog] URL completa da foto ${index}:`, fullImageUrl);
+                    logger.log(`[ProductDialog] URL completa da foto ${index}:`, fullImageUrl);
                     
                     return (
                       <div key={`existing-${index}`} className="relative group">
@@ -930,7 +959,7 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
                                 ? 'opacity-50 grayscale' 
                                 : ''
                             }`}
-                            onLoad={() => console.log(`[ProductDialog] Foto ${index} carregada com sucesso:`, fullImageUrl)}
+                            onLoad={() => logger.log(`[ProductDialog] Foto ${index} carregada com sucesso:`, fullImageUrl)}
                             onError={(e) => {
                               console.error(`[ProductDialog] Erro ao carregar foto ${index}:`, {
                                 originalUrl: photoUrl,
