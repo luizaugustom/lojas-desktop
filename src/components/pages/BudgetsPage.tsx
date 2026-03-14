@@ -30,6 +30,7 @@ import { formatCurrency } from '@/lib/utils-clean';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
 import { printContent as printContentService } from '@/lib/print-service';
+import { getFriendlyPrintErrorMessage } from '@/lib/print-error-message';
 import { PageHelpModal } from '../help/page-help-modal';
 import { budgetsHelpTitle, budgetsHelpDescription, budgetsHelpIcon, getBudgetsHelpTabs } from '../help/contents/budgets-help';
 import { useCartStore } from '@/store/cart-store';
@@ -150,7 +151,7 @@ export default function BudgetsPage() {
           return;
         }
 
-        toast(`Impressão local falhou: ${printResult.error || 'Erro desconhecido'}. Tentando impressão no servidor...`, {
+        toast(`${getFriendlyPrintErrorMessage(printResult.error)} Tentando impressão no servidor...`, {
           icon: '⚠️',
           duration: 5000,
         });

@@ -29,6 +29,7 @@ import { StoreCreditVoucherConfirmationDialog } from './store-credit-voucher-con
 import { InstallmentBilletViewer } from '../installments/installment-billet-viewer';
 import { useAuth } from '../../contexts/AuthContext';
 import { printContent as printContentService } from '../../lib/print-service';
+import { getFriendlyPrintErrorMessage } from '../../lib/print-error-message';
 import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import { CardBrandSelect } from '../ui/card-brand-select';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -668,7 +669,8 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
           setShowPrintConfirmation(false);
           setShowCustomerCopyConfirmation(true);
         } else {
-          toast.error(`Impressão local da via da loja falhou: ${printResult.error}. Tentando impressão no servidor...`);
+          const msg = getFriendlyPrintErrorMessage(printResult.error);
+          toast.error(`${msg} Tentando impressão no servidor...`);
           
           // Se falhar localmente, tentar no servidor como fallback
           try {
@@ -691,7 +693,8 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
           handlePrintComplete();
         } else {
           const printLabelLower = printLabel.toLowerCase();
-          toast.error(`Impressão local do ${printLabelLower} falhou: ${printResult.error}. Tentando impressão no servidor...`);
+          const msg = getFriendlyPrintErrorMessage(printResult.error);
+          toast.error(`Impressão local do ${printLabelLower} falhou: ${msg}. Tentando impressão no servidor...`);
           
           // Se falhar localmente, tentar no servidor como fallback
           try {
@@ -712,20 +715,8 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       }
     } catch (error: any) {
       console.error(`[Checkout] Erro ao imprimir ${printLabel}:`, error);
-      
-      // Extrai mensagem de erro detalhada do backend
-      let errorMessage = `Erro ao imprimir ${printLabel}`;
-      if (error?.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      // Exibe mensagem de erro detalhada
-      toast.error(errorMessage, {
-        duration: 6000, // Mostra por mais tempo para o usuário ler
-      });
-      
+      const { message } = handleApiError(error, { showToast: false });
+      toast.error(message, { duration: 6000 });
       handlePrintComplete();
     } finally {
       setPrinting(false);
@@ -743,7 +734,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       if (printResult.success) {
         toast.success('Via do cliente enviada para impressão!');
       } else {
-        toast.error(`Impressão local da via do cliente falhou: ${printResult.error}`, {
+        toast.error(getFriendlyPrintErrorMessage(printResult.error), {
           icon: '⚠️',
           duration: 5000,
         });
@@ -829,14 +820,15 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         if (printResult.success) {
           toast.success('Comprovante de saldo restante impresso com sucesso!');
         } else {
-          throw new Error(printResult.error || 'Erro ao imprimir');
+          toast.error(getFriendlyPrintErrorMessage(printResult.error));
         }
       } else {
         toast.success('Comprovante de saldo restante enviado para impressão!');
       }
     } catch (voucherError: any) {
       console.error('[Checkout] Erro ao imprimir comprovante de saldo restante:', voucherError);
-      toast.error('Erro ao imprimir comprovante. Você pode imprimi-lo depois.');
+      const { message } = handleApiError(voucherError, { showToast: false });
+      toast.error(message);
     } finally {
       setPrinting(false);
       setShowStoreCreditVoucherConfirmation(false);

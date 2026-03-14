@@ -11,6 +11,7 @@ import { formatCurrency, formatDate } from '../../lib/utils';
 import { handleApiError } from '../../lib/handleApiError';
 import { saleApi } from '../../lib/api-endpoints';
 import { printContent } from '../../lib/print-service';
+import { getFriendlyPrintErrorMessage } from '../../lib/print-error-message';
 import { ProcessExchangeDialog } from './process-exchange-dialog';
 import type { Exchange } from '../../types';
 
@@ -77,7 +78,7 @@ export function SaleDetailsDialog({ open, onClose, saleId }: SaleDetailsDialogPr
         if (printResult.success) {
           toast.success('Cupom reimpresso com sucesso!');
         } else {
-          throw new Error(printResult.error || 'Erro ao imprimir');
+          toast.error(getFriendlyPrintErrorMessage(printResult.error), { duration: 6000 });
         }
       } else {
         // Fallback: tentar impressão no servidor (para web)
@@ -85,16 +86,8 @@ export function SaleDetailsDialog({ open, onClose, saleId }: SaleDetailsDialogPr
         toast.success('Cupom reenviado para impressão!');
       }
     } catch (error: any) {
-      let errorMessage = 'Erro ao reimprimir cupom';
-      if (error?.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      toast.error(errorMessage, {
-        duration: 6000,
-      });
+      const { message } = handleApiError(error, { showToast: false });
+      toast.error(message, { duration: 6000 });
     }
   };
 
@@ -271,7 +264,7 @@ export function SaleDetailsDialog({ open, onClose, saleId }: SaleDetailsDialogPr
                                   if (printResult.success) {
                                     toast.success('Comprovante impresso com sucesso!');
                                   } else {
-                                    throw new Error(printResult.error || 'Erro ao imprimir');
+                                    toast.error(getFriendlyPrintErrorMessage(printResult.error));
                                   }
                                 } else {
                                   toast.success('Comprovante enviado para impressão!');

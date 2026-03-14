@@ -29,6 +29,8 @@ import { formatCurrency, formatDate } from '../../lib/utils';
 import { Loader2, Square, CheckSquare, Eye, Download } from 'lucide-react';
 import { PaymentReceiptConfirmDialog } from './payment-receipt-confirm-dialog';
 import { printContent } from '../../lib/print-service';
+import { getFriendlyPrintErrorMessage } from '../../lib/print-error-message';
+import { handleApiError } from '../../lib/handleApiError';
 import { generateBulkPaymentReceiptContent } from '../../lib/payment-receipt-content';
 import { InstallmentProductsDialog } from './installment-products-dialog';
 import { ConfirmationModal } from '../ui/confirmation-modal';
@@ -473,7 +475,7 @@ export function CustomerDebtPaymentDialog({
       }
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Erro ao registrar pagamentos');
+      handleApiError(error);
     },
   });
 
@@ -578,7 +580,7 @@ export function CustomerDebtPaymentDialog({
       if (printResult.success) {
         toast.success('Comprovante enviado para impressão!');
       } else {
-        toast.error(`Erro ao imprimir: ${printResult.error || 'Erro desconhecido'}`);
+        toast.error(getFriendlyPrintErrorMessage(printResult.error));
       }
     } catch (error) {
       console.error('Erro ao imprimir comprovante:', error);

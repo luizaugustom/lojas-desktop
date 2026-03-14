@@ -13,6 +13,7 @@ import { Badge } from '../ui/badge';
 import { useAuth } from '../../hooks/useAuth';
 import { useDebounce } from '../../hooks/useDebounce';
 import { handleApiError } from '../../lib/handleApiError';
+import { getFriendlyPrintErrorMessage } from '../../lib/print-error-message';
 import { formatCurrency } from '../../lib/utils';
 import type {
   Exchange,
@@ -498,14 +499,15 @@ export function ProcessExchangeDialog({
               if (printResult.success) {
                 toast.success('Comprovante impresso com sucesso!');
               } else {
-                throw new Error(printResult.error || 'Erro ao imprimir');
+                toast.error(getFriendlyPrintErrorMessage(printResult.error));
               }
             } else {
               toast.success('Comprovante enviado para impressão!');
             }
           } catch (printError) {
             console.error('Erro ao imprimir comprovante:', printError);
-            toast.error('Erro ao imprimir comprovante. Você pode imprimi-lo depois.');
+            const { message } = handleApiError(printError, { showToast: false });
+            toast.error(message);
           }
         }
       }

@@ -52,6 +52,7 @@ import { Textarea } from '../ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
 import { printContent } from '@/lib/print-service';
+import { getFriendlyPrintErrorMessage } from '@/lib/print-error-message';
 import { cashClosureApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
 import { formatCurrency, formatDateTime, formatDate, toLocalISOString } from '@/lib/utils';
@@ -430,14 +431,14 @@ export default function CashClosurePage() {
     }
 
     if (printResult && printResult.success === false) {
-      toast.error(printResult.error || 'Não foi possível enviar o relatório para a impressora configurada.');
+      toast.error(getFriendlyPrintErrorMessage(printResult.error));
       if (fallbackContent) {
         const localResult = await printContent(fallbackContent);
         if (localResult.success) {
           toast.success('Relatório impresso localmente.');
           return true;
         }
-        toast.error(localResult.error || 'Também não foi possível imprimir o relatório localmente.');
+        toast.error(getFriendlyPrintErrorMessage(localResult.error));
       }
       return false;
     }

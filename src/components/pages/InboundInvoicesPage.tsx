@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, RefreshCw, Search, Download, Upload, PlusCircle, Trash2, Pencil, Loader2, RotateCcw, FileCode2, HelpCircle } from 'lucide-react';
+import { FileText, RefreshCw, Search, Download, Upload, PlusCircle, Trash2, Pencil, Loader2, RotateCcw, FileCode2, HelpCircle, Plus, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
@@ -11,7 +11,8 @@ import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
-import { formatCurrency, formatDateTime, downloadFile } from '@/lib/utils';
+import { formatCurrency, formatDateTime, downloadFile, generateCoherentUUID } from '@/lib/utils';
+import { MAX_PRODUCT_PHOTOS, ACCEPTED_IMAGE_STRING, validateImageFile } from '@/lib/constants/upload.constants';
 import { fiscalApi, productApi, billApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
 import { PageHelpModal } from '../help/page-help-modal';
@@ -89,17 +90,32 @@ export default function InboundInvoicesPage() {
   const [xmlPasted, setXmlPasted] = useState('');
   const [parsingXml, setParsingXml] = useState(false);
   const [xmlStringForSubmit, setXmlStringForSubmit] = useState<string | null>(null);
+  type ItemNewProductDataRow = { name: string; barcode: string; costPrice: number; stockQuantity: number; ncm: string; cfop: string; unitOfMeasure: string; price: number; category?: string; description?: string; expirationDate?: string; lowStockAlertThreshold?: number };
   const [itemDecisions, setItemDecisions] = useState<ItemDecision[]>([]);
   const [itemLinkedIds, setItemLinkedIds] = useState<string[]>([]);
-  const [itemNewProductData, setItemNewProductData] = useState<Record<number, { name: string; barcode: string; costPrice: number; stockQuantity: number; ncm: string; cfop: string; unitOfMeasure: string; price: number }>>({});
+  const [itemNewProductData, setItemNewProductData] = useState<Record<number, ItemNewProductDataRow>>({});
   const [registerBillsFromXml, setRegisterBillsFromXml] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [linkProductModalItemIndex, setLinkProductModalItemIndex] = useState<number | null>(null);
+  const [linkProductSearch, setLinkProductSearch] = useState('');
+  const [createProductModalItemIndex, setCreateProductModalItemIndex] = useState<number | null>(null);
+  const [createProductModalForm, setCreateProductModalForm] = useState<ItemNewProductDataRow | null>(null);
+  const [createProductModalPhotos, setCreateProductModalPhotos] = useState<File[]>([]);
+  const [createProductModalPhotoPreviewUrls, setCreateProductModalPhotoPreviewUrls] = useState<string[]>([]);
+  const createProductModalFileInputRef = useRef<HTMLInputElement>(null);
+  const [itemNewProductPhotos, setItemNewProductPhotos] = useState<Record<number, File[]>>({});
 
   useEffect(() => {
     if (user && user.role !== 'empresa') {
       toast.error('Apenas empresas podem acessar esta página');
     }
   }, [user]);
+
+  useEffect(() => {
+    const urls = createProductModalPhotos.map((f) => URL.createObjectURL(f));
+    setCreateProductModalPhotoPreviewUrls(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [createProductModalPhotos]);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['inbound-fiscal', queryKeyPart, search],
@@ -123,9 +139,19 @@ export default function InboundInvoicesPage() {
   });
   const productsList: { id: string; name: string; barcode?: string; stockQuantity?: number }[] = useMemo(() => {
     const raw: any = productsData;
-    const list = Array.isArray(raw) ? raw : raw?.data || raw?.items || [];
+    const list = Array.isArray(raw) ? raw : raw?.products || raw?.data || raw?.items || [];
     return list.map((p: any) => ({ id: p.id, name: p.name || p.barcode || p.id, barcode: p.barcode, stockQuantity: p.stockQuantity }));
   }, [productsData]);
+  const linkProductFilteredList = useMemo(() => {
+    if (!linkProductSearch.trim()) return productsList;
+    const q = linkProductSearch.trim().toLowerCase();
+    return productsList.filter(
+      (p) =>
+        (p.name ?? '').toLowerCase().includes(q) ||
+        (p.barcode ?? '').toLowerCase().includes(q) ||
+        (p.id ?? '').toLowerCase().includes(q)
+    );
+  }, [productsList, linkProductSearch]);
 
   const docs: InboundDoc[] = useMemo(() => {
     const raw: any = data;
@@ -758,10 +784,16 @@ export default function InboundInvoicesPage() {
             setItemLinkedIds([]);
             setItemNewProductData({});
             setRegisterBillsFromXml(false);
+            setLinkProductModalItemIndex(null);
+            setLinkProductSearch('');
+            setCreateProductModalItemIndex(null);
+            setCreateProductModalForm(null);
+            setCreateProductModalPhotos([]);
+            setItemNewProductPhotos({});
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[89vw] w-[89vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingDoc ? 'Editar Nota de Entrada' : 'Adicionar Nota de Entrada'}</DialogTitle>
             <DialogDescription>
@@ -826,7 +858,8 @@ export default function InboundInvoicesPage() {
                         setItemDecisions(res.items?.length ? res.items.map(() => 'skip') : []);
                         setItemLinkedIds(res.items?.length ? res.items.map(() => '') : []);
                         setItemNewProductData({});
-                        const defaultData: Record<number, { name: string; barcode: string; costPrice: number; stockQuantity: number; ncm: string; cfop: string; unitOfMeasure: string; price: number }> = {};
+                        const defaultData: Record<number, ItemNewProductDataRow> = {};
+                        const uom = (v: string) => { const u = (v ?? 'UN').slice(0, 6) || 'UN'; return ['kg', 'g', 'ml', 'l', 'm', 'cm', 'un'].includes(u.toLowerCase()) ? u.toLowerCase() : 'un'; };
                         (res.items ?? []).forEach((it: ParsedItem, i: number) => {
                           const barcode = (it.barcode && it.barcode.length >= 8 && it.barcode.length <= 20)
                             ? it.barcode
@@ -838,11 +871,16 @@ export default function InboundInvoicesPage() {
                             stockQuantity: it.quantity ?? 0,
                             ncm: (it.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
                             cfop: (it.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102',
-                            unitOfMeasure: (it.unitOfMeasure ?? 'UN').slice(0, 6) || 'UN',
+                            unitOfMeasure: uom(it.unitOfMeasure ?? 'UN'),
                             price: Math.max(it.unitPrice ?? 0, 0.01),
+                            category: '',
+                            description: '',
+                            expirationDate: '',
+                            lowStockAlertThreshold: 3,
                           };
                         });
                         setItemNewProductData(defaultData);
+                        setItemNewProductPhotos({});
                         setRegisterBillsFromXml((res.duplicatas?.length ?? 0) > 0);
                         toast.success('XML lido. Revise os dados e defina o que fazer com os produtos.');
                       } catch (err: any) {
@@ -973,25 +1011,23 @@ export default function InboundInvoicesPage() {
                           </SelectContent>
                         </Select>
                         {itemDecisions[i] === 'link' && (
-                          <Select
-                            value={itemLinkedIds[i] ?? ''}
-                            onValueChange={(id) => {
-                              const next = [...itemLinkedIds];
-                              next[i] = id;
-                              setItemLinkedIds(next);
-                            }}
-                          >
-                            <SelectTrigger className="w-[220px]">
-                              <SelectValue placeholder="Selecione o produto" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {productsList.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  {p.name} {p.barcode ? `(${p.barcode})` : ''}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {itemLinkedIds[i] ? (
+                              <>
+                                <span className="text-sm text-muted-foreground max-w-[180px] truncate" title={productsList.find((p) => p.id === itemLinkedIds[i])?.name}>
+                                  {productsList.find((p) => p.id === itemLinkedIds[i])?.name ?? 'Produto'}
+                                  {productsList.find((p) => p.id === itemLinkedIds[i])?.barcode ? ` (${productsList.find((p) => p.id === itemLinkedIds[i])?.barcode})` : ''}
+                                </span>
+                                <Button type="button" variant="outline" size="sm" onClick={() => { setLinkProductSearch(''); setLinkProductModalItemIndex(i); }}>
+                                  Alterar
+                                </Button>
+                              </>
+                            ) : (
+                              <Button type="button" variant="outline" size="sm" onClick={() => { setLinkProductSearch(''); setLinkProductModalItemIndex(i); }}>
+                                Selecione um produto
+                              </Button>
+                            )}
+                          </div>
                         )}
                       </div>
                       {itemDecisions[i] === 'create' && itemNewProductData[i] != null && (
@@ -1030,14 +1066,38 @@ export default function InboundInvoicesPage() {
                           </div>
                           <div>
                             <Label className="text-xs">Preço venda</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={itemNewProductData[i].price}
-                              onChange={(e) => setItemNewProductData({ ...itemNewProductData, [i]: { ...itemNewProductData[i], price: parseFloat(e.target.value) || 0 } })}
-                              className="h-8"
-                            />
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={itemNewProductData[i].price}
+                                onChange={(e) => setItemNewProductData({ ...itemNewProductData, [i]: { ...itemNewProductData[i], price: parseFloat(e.target.value) || 0 } })}
+                                className="h-8"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-10 w-10 shrink-0 text-primary hover:text-primary hover:bg-primary/10"
+                                title="Configurar dados do produto a criar"
+                                onClick={() => {
+                                  setCreateProductModalItemIndex(i);
+                                  const row = itemNewProductData[i];
+                                  setCreateProductModalForm({
+                                    category: '',
+                                    description: '',
+                                    expirationDate: '',
+                                    lowStockAlertThreshold: 3,
+                                    ...row,
+                                    unitOfMeasure: ['kg', 'g', 'ml', 'l', 'm', 'cm', 'un'].includes((row?.unitOfMeasure ?? '').toLowerCase()) ? (row!.unitOfMeasure).toLowerCase() : 'un',
+                                  });
+                                  setCreateProductModalPhotos(itemNewProductPhotos[i] ?? []);
+                                }}
+                              >
+                                <Plus className="h-5 w-5" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1147,17 +1207,41 @@ export default function InboundInvoicesPage() {
                       if (itemDecisions[i] === 'create') {
                         const d = itemNewProductData[i];
                         if (!d) continue;
+                        const photos = itemNewProductPhotos[i] ?? [];
                         try {
-                          await productApi.create({
-                            name: d.name.trim(),
-                            barcode: d.barcode.trim().slice(0, 20),
-                            stockQuantity: d.stockQuantity,
-                            price: Math.max(d.price, 0.01),
-                            costPrice: d.costPrice,
-                            ncm: (d.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
-                            cfop: (d.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102',
-                            unitOfMeasure: (d.unitOfMeasure ?? 'UN').slice(0, 6) || 'UN',
-                          });
+                          if (photos.length > 0) {
+                            const fd = new FormData();
+                            fd.append('id', generateCoherentUUID());
+                            fd.append('name', d.name.trim());
+                            fd.append('barcode', d.barcode.trim().slice(0, 20));
+                            fd.append('price', Math.max(d.price, 0.01).toString());
+                            fd.append('stockQuantity', d.stockQuantity.toString());
+                            if (d.costPrice != null) fd.append('costPrice', d.costPrice.toString());
+                            if (d.category?.trim()) fd.append('category', d.category.trim());
+                            if (d.description?.trim()) fd.append('description', d.description.trim());
+                            if (d.expirationDate?.trim()) fd.append('expirationDate', d.expirationDate.trim());
+                            if (d.lowStockAlertThreshold != null) fd.append('lowStockAlertThreshold', String(d.lowStockAlertThreshold));
+                            fd.append('unitOfMeasure', (d.unitOfMeasure ?? 'un').slice(0, 10) || 'un');
+                            fd.append('cfop', (d.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102');
+                            fd.append('ncm', (d.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999');
+                            photos.forEach((file) => fd.append('photos', file));
+                            await productApi.createWithPhotos(fd);
+                          } else {
+                            await productApi.create({
+                              name: d.name.trim(),
+                              barcode: d.barcode.trim().slice(0, 20),
+                              stockQuantity: d.stockQuantity,
+                              price: Math.max(d.price, 0.01),
+                              costPrice: d.costPrice,
+                              ncm: (d.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
+                              cfop: (d.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102',
+                              unitOfMeasure: (d.unitOfMeasure ?? 'un').slice(0, 10) || 'un',
+                              ...(d.category?.trim() ? { category: d.category.trim() } : {}),
+                              ...(d.description?.trim() ? { description: d.description.trim() } : {}),
+                              ...(d.expirationDate?.trim() ? { expirationDate: d.expirationDate.trim() } : {}),
+                              ...(d.lowStockAlertThreshold !== undefined && d.lowStockAlertThreshold !== null ? { lowStockAlertThreshold: Number(d.lowStockAlertThreshold) } : {}),
+                            });
+                          }
                         } catch (e: any) {
                           toast.error(`Falha ao criar produto do item "${item.description?.slice(0, 30)}...": ${e?.response?.data?.message || e?.message || 'Erro'}`);
                         }
@@ -1192,6 +1276,7 @@ export default function InboundInvoicesPage() {
                   setItemDecisions([]);
                   setItemLinkedIds([]);
                   setItemNewProductData({});
+                  setItemNewProductPhotos({});
                   setRegisterBillsFromXml(false);
                   setEditingDoc(null);
                   refetch();
@@ -1225,6 +1310,282 @@ export default function InboundInvoicesPage() {
                   )}
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={linkProductModalItemIndex !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLinkProductModalItemIndex(null);
+            setLinkProductSearch('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Selecionar produto</DialogTitle>
+            <DialogDescription>
+              Escolha o produto ao qual vincular o item da nota. Será adicionada apenas a quantidade ao estoque; demais dados do produto não serão alterados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 flex-1 min-h-0">
+            <Input
+              placeholder="Buscar por nome ou código de barras..."
+              value={linkProductSearch}
+              onChange={(e) => setLinkProductSearch(e.target.value)}
+              className="shrink-0"
+            />
+            <div className="flex-1 overflow-y-auto border rounded-md divide-y min-h-[200px]">
+              {linkProductFilteredList.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground text-center">Nenhum produto encontrado.</div>
+              ) : (
+                linkProductFilteredList.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="w-full text-left px-3 py-2.5 hover:bg-muted/60 transition-colors text-sm"
+                    onClick={() => {
+                      if (linkProductModalItemIndex !== null) {
+                        const next = [...itemLinkedIds];
+                        next[linkProductModalItemIndex] = p.id;
+                        setItemLinkedIds(next);
+                        setLinkProductModalItemIndex(null);
+                        setLinkProductSearch('');
+                      }
+                    }}
+                  >
+                    <span className="font-medium">{p.name}</span>
+                    {p.barcode ? <span className="text-muted-foreground ml-1">({p.barcode})</span> : null}
+                    {p.stockQuantity != null ? <span className="text-muted-foreground text-xs ml-1">— Estoque: {p.stockQuantity}</span> : null}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createProductModalItemIndex !== null && createProductModalForm !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCreateProductModalItemIndex(null);
+            setCreateProductModalForm(null);
+            setCreateProductModalPhotos([]);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Dados do novo produto</DialogTitle>
+            <DialogDescription>
+              Os campos estão pré-preenchidos com os valores da nota. Ajuste se necessário. O produto será criado ao clicar em &quot;Adicionar&quot; na nota de entrada.
+            </DialogDescription>
+          </DialogHeader>
+          {createProductModalForm && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs">Nome *</Label>
+                <Input
+                  value={createProductModalForm.name}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, name: e.target.value } : f)}
+                  placeholder="Nome do produto"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Código de Barras *</Label>
+                <Input
+                  value={createProductModalForm.barcode}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, barcode: e.target.value.slice(0, 20) } : f)}
+                  placeholder="8–20 caracteres"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Categoria</Label>
+                <Input
+                  value={createProductModalForm.category ?? ''}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, category: e.target.value } : f)}
+                  placeholder="Ex.: Eletrônicos"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs">Descrição</Label>
+                <Textarea
+                  value={createProductModalForm.description ?? ''}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, description: e.target.value } : f)}
+                  placeholder="Descrição opcional do produto"
+                  rows={3}
+                  className="resize-none h-auto text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Preço de Venda *</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={createProductModalForm.price}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, price: parseFloat(e.target.value) || 0 } : f)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Preço de Custo</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={createProductModalForm.costPrice}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value) || 0;
+                    setCreateProductModalForm((f) => f ? { ...f, costPrice: v, price: Math.max(f.price, v) } : f);
+                  }}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Quantidade em Estoque *</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={createProductModalForm.stockQuantity}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, stockQuantity: parseFloat(e.target.value) || 0 } : f)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Alerta de estoque baixo</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={createProductModalForm.lowStockAlertThreshold ?? ''}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, lowStockAlertThreshold: e.target.value === '' ? undefined : parseFloat(e.target.value) || 0 } : f)}
+                  placeholder="3"
+                  className="h-9"
+                />
+                <p className="text-xs text-muted-foreground">Avisar quando estoque for menor ou igual (padrão: 3)</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Unidade de Medida</Label>
+                <Select
+                  value={createProductModalForm.unitOfMeasure || 'un'}
+                  onValueChange={(v) => setCreateProductModalForm((f) => f ? { ...f, unitOfMeasure: v } : f)}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Unidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="un">Unidade (un)</SelectItem>
+                    <SelectItem value="kg">Kilograma (kg)</SelectItem>
+                    <SelectItem value="g">Grama (g)</SelectItem>
+                    <SelectItem value="ml">Mililitro (ml)</SelectItem>
+                    <SelectItem value="l">Litro (l)</SelectItem>
+                    <SelectItem value="m">Metro (m)</SelectItem>
+                    <SelectItem value="cm">Centímetro (cm)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Data de Validade</Label>
+                <Input
+                  type="date"
+                  value={createProductModalForm.expirationDate ?? ''}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, expirationDate: e.target.value || '' } : f)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">CFOP (4 dígitos)</Label>
+                <Input
+                  value={createProductModalForm.cfop}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, cfop: e.target.value.replace(/\D/g, '').slice(0, 4) } : f)}
+                  placeholder="5102"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">NCM (8 dígitos)</Label>
+                <Input
+                  value={createProductModalForm.ncm}
+                  onChange={(e) => setCreateProductModalForm((f) => f ? { ...f, ncm: e.target.value.replace(/\D/g, '').slice(0, 8) } : f)}
+                  placeholder="99999999"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs">Fotos do produto</Label>
+                <p className="text-xs text-muted-foreground">{createProductModalPhotos.length} / {MAX_PRODUCT_PHOTOS} fotos</p>
+                <input
+                  ref={createProductModalFileInputRef}
+                  type="file"
+                  accept={ACCEPTED_IMAGE_STRING}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = e.target.files ? Array.from(e.target.files) : [];
+                    e.target.value = '';
+                    const toAdd: File[] = [];
+                    for (const f of files) {
+                      const { valid, error } = validateImageFile(f);
+                      if (!valid) { toast.error(error ?? 'Arquivo inválido'); continue; }
+                      toAdd.push(f);
+                    }
+                    const next = [...createProductModalPhotos, ...toAdd].slice(0, MAX_PRODUCT_PHOTOS);
+                    if (next.length > createProductModalPhotos.length + toAdd.length) toast.error(`Máximo de ${MAX_PRODUCT_PHOTOS} fotos.`);
+                    setCreateProductModalPhotos(next);
+                  }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => createProductModalPhotos.length < MAX_PRODUCT_PHOTOS && createProductModalFileInputRef.current?.click()}
+                    onKeyDown={(e) => e.key === 'Enter' && createProductModalPhotos.length < MAX_PRODUCT_PHOTOS && createProductModalFileInputRef.current?.click()}
+                    className={`w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${createProductModalPhotos.length >= MAX_PRODUCT_PHOTOS ? 'opacity-50 cursor-not-allowed border-muted' : 'border-border hover:border-primary hover:bg-muted'}`}
+                  >
+                    <Plus className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Adicionar</span>
+                  </div>
+                  {createProductModalPhotoPreviewUrls.map((url, idx) => (
+                    <div key={idx} className="relative group">
+                      <img src={url} alt="" className="w-16 h-16 object-cover rounded border border-border" />
+                      <button
+                        type="button"
+                        className="absolute -top-1 -right-1 rounded-full bg-destructive text-destructive-foreground w-5 h-5 flex items-center justify-center opacity-90 hover:opacity-100"
+                        onClick={() => setCreateProductModalPhotos((p) => p.filter((_, i) => i !== idx))}
+                        aria-label="Remover foto"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="pt-4">
+            <Button variant="outline" onClick={() => { setCreateProductModalItemIndex(null); setCreateProductModalForm(null); setCreateProductModalPhotos([]); }}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (createProductModalItemIndex !== null && createProductModalForm !== null) {
+                  setItemNewProductData((prev) => ({ ...prev, [createProductModalItemIndex]: createProductModalForm }));
+                  setItemNewProductPhotos((prev) => ({ ...prev, [createProductModalItemIndex]: createProductModalPhotos }));
+                  setCreateProductModalItemIndex(null);
+                  setCreateProductModalForm(null);
+                  setCreateProductModalPhotos([]);
+                }
+              }}
+            >
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>

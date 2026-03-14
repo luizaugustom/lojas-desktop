@@ -390,7 +390,7 @@ export default function SettingsPage() {
           login: user.login || '',
         });
       }
-      toast.error(error.response?.data?.message || 'Erro ao carregar perfil');
+      handleApiError(error);
     } finally {
       setLoadingProfile(false);
     }
@@ -431,7 +431,7 @@ export default function SettingsPage() {
       await loadProfile();
     } catch (error: any) {
       console.error('Erro ao atualizar perfil:', error);
-      toast.error(error.response?.data?.message || 'Erro ao atualizar perfil');
+      handleApiError(error);
     } finally {
       setUpdatingProfile(false);
     }
@@ -491,7 +491,7 @@ export default function SettingsPage() {
       }, 2000);
     } catch (error: any) {
       console.error('Erro ao alterar senha:', error);
-      toast.error(error.response?.data?.message || 'Erro ao alterar senha');
+      handleApiError(error);
     }
   };
 
@@ -525,7 +525,7 @@ export default function SettingsPage() {
       setCompanyPasswordModal(null);
       setCompanyPasswordForm({ newPassword: '', confirmPassword: '' });
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Erro ao alterar senha da empresa');
+      handleApiError(error);
     } finally {
       setSavingCompanyPassword(false);
     }
@@ -562,7 +562,7 @@ export default function SettingsPage() {
         return;
       }
       
-      toast.error(error.response?.data?.message || 'Erro ao carregar preferências de notificação');
+      handleApiError(error);
     } finally {
       setLoadingPreferences(false);
     }
@@ -1175,7 +1175,7 @@ export default function SettingsPage() {
         });
       } else if (error.response?.data?.message?.includes('permissão') || 
                  error.response?.data?.message?.includes('administrador')) {
-        toast.error(error.response?.data?.message || 'A empresa não tem permissão para usar catálogo digital. Entre em contato com o administrador.');
+        handleApiError(error);
         // Reverter estado do formulário
         setCatalogPageForm({
           ...catalogPageForm,
@@ -1226,7 +1226,7 @@ export default function SettingsPage() {
       // Verificar se o erro é relacionado à permissão
       if (error.response?.data?.message?.includes('permissão') || 
           error.response?.data?.message?.includes('administrador')) {
-        toast.error(error.response?.data?.message || 'A empresa não tem permissão para usar catálogo digital. Entre em contato com o administrador.');
+        handleApiError(error);
       } else {
         handleApiError(error);
       }

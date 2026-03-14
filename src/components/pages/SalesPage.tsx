@@ -8,6 +8,7 @@ import { Input, InputWithIcon } from '../ui/input';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { useAuth } from '../../contexts/AuthContext';
+import { handleApiError } from '../../lib/handleApiError';
 import { useCartStore } from '../../store/cart-store';
 import { ProductList } from '../sales/product-list';
 import { Cart } from '../sales/cart';
@@ -373,7 +374,7 @@ export default function SalesPage() {
               try {
                 addItem(product);
               } catch (error) {
-                toast.error(error instanceof Error ? error.message : 'Erro ao adicionar produto');
+                handleApiError(error);
               }
             }}
           />

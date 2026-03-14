@@ -27,6 +27,8 @@ import { PaymentReceiptConfirmDialog } from './payment-receipt-confirm-dialog';
 import { InstallmentBilletViewer } from './installment-billet-viewer';
 import { ConfirmationModal } from '../ui/confirmation-modal';
 import { printContent } from '../../lib/print-service';
+import { getFriendlyPrintErrorMessage } from '../../lib/print-error-message';
+import { handleApiError } from '../../lib/handleApiError';
 import { generatePaymentReceiptContent } from '../../lib/payment-receipt-content';
 
 interface PaymentDialogProps {
@@ -145,7 +147,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
       }
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Erro ao registrar pagamento');
+      handleApiError(error);
     },
   });
 
@@ -247,7 +249,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
       if (printResult.success) {
         toast.success('Comprovante enviado para impressão!');
       } else {
-        toast.error(`Erro ao imprimir: ${printResult.error || 'Erro desconhecido'}`);
+        toast.error(getFriendlyPrintErrorMessage(printResult.error));
       }
     } catch (error) {
       console.error('Erro ao imprimir comprovante:', error);

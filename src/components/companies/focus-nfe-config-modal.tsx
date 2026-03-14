@@ -6,6 +6,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Company } from '../../types';
 import { companyApi } from '../../lib/api-endpoints';
+import { handleApiError } from '../../lib/handleApiError';
 import { toast } from 'react-hot-toast';
 import { Loader2, Lock, FileText, Eye, EyeOff, Download, Copy } from 'lucide-react';
 
@@ -107,7 +108,7 @@ export function FocusNfeConfigModal({ open, onOpenChange, company, onSuccess }: 
       onOpenChange(false);
     } catch (error: any) {
       console.error('Erro ao salvar configuração:', error);
-      toast.error(error.response?.data?.message || 'Erro ao salvar configuração do Focus NFe');
+      handleApiError(error);
     } finally {
       setLoading(false);
     }
