@@ -793,7 +793,7 @@ export default function InboundInvoicesPage() {
           }
         }}
       >
-        <DialogContent className="max-w-[89vw] w-[89vw] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[89vw] w-[89vw] max-h-[90vh] overflow-y-auto" overlayClassName="backdrop-blur-none [backdrop-filter:none] [-webkit-backdrop-filter:none]">
           <DialogHeader>
             <DialogTitle>{editingDoc ? 'Editar Nota de Entrada' : 'Adicionar Nota de Entrada'}</DialogTitle>
             <DialogDescription>
@@ -861,12 +861,16 @@ export default function InboundInvoicesPage() {
                         const defaultData: Record<number, ItemNewProductDataRow> = {};
                         const uom = (v: string) => { const u = (v ?? 'UN').slice(0, 6) || 'UN'; return ['kg', 'g', 'ml', 'l', 'm', 'cm', 'un'].includes(u.toLowerCase()) ? u.toLowerCase() : 'un'; };
                         (res.items ?? []).forEach((it: ParsedItem, i: number) => {
-                          const barcode = (it.barcode && it.barcode.length >= 8 && it.barcode.length <= 20)
-                            ? it.barcode
-                            : `NFe-${Date.now().toString(36)}-${i}`;
+                          const rawBarcode = (it.barcode ?? '').toString().trim();
+                          const isInvalidBarcode = !rawBarcode || /^sem\s*gtin$/i.test(rawBarcode);
+                          const barcode = isInvalidBarcode
+                            ? `NFe-${Date.now().toString(36)}-${i}`
+                            : rawBarcode.length < 8
+                              ? rawBarcode.padStart(8, '0')
+                              : rawBarcode.slice(0, 20);
                           defaultData[i] = {
                             name: it.description || `Item ${i + 1}`,
-                            barcode: barcode.substring(0, 20),
+                            barcode,
                             costPrice: it.unitPrice ?? 0,
                             stockQuantity: it.quantity ?? 0,
                             ncm: (it.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
@@ -1190,6 +1194,7 @@ export default function InboundInvoicesPage() {
                     return;
                   }
                   await api.post('/fiscal/inbound-invoice', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                  const createdByBarcode: Record<string, string> = {};
                   if (parsedData?.items?.length) {
                     for (let i = 0; i < parsedData.items.length; i++) {
                       const item = parsedData.items[i];
@@ -1207,40 +1212,50 @@ export default function InboundInvoicesPage() {
                       if (itemDecisions[i] === 'create') {
                         const d = itemNewProductData[i];
                         if (!d) continue;
+                        const barcode = (d.barcode ?? '').trim().slice(0, 20);
                         const photos = itemNewProductPhotos[i] ?? [];
                         try {
-                          if (photos.length > 0) {
-                            const fd = new FormData();
-                            fd.append('id', generateCoherentUUID());
-                            fd.append('name', d.name.trim());
-                            fd.append('barcode', d.barcode.trim().slice(0, 20));
-                            fd.append('price', Math.max(d.price, 0.01).toString());
-                            fd.append('stockQuantity', d.stockQuantity.toString());
-                            if (d.costPrice != null) fd.append('costPrice', d.costPrice.toString());
-                            if (d.category?.trim()) fd.append('category', d.category.trim());
-                            if (d.description?.trim()) fd.append('description', d.description.trim());
-                            if (d.expirationDate?.trim()) fd.append('expirationDate', d.expirationDate.trim());
-                            if (d.lowStockAlertThreshold != null) fd.append('lowStockAlertThreshold', String(d.lowStockAlertThreshold));
-                            fd.append('unitOfMeasure', (d.unitOfMeasure ?? 'un').slice(0, 10) || 'un');
-                            fd.append('cfop', (d.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102');
-                            fd.append('ncm', (d.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999');
-                            photos.forEach((file) => fd.append('photos', file));
-                            await productApi.createWithPhotos(fd);
+                          const existingProductId = createdByBarcode[barcode];
+                          if (existingProductId) {
+                            const { data: prod } = await productApi.get(existingProductId);
+                            const current = (prod as any)?.stockQuantity ?? 0;
+                            await productApi.updateStock(existingProductId, { stockQuantity: current + item.quantity });
                           } else {
-                            await productApi.create({
-                              name: d.name.trim(),
-                              barcode: d.barcode.trim().slice(0, 20),
-                              stockQuantity: d.stockQuantity,
-                              price: Math.max(d.price, 0.01),
-                              costPrice: d.costPrice,
-                              ncm: (d.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
-                              cfop: (d.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102',
-                              unitOfMeasure: (d.unitOfMeasure ?? 'un').slice(0, 10) || 'un',
-                              ...(d.category?.trim() ? { category: d.category.trim() } : {}),
-                              ...(d.description?.trim() ? { description: d.description.trim() } : {}),
-                              ...(d.expirationDate?.trim() ? { expirationDate: d.expirationDate.trim() } : {}),
-                              ...(d.lowStockAlertThreshold !== undefined && d.lowStockAlertThreshold !== null ? { lowStockAlertThreshold: Number(d.lowStockAlertThreshold) } : {}),
-                            });
+                            if (photos.length > 0) {
+                              const fd = new FormData();
+                              fd.append('id', generateCoherentUUID());
+                              fd.append('name', d.name.trim());
+                              fd.append('barcode', barcode);
+                              fd.append('price', Math.max(d.price, 0.01).toString());
+                              fd.append('stockQuantity', d.stockQuantity.toString());
+                              if (d.costPrice != null) fd.append('costPrice', d.costPrice.toString());
+                              if (d.category?.trim()) fd.append('category', d.category.trim());
+                              if (d.description?.trim()) fd.append('description', d.description.trim());
+                              if (d.expirationDate?.trim()) fd.append('expirationDate', d.expirationDate.trim());
+                              if (d.lowStockAlertThreshold != null) fd.append('lowStockAlertThreshold', String(d.lowStockAlertThreshold));
+                              fd.append('unitOfMeasure', (d.unitOfMeasure ?? 'un').slice(0, 10) || 'un');
+                              fd.append('cfop', (d.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102');
+                              fd.append('ncm', (d.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999');
+                              photos.forEach((file) => fd.append('photos', file));
+                              const { data: created } = await productApi.createWithPhotos(fd);
+                              if ((created as any)?.id) createdByBarcode[barcode] = (created as any).id;
+                            } else {
+                              const { data: created } = await productApi.create({
+                                name: d.name.trim(),
+                                barcode,
+                                stockQuantity: d.stockQuantity,
+                                price: Math.max(d.price, 0.01),
+                                costPrice: d.costPrice,
+                                ncm: (d.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
+                                cfop: (d.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102',
+                                unitOfMeasure: (d.unitOfMeasure ?? 'un').slice(0, 10) || 'un',
+                                ...(d.category?.trim() ? { category: d.category.trim() } : {}),
+                                ...(d.description?.trim() ? { description: d.description.trim() } : {}),
+                                ...(d.expirationDate?.trim() ? { expirationDate: d.expirationDate.trim() } : {}),
+                                ...(d.lowStockAlertThreshold !== undefined && d.lowStockAlertThreshold !== null ? { lowStockAlertThreshold: Number(d.lowStockAlertThreshold) } : {}),
+                              });
+                              if ((created as any)?.id) createdByBarcode[barcode] = (created as any).id;
+                            }
                           }
                         } catch (e: any) {
                           toast.error(`Falha ao criar produto do item "${item.description?.slice(0, 30)}...": ${e?.response?.data?.message || e?.message || 'Erro'}`);

@@ -4,6 +4,7 @@ import { NotificationDetailModal } from './NotificationDetailModal';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { ConfirmationModal } from '../ui/confirmation-modal';
 import { CheckCheck, RefreshCw, Bell, Trash2 } from 'lucide-react';
 import { notificationApi } from '../../lib/api-endpoints';
 import { toast } from 'react-hot-toast';
@@ -27,6 +28,8 @@ export function NotificationPanel() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [detailNotification, setDetailNotification] = useState<Notification | null>(null);
+  const [confirmDeleteReadOpen, setConfirmDeleteReadOpen] = useState(false);
+  const [deleteReadLoading, setDeleteReadLoading] = useState(false);
 
   useEffect(() => {
     loadNotifications();
@@ -69,15 +72,22 @@ export function NotificationPanel() {
     }
   };
 
-  const handleDeleteRead = async () => {
-    if (!window.confirm('Remover todas as notificações lidas?')) return;
+  const handleDeleteRead = () => {
+    setConfirmDeleteReadOpen(true);
+  };
+
+  const handleConfirmDeleteRead = async () => {
     try {
+      setDeleteReadLoading(true);
       await notificationApi.deleteRead();
       setNotifications(prev => prev.filter(n => !n.isRead));
       toast.success('Notificações lidas removidas');
+      setConfirmDeleteReadOpen(false);
     } catch (error: any) {
       console.error('Erro ao remover notificações lidas:', error);
       toast.error('Erro ao remover notificações lidas');
+    } finally {
+      setDeleteReadLoading(false);
     }
   };
 
@@ -207,6 +217,17 @@ export function NotificationPanel() {
         open={!!detailNotification}
         onClose={() => setDetailNotification(null)}
         onAction={handleAction}
+      />
+
+      <ConfirmationModal
+        open={confirmDeleteReadOpen}
+        onClose={() => setConfirmDeleteReadOpen(false)}
+        onConfirm={handleConfirmDeleteRead}
+        title="Remover notificações lidas"
+        description="Tem certeza que deseja remover todas as notificações já lidas? Esta ação não pode ser desfeita."
+        confirmText="Remover"
+        variant="destructive"
+        loading={deleteReadLoading}
       />
     </div>
   );
