@@ -3,7 +3,12 @@ import { getClientTimeContext } from './utils';
 import { getComputerIdCached } from './computer-id-cache';
 import { logger } from '@/lib/logger';
 
-const API_BASE_URL = 'https://montshop-api-qi3v4.ondigitalocean.app';
+/** Build: defina VITE_API_URL (ex.: https://api.montshop-api.uk). Sem env, usa API VPS. */
+const API_BASE_URL = (() => {
+  const fromEnv = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/+$/, '');
+  if (fromEnv) return fromEnv;
+  return 'https://api.montshop-api.uk';
+})();
 
 // Armazenamento do access token: em Electron usa safeStorage no main; senão memória (e migração de localStorage)
 let accessToken: string | null = null;
@@ -226,7 +231,9 @@ export async function authRefresh(): Promise<{ access_token: string; user: any }
 export interface DeviceInfo {
   deviceId?: string;
   deviceName?: string;
-}export interface ActiveSession {
+}
+
+export interface ActiveSession {
   id: string;
   deviceId?: string;
   ipAddress?: string;
@@ -235,7 +242,9 @@ export interface DeviceInfo {
   createdAt: string;
   expiresAt: string;
   isCurrent: boolean;
-}export async function authLogin(
+}
+
+export async function authLogin(
   login: string, 
   password: string, 
   deviceInfo?: DeviceInfo
@@ -247,7 +256,9 @@ export interface DeviceInfo {
     deviceName: deviceInfo?.deviceName,
   });
   return res.data;
-}/**
+}
+
+/**
  * GET /auth/sessions
  * Listar sessões ativas do usuário
  */
@@ -263,7 +274,9 @@ export async function getActiveSessions(): Promise<ActiveSession[]> {
 export async function revokeSession(sessionId: string): Promise<{ message: string }> {
   const res = await instance.post(`/auth/sessions/${sessionId}/revoke`);
   return res.data;
-}/**
+}
+
+/**
  * POST /auth/sessions/revoke-others
  * Invalidar todas as outras sessões (exceto a atual)
  */

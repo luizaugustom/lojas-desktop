@@ -40,6 +40,8 @@ jobs:
       - name: Build da aplicação (sem publicar)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # API da VPS usada no build de release do desktop.
+          VITE_API_URL: https://api.montshop-api.uk
         run: |
           # Build sem publicar (--publish=never para gerar arquivos mas não criar release)
           npm run build:win -- --publish=never

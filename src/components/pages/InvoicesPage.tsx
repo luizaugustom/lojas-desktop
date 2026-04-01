@@ -847,7 +847,7 @@ export default function InvoicesPage() {
                   <p className="text-sm text-yellow-700 dark:text-yellow-300">
                     A empresa não possui configuração fiscal completa para emissão de NF-e. 
                     Configure os dados fiscais na seção de <strong>Configurações</strong> antes de emitir notas fiscais.
-                    Campos obrigatórios: CNPJ, Inscrição Estadual, Código IBGE, CEP, Estado, Cidade e API Key do Focus NFe.
+                    Campos obrigatórios: CNPJ, Inscrição Estadual, Código IBGE, CEP, Estado, Cidade, certificado digital A1 (.pfx) e ambiente SEFAZ.
                   </p>
                 </div>
               </div>

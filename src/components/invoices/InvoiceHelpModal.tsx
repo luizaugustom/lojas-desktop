@@ -226,7 +226,7 @@ export function InvoiceHelpModal({ open, onClose }: InvoiceHelpModalProps) {
                 <div className="flex-1">
                   <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200 mb-1">Antes de Emitir</h4>
                   <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-2">
-                    Certifique-se de que a empresa possui configuração fiscal completa (CNPJ, IE, Código IBGE, CEP, API Key Focus NFe, etc.)
+                    Certifique-se de que a empresa possui configuração fiscal completa (CNPJ, IE, Código IBGE, CEP, certificado A1, ambiente SEFAZ, etc.)
                   </p>
                   <p className="text-sm text-yellow-700 dark:text-yellow-300">
                     Para NFC-e emitidas na venda: acima do valor configurado pela empresa (ex.: R$ 200), o CPF ou CNPJ do cliente é obrigatório por lei.
@@ -534,7 +534,7 @@ export function InvoiceHelpModal({ open, onClose }: InvoiceHelpModalProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <TroubleshootItem problem="Erro: 'Dados fiscais incompletos'" solution="Acesse Configurações e preencha todos os dados fiscais da empresa (CNPJ, IE, Código IBGE, CEP, API Key Focus NFe)" />
+                  <TroubleshootItem problem="Erro: 'Dados fiscais incompletos'" solution="Acesse Configurações e preencha todos os dados fiscais da empresa (CNPJ, IE, Código IBGE, CEP, certificado A1, SEFAZ)" />
                   <TroubleshootItem problem="Erro: 'CPF/CNPJ inválido'" solution="Verifique se o documento possui 11 dígitos (CPF) ou 14 (CNPJ) e se os dígitos verificadores estão corretos" />
                   <TroubleshootItem problem="Erro ao adicionar cartão" solution="Para pagamentos com cartão, preencha todos os campos obrigatórios: CNPJ da Credenciadora e Tipo de Operação" />
                   <TroubleshootItem problem="Botão 'Status' desabilitado" solution="Somente notas com Chave de Acesso podem ter o status consultado. Notas sem chave ainda não foram processadas." />

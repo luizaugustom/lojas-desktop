@@ -30,6 +30,8 @@ import { getAcquirerList } from '@/lib/acquirer-cnpj-list';
 import { PageHelpModal } from '../help/page-help-modal';
 import { settingsHelpTitle, settingsHelpDescription, settingsHelpIcon, getSettingsHelpTabs } from '../help/contents/settings-help';
 import { logger } from '@/lib/logger';
+import { WhatsAppConnectionCard } from '../whatsapp/whatsapp-connection-card';
+import { WhatsAppGlobalStatus } from '../whatsapp/whatsapp-global-status';
 
 const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL || 'https://montshop.app').replace(/\/+$/, '');
 
@@ -99,6 +101,7 @@ export default function SettingsPage() {
   const [autoMessageStatus, setAutoMessageStatus] = useState<any>(null);
   const [loadingAutoMessage, setLoadingAutoMessage] = useState(false);
   const [togglingAutoMessage, setTogglingAutoMessage] = useState(false);
+  const [whatsappConnected, setWhatsappConnected] = useState(false);
 
   // Estado da página de catálogo
   const [catalogPageConfig, setCatalogPageConfig] = useState<any>(null);
@@ -124,18 +127,20 @@ export default function SettingsPage() {
     stateRegistration: '',
     municipioIbge: '',
     nfceSerie: '1',
+    nfeSerie: '1',
+    sefazEnvironment: 'homologacao' as 'homologacao' | 'producao',
+    aliquotaCbsDefault: '0.9',
+    aliquotaIbsDefault: '0.1',
     csc: '',
     idTokenCsc: '000001',
   });
   const [savingFiscalData, setSavingFiscalData] = useState(false);
 
-  // Estado das configurações globais Focus NFe (apenas para admin)
-  const [adminFocusNfeConfig, setAdminFocusNfeConfig] = useState<any>(null);
-  const [loadingAdminFocusNfe, setLoadingAdminFocusNfe] = useState(false);
-  const [savingAdminFocusNfe, setSavingAdminFocusNfe] = useState(false);
-  const [adminFocusNfeForm, setAdminFocusNfeForm] = useState({
-    focusNfeApiKey: '',
-    focusNfeEnvironment: 'sandbox' as 'sandbox' | 'production',
+  // Token IBPT global opcional (admin) — rota legada /admin/focus-nfe-config
+  const [adminIbptGlobalConfig, setAdminIbptGlobalConfig] = useState<any>(null);
+  const [loadingAdminIbptGlobal, setLoadingAdminIbptGlobal] = useState(false);
+  const [savingAdminIbptGlobal, setSavingAdminIbptGlobal] = useState(false);
+  const [adminIbptGlobalForm, setAdminIbptGlobalForm] = useState({
     ibptToken: '',
   });
 
@@ -278,36 +283,33 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Carregar configuração global Focus NFe (apenas para admin)
-  const loadAdminFocusNfeConfig = async () => {
+  const loadAdminIbptGlobalConfig = async () => {
     try {
-      setLoadingAdminFocusNfe(true);
+      setLoadingAdminIbptGlobal(true);
       const response = await adminApi.getFocusNfeConfig();
-      setAdminFocusNfeConfig(response.data);
-      setAdminFocusNfeForm({
-        focusNfeApiKey: response.data?.focusNfeApiKey || '',
-        focusNfeEnvironment: (response.data?.focusNfeEnvironment || 'sandbox') as 'sandbox' | 'production',
+      setAdminIbptGlobalConfig(response.data);
+      setAdminIbptGlobalForm({
         ibptToken: response.data?.ibptToken || '',
       });
     } catch (error) {
-      console.error('Erro ao carregar configuração Focus NFe:', error);
-      setAdminFocusNfeConfig(null);
+      console.error('Erro ao carregar token IBPT global:', error);
+      setAdminIbptGlobalConfig(null);
     } finally {
-      setLoadingAdminFocusNfe(false);
+      setLoadingAdminIbptGlobal(false);
     }
   };
 
-  const handleSaveAdminFocusNfeConfig = async () => {
+  const handleSaveAdminIbptGlobalConfig = async () => {
     try {
-      setSavingAdminFocusNfe(true);
-      await adminApi.updateFocusNfeConfig(adminFocusNfeForm);
-      toast.success('Configuração global do Focus NFe salva com sucesso!');
-      await loadAdminFocusNfeConfig();
+      setSavingAdminIbptGlobal(true);
+      await adminApi.updateFocusNfeConfig({ ibptToken: adminIbptGlobalForm.ibptToken });
+      toast.success('Token IBPT global salvo com sucesso!');
+      await loadAdminIbptGlobalConfig();
     } catch (error: any) {
-      console.error('Erro ao salvar configuração Focus NFe:', error);
+      console.error('Erro ao salvar token IBPT global:', error);
       handleApiError(error);
     } finally {
-      setSavingAdminFocusNfe(false);
+      setSavingAdminIbptGlobal(false);
     }
   };
 
@@ -347,7 +349,7 @@ export default function SettingsPage() {
     if (user) {
       loadNotificationPreferences();
       if (user.role === 'admin') {
-        loadAdminFocusNfeConfig();
+        loadAdminIbptGlobalConfig();
         loadAdminBoletoCloudConfig();
       }
     }
@@ -700,6 +702,10 @@ export default function SettingsPage() {
 
   const handleToggleAutoMessage = async (enable: boolean) => {
     try {
+      if (enable && !whatsappConnected) {
+        toast.error('Conecte o WhatsApp da empresa nas configurações antes de ativar as mensagens automáticas de cobrança.');
+        return;
+      }
       // Verificar plano antes de habilitar
       if (enable && companyData?.plan) {
         const plan = companyData.plan.toUpperCase();
@@ -748,6 +754,10 @@ export default function SettingsPage() {
         stateRegistration: config.stateRegistration || '',
         municipioIbge: config.municipioIbge || '',
         nfceSerie: config.nfceSerie || '1',
+        nfeSerie: config.nfeSerie || '1',
+        sefazEnvironment: (config.sefazEnvironment || 'homologacao') as 'homologacao' | 'producao',
+        aliquotaCbsDefault: config.aliquotaCbsDefault?.toString() || '0.9',
+        aliquotaIbsDefault: config.aliquotaIbsDefault?.toString() || '0.1',
         csc: '', // Nunca pré-preencher senhas/tokens por segurança
         idTokenCsc: config.idTokenCsc || '000001',
       });
@@ -849,7 +859,17 @@ export default function SettingsPage() {
 
     try {
       setSavingFiscalData(true);
-      await companyApi.updateFiscalConfig(fiscalDataForm);
+      await companyApi.updateFiscalConfig({
+        ...fiscalDataForm,
+        aliquotaCbsDefault:
+          fiscalDataForm.aliquotaCbsDefault === ''
+            ? undefined
+            : Number(fiscalDataForm.aliquotaCbsDefault),
+        aliquotaIbsDefault:
+          fiscalDataForm.aliquotaIbsDefault === ''
+            ? undefined
+            : Number(fiscalDataForm.aliquotaIbsDefault),
+      });
       toast.success('Dados fiscais salvos com sucesso!');
       await loadFiscalConfig();
     } catch (error: any) {
@@ -1277,121 +1297,77 @@ export default function SettingsPage() {
       {user?.role === 'admin' && (
         <nav className="sticky top-0 z-10 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b rounded-md">
           <div className="flex flex-wrap gap-2 p-2">
-            <a href="#focus-nfe-global"><Button variant="outline" size="sm">Focus NFe Global</Button></a>
+            <a href="#ibpt-global-admin"><Button variant="outline" size="sm">Token IBPT global</Button></a>
             <a href="#notificacoes-fim"><Button variant="outline" size="sm">Notificações</Button></a>
           </div>
         </nav>
       )}
 
       <div className="grid gap-6">
-        {/* Configurações Globais Focus NFe - Apenas para Admin */}
+        {/* Token IBPT global (admin) — emissão NF-e/NFC-e é direto na SEFAZ com certificado A1 por empresa */}
         {user?.role === 'admin' && (
-          <Card id="focus-nfe-global" className="scroll-mt-24">
+          <Card id="ibpt-global-admin" className="scroll-mt-24">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <SettingsIcon className="h-5 w-5" />
-                Focus NFe - Configuração Global
+                Token IBPT global (opcional)
               </CardTitle>
               <CardDescription>
-                Configure a API Key global do Focus NFe que será usada por todas as empresas como padrão. 
-                As empresas podem configurar sua própria API Key, mas se não configurada, usarão esta global.
+                Token opcional da API IBPT (Lei 12.741) associado ao administrador. Cada empresa também pode ter seu próprio token em dados fiscais.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {loadingAdminFocusNfe ? (
+              {loadingAdminIbptGlobal ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-2 text-sm text-muted-foreground">Carregando configuração...</p>
+                  <p className="mt-2 text-sm text-muted-foreground">Carregando...</p>
                 </div>
               ) : (
                 <>
                   <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                     <p className="text-sm text-blue-900 dark:text-blue-100 font-semibold mb-1">
-                      ℹ️ Sobre a Configuração Global
+                      ℹ️ Sobre o IBPT
                     </p>
                     <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
-                      <li>• Esta API Key será usada por todas as empresas como padrão</li>
-                      <li>• Empresas podem configurar sua própria API Key (opcional)</li>
-                      <li>• Se uma empresa não tiver API Key própria, usará esta global</li>
-                      <li>• Uma única assinatura Focus NFe pode servir múltiplas empresas</li>
+                      <li>• Usado para exibir tributos aproximados nos documentos fiscais</li>
+                      <li>• Opcional; a emissão na SEFAZ depende do certificado A1 e dos dados fiscais da empresa</li>
+                      <li>• Obtenha o token em ibpt.org.br</li>
                     </ul>
                   </div>
 
                   <div className="grid gap-4">
-                    {/* API Key Global */}
                     <div className="space-y-2">
-                      <Label htmlFor="admin-focusNfeApiKey">
-                        API Key Global do Focus NFe *
-                      </Label>
-                      <Input
-                        id="admin-focusNfeApiKey"
-                        type="password"
-                        value={adminFocusNfeForm.focusNfeApiKey}
-                        onChange={(e) => setAdminFocusNfeForm({ ...adminFocusNfeForm, focusNfeApiKey: e.target.value })}
-                        placeholder="Digite a API Key global do Focus NFe"
-                        required
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        API Key compartilhada por todas as empresas. Obtenha em: <a href="https://focusnfe.com.br" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">focusnfe.com.br</a>
-                      </p>
-                      {adminFocusNfeConfig?.hasFocusNfeApiKey && (
-                        <p className="text-xs text-green-600 dark:text-green-400">
-                          ✅ API Key global configurada
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Ambiente */}
-                    <div className="space-y-2">
-                      <Label htmlFor="admin-focusNfeEnvironment">
-                        Ambiente *
-                      </Label>
-                      <Select
-                        value={adminFocusNfeForm.focusNfeEnvironment}
-                        onValueChange={(value) => setAdminFocusNfeForm({ ...adminFocusNfeForm, focusNfeEnvironment: value as 'sandbox' | 'production' })}
-                      >
-                        <SelectTrigger id="admin-focusNfeEnvironment">
-                          <SelectValue placeholder="Selecione o ambiente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sandbox">Sandbox (Homologação) - Para testes</SelectItem>
-                          <SelectItem value="production">Production (Produção) - Para emissão real</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Ambiente onde as notas fiscais serão emitidas. Use "Sandbox" para testes e "Production" para emissão real.
-                      </p>
-                    </div>
-
-                    {/* Token IBPT */}
-                    <div className="space-y-2">
-                      <Label htmlFor="admin-ibptToken">
-                        Token IBPT (Opcional)
-                      </Label>
+                      <Label htmlFor="admin-ibptToken">Token IBPT</Label>
                       <Input
                         id="admin-ibptToken"
                         type="password"
-                        value={adminFocusNfeForm.ibptToken}
-                        onChange={(e) => setAdminFocusNfeForm({ ...adminFocusNfeForm, ibptToken: e.target.value })}
-                        placeholder="Digite o token IBPT (opcional)"
+                        value={adminIbptGlobalForm.ibptToken}
+                        onChange={(e) =>
+                          setAdminIbptGlobalForm({ ...adminIbptGlobalForm, ibptToken: e.target.value })
+                        }
+                        placeholder="Cole o token IBPT (opcional)"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Token da API IBPT para cálculo de tributos aproximados. Opcional, mas recomendado para melhor precisão.
-                        Obtenha em: <a href="https://deolhonoimposto.ibpt.org.br" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">ibpt.org.br</a>
+                        <a
+                          href="https://deolhonoimposto.ibpt.org.br"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          deolhonoimposto.ibpt.org.br
+                        </a>
                       </p>
-                      {adminFocusNfeConfig?.hasIbptToken && (
-                        <p className="text-xs text-green-600 dark:text-green-400">
-                          ✅ Token IBPT configurado
-                        </p>
+                      {adminIbptGlobalConfig?.hasIbptToken && (
+                        <p className="text-xs text-green-600 dark:text-green-400">✅ Token IBPT global configurado</p>
                       )}
                     </div>
 
                     <Button
-                      onClick={handleSaveAdminFocusNfeConfig}
-                      disabled={savingAdminFocusNfe}
+                      onClick={handleSaveAdminIbptGlobalConfig}
+                      disabled={savingAdminIbptGlobal}
                       className="w-full"
                     >
-                      {savingAdminFocusNfe ? (
+                      {savingAdminIbptGlobal ? (
                         <>
                           <Save className="mr-2 h-4 w-4 animate-spin" />
                           Salvando...
@@ -1399,7 +1375,7 @@ export default function SettingsPage() {
                       ) : (
                         <>
                           <Save className="mr-2 h-4 w-4" />
-                          Salvar Configuração Global
+                          Salvar token IBPT global
                         </>
                       )}
                     </Button>
@@ -1721,6 +1697,16 @@ export default function SettingsPage() {
           </DialogContent>
         </Dialog>
 
+        {/* WhatsApp Evolution — apenas admin pode gerenciar a instância */}
+        {user?.role === 'admin' && (
+          <WhatsAppConnectionCard onConnectionChange={(c) => setWhatsappConnected(c)} />
+        )}
+
+        {/* Status do WhatsApp global — empresas e vendedores veem status read-only */}
+        {(user?.role === 'empresa' || user?.role === 'vendedor') && (
+          <WhatsAppGlobalStatus onConnectionChange={(c) => setWhatsappConnected(c)} />
+        )}
+
         {/* Mensagens Automáticas - Apenas para Empresas */}
         {user?.role === 'empresa' && (
           <Card id="mensagem-cobranca" className="scroll-mt-24">
@@ -1741,6 +1727,14 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <>
+                  {!whatsappConnected && (
+                    <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-900 dark:text-amber-100 text-sm">
+                        O WhatsApp do sistema não está conectado. Entre em contato com o administrador para ativá-lo.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   {/* Aviso de plano */}
                   {companyData?.plan && companyData.plan.toUpperCase() !== 'PRO' && companyData.plan.toUpperCase() !== 'TRIAL_7_DAYS' && (
                     <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
@@ -1776,7 +1770,14 @@ export default function SettingsPage() {
                     </div>
                     <Button
                       onClick={() => handleToggleAutoMessage(!autoMessageStatus?.autoMessageEnabled)}
-                      disabled={togglingAutoMessage || (companyData?.plan && companyData.plan.toUpperCase() !== 'PRO' && companyData.plan.toUpperCase() !== 'TRIAL_7_DAYS' && !autoMessageStatus?.autoMessageEnabled)}
+                      disabled={
+                        togglingAutoMessage ||
+                        (!autoMessageStatus?.autoMessageEnabled &&
+                          (!whatsappConnected ||
+                            (companyData?.plan &&
+                              companyData.plan.toUpperCase() !== 'PRO' &&
+                              companyData.plan.toUpperCase() !== 'TRIAL_7_DAYS')))
+                      }
                       variant={autoMessageStatus?.autoMessageEnabled ? "destructive" : "default"}
                     >
                       {togglingAutoMessage ? (
@@ -2031,25 +2032,22 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <>
-                  {/* Aviso sobre API Key do Focus NFe */}
-                  {!fiscalConfig?.adminHasFocusNfeApiKey && (
-                    <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                      <p className="text-sm text-red-900 dark:text-red-100 font-semibold mb-1">
-                        ⚠️ API Key do Focus NFe não configurada
+                  {!fiscalConfig?.hasCertificateBlob || !fiscalConfig?.hasCertificatePassword ? (
+                    <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                      <p className="text-sm text-amber-900 dark:text-amber-100 font-semibold mb-1">
+                        ⚠️ Certificado A1 e senha necessários para a SEFAZ
                       </p>
-                      <p className="text-sm text-red-800 dark:text-red-200">
-                        O administrador precisa configurar a API Key do Focus NFe nas configurações globais antes que você possa emitir notas fiscais.
+                      <p className="text-sm text-amber-800 dark:text-amber-200">
+                        A emissão de NF-e e NFC-e é feita diretamente com a SEFAZ. Configure a senha e envie o arquivo .pfx ou .p12 na seção &quot;Certificado Digital&quot; abaixo.
                       </p>
                     </div>
-                  )}
-
-                  {fiscalConfig?.adminHasFocusNfeApiKey && (
+                  ) : (
                     <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
                       <p className="text-sm text-green-900 dark:text-green-100 font-semibold mb-1">
-                        ✅ API Key do Focus NFe configurada
+                        ✅ Certificado digital pronto
                       </p>
                       <p className="text-sm text-green-800 dark:text-green-200">
-                        O sistema está pronto para emitir notas fiscais. Configure os dados abaixo para começar.
+                        Certificado A1 e senha configurados. Complete os dados fiscais abaixo e o CSC para NFC-e.
                       </p>
                     </div>
                   )}
@@ -2155,6 +2153,48 @@ export default function SettingsPage() {
                       </p>
                     </div>
 
+                    <div className="space-y-2">
+                      <Label htmlFor="nfeSerie">
+                        Série da NF-e
+                      </Label>
+                      <Input
+                        id="nfeSerie"
+                        value={fiscalDataForm.nfeSerie}
+                        onChange={(e) =>
+                          setFiscalDataForm({ ...fiscalDataForm, nfeSerie: e.target.value.replace(/\D/g, '') })
+                        }
+                        placeholder="1"
+                        maxLength={3}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Série usada nas NF-e modelo 55. Geralmente "1", salvo orientação fiscal diferente.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="sefazEnvironmentEmpresa">Ambiente SEFAZ</Label>
+                      <Select
+                        value={fiscalDataForm.sefazEnvironment}
+                        onValueChange={(value) =>
+                          setFiscalDataForm({
+                            ...fiscalDataForm,
+                            sefazEnvironment: value as 'homologacao' | 'producao',
+                          })
+                        }
+                      >
+                        <SelectTrigger id="sefazEnvironmentEmpresa">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="homologacao">Homologação (testes)</SelectItem>
+                          <SelectItem value="producao">Produção</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Atual: {fiscalConfig?.sefazEnvironment === 'producao' ? 'Produção' : 'Homologação'}
+                      </p>
+                    </div>
+
                     {/* CNAE */}
                     <div className="space-y-2">
                       <Label htmlFor="cnae">
@@ -2172,6 +2212,50 @@ export default function SettingsPage() {
                       <p className="text-xs text-muted-foreground">
                         7 dígitos. Opcional, mas recomendado.
                       </p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="aliquotaCbsDefault">
+                          Alíquota padrão CBS
+                        </Label>
+                        <Input
+                          id="aliquotaCbsDefault"
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          value={fiscalDataForm.aliquotaCbsDefault}
+                          onChange={(e) =>
+                            setFiscalDataForm({ ...fiscalDataForm, aliquotaCbsDefault: e.target.value })
+                          }
+                          placeholder="0.90"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Percentual piloto usado no cálculo interno de CBS. Revise com o contador antes de usar em produção.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="aliquotaIbsDefault">
+                          Alíquota padrão IBS
+                        </Label>
+                        <Input
+                          id="aliquotaIbsDefault"
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          value={fiscalDataForm.aliquotaIbsDefault}
+                          onChange={(e) =>
+                            setFiscalDataForm({ ...fiscalDataForm, aliquotaIbsDefault: e.target.value })
+                          }
+                          placeholder="0.10"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Percentual piloto usado no cálculo interno de IBS. Revise com o contador antes de usar em produção.
+                        </p>
+                      </div>
                     </div>
 
                     {/* CSC */}
@@ -2271,8 +2355,9 @@ export default function SettingsPage() {
                       <li>• Regime Tributário</li>
                       <li>• Inscrição Estadual</li>
                       <li>• Código IBGE do Município</li>
+                      <li>• Ambiente SEFAZ (homologação ou produção)</li>
                       <li>• CSC (Código de Segurança do Contribuinte)</li>
-                      <li>• Certificado Digital (próxima seção)</li>
+                      <li>• Certificado digital A1 — senha e arquivo .pfx (próxima seção)</li>
                     </ul>
                   </div>
                 </>
@@ -2357,10 +2442,10 @@ export default function SettingsPage() {
                       <p className="text-xs text-muted-foreground">
                         Formatos aceitos: .pfx, .p12. Tamanho máximo: 10MB
                       </p>
-                      {fiscalConfig?.certificateFileUrl && (
+                      {(fiscalConfig?.hasCertificateBlob || fiscalConfig?.certificateFileUrl) && (
                         <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3 mt-2">
                           <p className="text-sm text-green-900 dark:text-green-100">
-                            ✅ Certificado já enviado
+                            ✅ Certificado A1 disponível no sistema
                           </p>
                         </div>
                       )}
@@ -2418,7 +2503,7 @@ export default function SettingsPage() {
                       <li>• O certificado digital é necessário para emissão de notas fiscais</li>
                       <li>• Configure primeiro a senha do certificado</li>
                       <li>• Depois faça upload do arquivo .pfx ou .p12</li>
-                      <li>• O certificado será enviado automaticamente para o Focus NFe</li>
+                      <li>• O arquivo é armazenado com segurança para assinatura e transmissão à SEFAZ</li>
                     </ul>
                   </div>
                 </>

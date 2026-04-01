@@ -5,7 +5,7 @@ import { FeatureCard, StepItem, TipItem, TroubleshootItem, type PageHelpTab } fr
 const STAGGER = 50;
 
 export const companiesHelpTitle = 'Central de Ajuda - Empresas';
-export const companiesHelpDescription = 'Gerencie empresas (admin): cadastro, status ativo/inativo e configuração Focus NFe.';
+export const companiesHelpDescription = 'Gerencie empresas (admin): cadastro, status ativo/inativo e configuração fiscal (SEFAZ).';
 export const companiesHelpIcon = <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />;
 
 export function getCompaniesHelpTabs(): PageHelpTab[] {
@@ -25,7 +25,7 @@ export function getCompaniesHelpTabs(): PageHelpTab[] {
             <FeatureCard icon={<Plus className="h-5 w-5 text-green-500" />} title="Nova empresa" description="Cadastre uma nova empresa com nome, CNPJ e dados de acesso." badge="Admin" delay={0 * STAGGER} />
             <FeatureCard icon={<Search className="h-5 w-5 text-blue-500" />} title="Busca" description="Pesquise empresas por nome ou CNPJ." delay={1 * STAGGER} />
             <FeatureCard icon={<Building2 className="h-5 w-5 text-purple-500" />} title="Status ativo/inativo" description="Ative ou desative empresas. Empresas inativas não acessam o sistema." delay={2 * STAGGER} />
-            <FeatureCard icon={<Settings className="h-5 w-5 text-amber-500" />} title="Configuração Focus NFe" description="Configure API Key e dados fiscais da empresa para emissão de NF-e/NFC-e." delay={3 * STAGGER} />
+            <FeatureCard icon={<Settings className="h-5 w-5 text-amber-500" />} title="Configuração fiscal (SEFAZ)" description="Ambiente SEFAZ, IBPT opcional e status do certificado A1 por empresa." delay={3 * STAGGER} />
           </div>
         </div>
       ),
@@ -70,7 +70,7 @@ export function getCompaniesHelpTabs(): PageHelpTab[] {
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-orange-500" />Problemas comuns</CardTitle></CardHeader>
             <CardContent>
-              <TroubleshootItem problem="Empresa não consegue emitir nota" solution="Verifique a configuração Focus NFe (API Key e dados fiscais) na empresa. A empresa deve preencher em Configurações ou o admin pode configurar aqui." />
+              <TroubleshootItem problem="Empresa não consegue emitir nota" solution="Verifique certificado A1, senha, dados fiscais e ambiente SEFAZ. A empresa configura em Configurações; o admin pode ajustar SEFAZ/IBPT no menu da empresa." />
             </CardContent>
           </Card>
         </div>

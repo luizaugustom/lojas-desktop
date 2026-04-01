@@ -59,7 +59,7 @@ export function getInboundInvoicesHelpTabs(): PageHelpTab[] {
                 Emissão de NFe de devolução
               </CardTitle>
               <CardDescription>
-                A NFe de devolução é a nota fiscal de saída que sua empresa emite para o fornecedor quando devolve mercadorias que foram recebidas em uma nota de entrada. Ela referencia a nota de entrada original e é transmitida pela Focus NFe (mesmo provedor das demais NF-e).
+                A NFe de devolução é a nota fiscal de saída que sua empresa emite para o fornecedor quando devolve mercadorias que foram recebidas em uma nota de entrada. Ela referencia a nota de entrada original e é transmitida diretamente à SEFAZ (certificado A1 da empresa).
               </CardDescription>
             </CardHeader>
           </Card>
@@ -81,7 +81,7 @@ export function getInboundInvoicesHelpTabs(): PageHelpTab[] {
                 </li>
                 <li className="flex items-start gap-2">
                   <FileText className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
-                  <span><strong className="text-foreground">Configuração fiscal:</strong> a API Key do Focus NFe deve estar configurada (pela empresa ou pelo administrador) para que a emissão seja enviada à SEFAZ.</span>
+                  <span><strong className="text-foreground">Configuração fiscal:</strong> certificado digital A1 (.pfx), senha, dados fiscais e CSC (para NFC-e) devem estar configurados para transmissão à SEFAZ.</span>
                 </li>
               </ul>
             </CardContent>
@@ -97,7 +97,7 @@ export function getInboundInvoicesHelpTabs(): PageHelpTab[] {
               <StepItem number={2} text="Clique no botão «Emitir Devolução». Será aberto um modal com o título «Emitir nota de devolução»." />
               <StepItem number={3} text="Aguarde o carregamento do preview. O sistema exibirá o resumo da nota de entrada: fornecedor, chave de acesso e valor total, além de uma tabela com todos os itens (descrição, quantidade, valor unitário e total por item)." />
               <StepItem number={4} text="Confira atentamente os dados exibidos. A NFe de devolução será emitida com todos os itens da nota de entrada (devolução total). Certifique-se de que é realmente essa a nota e os itens que deseja devolver." />
-              <StepItem number={5} text="Se estiver tudo correto, clique em «Confirmar e emitir». O sistema enviará a NFe de devolução para a Focus NFe; a emissão pode levar alguns segundos." />
+              <StepItem number={5} text="Se estiver tudo correto, clique em «Confirmar e emitir». O sistema transmitirá a NFe de devolução à SEFAZ; a emissão pode levar alguns segundos." />
               <StepItem number={6} text="Ao concluir, uma mensagem de sucesso será exibida e a nota de devolução ficará registrada. Você pode acessá-la pelo botão «Ver devoluções» na mesma linha da nota de entrada e baixar o PDF/XML da NFe de devolução a partir dali." />
             </CardContent>
           </Card>
@@ -122,7 +122,7 @@ export function getInboundInvoicesHelpTabs(): PageHelpTab[] {
               <TipItem icon={<CheckCircle2 className="h-4 w-4 text-green-500" />} text="Só é possível emitir devolução para notas que foram importadas com XML. Notas cadastradas apenas com chave/fornecedor/valor manual não possuem os dados necessários para a NFe de devolução." />
               <TroubleshootItem problem="Botão «Emitir Devolução» desabilitado" solution="Verifique se a nota foi importada com o arquivo XML e se a chave de acesso tem 44 dígitos. Passe o mouse sobre o botão para ver a dica: «É necessário ter o XML e a chave de 44 dígitos para emitir a devolução.»" />
               <TroubleshootItem problem="Erro ao carregar o preview no modal" solution="A nota pode não ser uma NF-e de entrada válida, o XML pode estar incompleto ou o endereço do fornecedor no XML pode estar incompleto. Confira o XML original e, se necessário, reimporte a nota com o XML correto." />
-              <TroubleshootItem problem="Falha ao emitir (Focus NFe / SEFAZ)" solution="Verifique a configuração da API Key do Focus NFe nas configurações da empresa. Erros de timeout ou conexão indicam problema de rede ou indisponibilidade do serviço; tente novamente em alguns instantes." />
+              <TroubleshootItem problem="Falha ao emitir na SEFAZ" solution="Verifique certificado A1, senha, ambiente SEFAZ e dados fiscais em Configurações. Erros de timeout ou conexão podem ser rede ou indisponibilidade da SEFAZ; tente novamente em instantes." />
             </CardContent>
           </Card>
         </div>

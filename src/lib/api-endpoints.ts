@@ -111,9 +111,9 @@ export const companyApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  updateFocusNfeConfig: (id: string, data: any) => api.patch(`/company/${id}/focus-nfe-config`, data),
-  getFocusNfeConfig: (id: string) => api.get(`/company/${id}/focus-nfe-config`),
   getFiscalConfigForAdmin: (id: string) => api.get(`/company/${id}/fiscal-config`),
+  updateFiscalConfigForAdmin: (id: string, data: any) =>
+    api.patch(`/company/${id}/fiscal-config`, data),
   acceptTerms: (data: { accepted: boolean }) => api.post('/company/terms', data),
 };
 
@@ -387,14 +387,13 @@ export const adminApi = {
 
   /**
    * PATCH /admin/focus-nfe-config
-   * Roles: ADMIN - Atualizar configuração global do Focus NFe
-   * Body: { focusNfeApiKey?, focusNfeEnvironment?, ibptToken? }
+   * Roles: ADMIN - Token IBPT global (rota legada; use principalmente { ibptToken })
    */
   updateFocusNfeConfig: (data: any) => api.patch('/admin/focus-nfe-config', data),
 
   /**
    * GET /admin/focus-nfe-config
-   * Roles: ADMIN - Obter configuração global do Focus NFe
+   * Roles: ADMIN - Metadados IBPT global (e campos legados Focus, se existirem)
    */
   getFocusNfeConfig: () => api.get('/admin/focus-nfe-config'),
 
@@ -409,6 +408,29 @@ export const adminApi = {
    * Roles: ADMIN - Obter configuração global do Boleto Cloud
    */
   getBoletoCloudConfig: () => api.get('/admin/boleto-cloud-config'),
+};
+
+export const whatsappApi = {
+  createInstance: () =>
+    api.post('/whatsapp/instance/create', {}),
+  connect: () =>
+    api.get<{ qr: string | null; pairingCode?: string; instanceName?: string }>('/whatsapp/instance/connect'),
+  getInstanceStatus: () =>
+    api.get<{
+      hasInstance: boolean;
+      connected: boolean;
+      status: string;
+      instanceName?: string;
+      connectedPhone?: string | null;
+    }>('/whatsapp/instance/status'),
+  disconnectInstance: () =>
+    api.delete('/whatsapp/instance/disconnect'),
+  deleteInstance: () =>
+    api.delete('/whatsapp/instance/delete'),
+  sendMessage: (data: any) => api.post('/whatsapp/send-message', data),
+  sendTemplate: (data: any) => api.post('/whatsapp/send-template', data),
+  validatePhone: (phone: string) => api.post('/whatsapp/validate-phone', { phone }),
+  formatPhone: (phone: string) => api.post('/whatsapp/format-phone', { phone }),
 };
 
 export const dashboardApi = {

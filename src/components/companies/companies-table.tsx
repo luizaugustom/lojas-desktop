@@ -26,10 +26,17 @@ interface CompaniesTableProps {
   onEdit: (company: Company) => void;
   onDelete: (id: string) => void;
   onToggleStatus: (company: Company) => void;
-  onConfigureFocusNfe?: (company: Company) => void;
+  onConfigureCompanyFiscal?: (company: Company) => void;
 }
 
-export function CompaniesTable({ companies, loading, onEdit, onDelete, onToggleStatus, onConfigureFocusNfe }: CompaniesTableProps) {
+export function CompaniesTable({
+  companies,
+  loading,
+  onEdit,
+  onDelete,
+  onToggleStatus,
+  onConfigureCompanyFiscal,
+}: CompaniesTableProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (loading) {
@@ -121,10 +128,10 @@ export function CompaniesTable({ companies, loading, onEdit, onDelete, onToggleS
                       <Edit className="h-4 w-4 mr-2" />
                       Editar
                     </DropdownMenuItem>
-                    {onConfigureFocusNfe && (
-                      <DropdownMenuItem onClick={() => onConfigureFocusNfe(company)}>
+                    {onConfigureCompanyFiscal && (
+                      <DropdownMenuItem onClick={() => onConfigureCompanyFiscal(company)}>
                         <Settings className="h-4 w-4 mr-2" />
-                        Configurar Focus NFe
+                        Configuração fiscal (SEFAZ)
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
