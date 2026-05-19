@@ -246,6 +246,57 @@ export function ProductDetailsModal({
               />
             </div>
 
+            {/* Seção de Lotes/Validades */}
+            {product.stockEntries && product.stockEntries.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">
+                  Lotes / Validades em Estoque
+                </h3>
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Lote</th>
+                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Validade</th>
+                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">Quantidade</th>
+                        {canViewCostPrice && (
+                          <th className="text-right px-3 py-2 font-medium text-muted-foreground">Custo Unit.</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {product.stockEntries.map((entry) => {
+                        const isExpired = entry.expirationDate && new Date(entry.expirationDate) <= new Date();
+                        const isExpiringSoon = entry.expirationDate && !isExpired && new Date(entry.expirationDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+                        return (
+                          <tr key={entry.id} className={isExpired ? 'bg-red-50' : isExpiringSoon ? 'bg-orange-50' : ''}>
+                            <td className="px-3 py-2">
+                              {entry.batchNumber || <span className="text-muted-foreground">-</span>}
+                            </td>
+                            <td className="px-3 py-2">
+                              {entry.expirationDate ? (
+                                <span className={isExpired ? 'text-red-600 font-medium' : isExpiringSoon ? 'text-orange-600 font-medium' : ''}>
+                                  {formatDate(entry.expirationDate)}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">Sem validade</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium">{entry.quantity}</td>
+                            {canViewCostPrice && (
+                              <td className="px-3 py-2 text-right text-muted-foreground">
+                                {entry.unitCost ? formatCurrency(entry.unitCost) : '-'}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Seção Fiscal */}
             <div>
               <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">

@@ -187,7 +187,7 @@ export function Cart({ keyboardFocusArea = 'products', keyboardShortcutsEnabled 
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm line-clamp-2">{item.product.name}</p>
                 <p className="text-sm text-muted-foreground">
-                  {formatCurrency(getEffectivePrice(item.product))} x {item.quantity}
+                  {formatCurrency(getEffectivePrice(item.product))} x {item.quantity % 1 === 0 ? item.quantity : item.quantity.toFixed(3).replace(/\.?0+$/, '')}
                 </p>
                 <p className="font-semibold">{formatCurrency(item.subtotal)}</p>
               </div>
@@ -201,7 +201,7 @@ export function Cart({ keyboardFocusArea = 'products', keyboardShortcutsEnabled 
                   >
                     <Minus className="h-3 w-3" />
                   </Button>
-                  <span className="w-8 text-center text-sm">{item.quantity}</span>
+                  <span className="w-12 text-center text-sm">{item.quantity % 1 === 0 ? item.quantity : item.quantity.toFixed(3).replace(/\.?0+$/, '')}</span>
                   <Button
                     size="icon"
                     variant="outline"

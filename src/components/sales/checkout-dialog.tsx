@@ -83,6 +83,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
   const [emitOnlyNfe, setEmitOnlyNfe] = useState(false);
   const [emitBoleto, setEmitBoleto] = useState(false);
   const [boletoDueDate, setBoletoDueDate] = useState('');
+  const [forceNonFiscal, setForceNonFiscal] = useState(false);
   // Cache do conteúdo de impressão para reimpressão
   const [cachedPrintContent, setCachedPrintContent] = useState<{ content: string | { storeCopy: string; customerCopy: string; isInstallmentSale: boolean }; type: string } | null>(null);
   const [currentPrintType, setCurrentPrintType] = useState<string | null>(null);
@@ -588,6 +589,19 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         },
         context: ['checkout'],
       },
+      {
+        key: 'F7',
+        handler: () => {
+          // Finalizar sem emissão fiscal
+          if (!showInstallmentModal && !showCreditCardInstallmentModal && !loading && paymentDetails.length > 0) {
+            setForceNonFiscal(true);
+            const formData = { clientName: watch('clientName'), clientCpfCnpj: watch('clientCpfCnpj') };
+            handleSubmit(onSubmit)(formData as any).catch(() => {});
+            setForceNonFiscal(false);
+          }
+        },
+        context: ['checkout'],
+      },
     ],
     enabled: open && !showPrintConfirmation && !showCustomerCopyConfirmation && !showBilletPrintConfirmation && !showStoreCreditVoucherConfirmation,
     context: 'checkout',
@@ -1086,6 +1100,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         clientName: data.clientName,
         clientCpfCnpj: data.clientCpfCnpj,
         sellerId: selectedSellerId || undefined,
+        ...(forceNonFiscal && { forceNonFiscal: true }),
         ...(emitOnlyNfe && {
           emitBoleto: emitBoleto,
           boletoDueDate: emitBoleto && boletoDueDate ? boletoDueDate : undefined,
@@ -1731,6 +1746,20 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
                 Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setForceNonFiscal(true);
+                  const formData = { clientName: watch('clientName'), clientCpfCnpj: watch('clientCpfCnpj') };
+                  handleSubmit(onSubmit)(formData as any).catch(() => {});
+                  setForceNonFiscal(false);
+                }}
+                disabled={loading || paymentDetails.length === 0}
+                title="Finalizar sem emitir NFC-e (F7)"
+              >
+                {loading ? 'Processando...' : 'Sem Nota (F7)'}
               </Button>
               <Button type="submit" disabled={loading || paymentDetails.length === 0}>
                 {loading ? 'Processando...' : 'Confirmar Venda'}

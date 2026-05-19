@@ -46,12 +46,17 @@ export function useKeyboardShortcuts({
 
   const isInputElement = useCallback((target: EventTarget | null): boolean => {
     if (!target || !(target instanceof HTMLElement)) return false;
-    
+
     const tagName = target.tagName.toLowerCase();
     const isInput = tagName === 'input' || tagName === 'textarea' || tagName === 'select';
     const isContentEditable = target.isContentEditable;
-    const isDialogInput = target.closest('[role="dialog"]') !== null;
-    
+    const isInDialog = target.closest('[role="dialog"]') !== null;
+
+    // Se está dentro de um dialog, bloquear atalhos (retorna true = é input)
+    if (isInDialog) {
+      return true;
+    }
+
     // Se está em um input e ignoreInputs é true, não processar atalhos
     // Exceto se for um input específico que queremos permitir (ex: busca)
     if (isInput && ignoreInputs) {
@@ -60,7 +65,7 @@ export function useKeyboardShortcuts({
       const allowedInInput = input.type === 'search' || input.placeholder?.toLowerCase().includes('buscar');
       return !allowedInInput;
     }
-    
+
     return isContentEditable;
   }, [ignoreInputs]);
 
@@ -70,8 +75,9 @@ export function useKeyboardShortcuts({
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignorar se estiver digitando em input (exceto inputs permitidos)
       if (isInputElement(e.target)) {
-        // Verificar se é um atalho que deve funcionar mesmo em inputs
-        const isSpecialShortcut = e.ctrlKey || e.altKey || e.key === 'Escape' || e.key === 'Enter';
+        // Apenas Ctrl/Alt/Escape em inputs - Enter NÃO é mais especial aqui
+        // pois interfere com modais de quantidade
+        const isSpecialShortcut = e.ctrlKey || e.altKey || e.key === 'Escape';
         if (!isSpecialShortcut) {
           return;
         }

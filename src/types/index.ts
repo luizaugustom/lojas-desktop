@@ -119,6 +119,16 @@ export interface Admin {
   updatedAt: string;
 }
 
+export interface StockEntry {
+  id: string;
+  batchNumber: string | null;
+  expirationDate: string | null;
+  quantity: number;
+  unitCost: number;
+  inboundInvoiceId: string | null;
+  createdAt: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -126,6 +136,7 @@ export interface Product {
   price: number;
   costPrice?: number;
   stockQuantity: number;
+  stockEntries?: StockEntry[];
   minStockQuantity?: number;
   lowStockAlertThreshold?: number;
   category?: string;

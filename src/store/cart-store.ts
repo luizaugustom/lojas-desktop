@@ -63,7 +63,7 @@ export const useCartStore = create<CartState>((set, get) => ({
             ? {
                 ...item,
                 quantity: item.quantity + quantity,
-                subtotal: (item.quantity + quantity) * effectivePrice,
+                subtotal: Math.round((item.quantity + quantity) * effectivePrice * 100) / 100,
               }
             : item
         ),
@@ -75,7 +75,7 @@ export const useCartStore = create<CartState>((set, get) => ({
           {
             product,
             quantity,
-            subtotal: quantity * effectivePrice,
+            subtotal: Math.round(quantity * effectivePrice * 100) / 100,
           },
         ],
       });
@@ -100,7 +100,7 @@ export const useCartStore = create<CartState>((set, get) => ({
           ? {
               ...item,
               quantity,
-              subtotal: quantity * getEffectivePrice(item.product),
+              subtotal: Math.round(quantity * getEffectivePrice(item.product) * 100) / 100,
             }
           : item
       ),
@@ -116,12 +116,12 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
   
   getSubtotal: () => {
-    return get().items.reduce((total, item) => total + Number(item.subtotal), 0);
+    return Math.round(get().items.reduce((total, item) => total + Number(item.subtotal), 0) * 100) / 100;
   },
-  
+
   getTotal: () => {
     const subtotal = get().getSubtotal();
-    return Math.max(0, subtotal - get().discount);
+    return Math.round(Math.max(0, subtotal - get().discount) * 100) / 100;
   },
 }));
 

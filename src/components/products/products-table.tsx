@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit, Trash2, Package, AlertCircle, AlertTriangle, Eye } from 'lucide-react';
+import { Edit, Trash2, Package, AlertCircle, AlertTriangle, Eye, PlusCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
@@ -22,6 +22,7 @@ interface ProductsTableProps {
   onRefetch: () => void;
   canManage?: boolean;
   onRegisterLoss?: (product: Product) => void;
+  onAddStock?: (product: Product) => void;
   page?: number;
   totalPages?: number;
   totalItems?: number;
@@ -36,6 +37,7 @@ export function ProductsTable({
   onRefetch,
   canManage = true,
   onRegisterLoss,
+  onAddStock,
   page = 1,
   totalPages = 1,
   totalItems,
@@ -217,6 +219,18 @@ export function ProductsTable({
                         <Button variant="ghost" size="icon-sm" onClick={() => onEdit(product)} aria-label={`Editar produto ${product.name}`}>
                           <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                         </Button>
+                        {onAddStock && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onAddStock(product)}
+                            aria-label={`Adicionar estoque ao produto ${product.name}`}
+                            className="text-green-600 hover:text-green-700"
+                            title="Adicionar estoque"
+                          >
+                            <PlusCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-sm"

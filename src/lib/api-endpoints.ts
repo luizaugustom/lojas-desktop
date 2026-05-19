@@ -30,6 +30,8 @@ export const productApi = {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
   updateStock: (id: string, data: any) => api.patch(`/product/${id}/stock`, data),
+  addStock: (id: string, data: { quantity: number; expirationDate?: string; batchNumber?: string; unitCost?: number }) =>
+    api.post(`/product/${id}/stock`, data),
   delete: (id: string, params?: any) => api.delete(`/product/${id}`, { params }),
 };
 

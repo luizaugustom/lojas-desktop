@@ -19,6 +19,7 @@ import { useDateRange } from '../../hooks/useDateRange';
 import { ProductsTable } from '../products/products-table';
 import { ProductDialog } from '../products/product-dialog';
 import { ProductLossDialog } from '../product-losses/product-loss-dialog';
+import { AddStockDialog } from '../products/add-stock-dialog';
 import { ProductFilters } from '../products/product-filters';
 import { applyProductFilters, getActiveFiltersCount, type ProductFilters as ProductFiltersType } from '../../lib/productFilters';
 import type { Product, PlanUsageStats } from '../../types';
@@ -35,8 +36,10 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [lossDialogOpen, setLossDialogOpen] = useState(false);
+  const [addStockDialogOpen, setAddStockDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [productForLoss, setProductForLoss] = useState<Product | null>(null);
+  const [productForAddStock, setProductForAddStock] = useState<Product | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState<ProductFiltersType>({
@@ -148,6 +151,17 @@ export default function ProductsPage() {
   const handleLossClose = () => {
     setLossDialogOpen(false);
     setProductForLoss(null);
+    refetch();
+  };
+
+  const handleAddStock = (product: Product) => {
+    setProductForAddStock(product);
+    setAddStockDialogOpen(true);
+  };
+
+  const handleAddStockClose = () => {
+    setAddStockDialogOpen(false);
+    setProductForAddStock(null);
     refetch();
   };
 
@@ -464,6 +478,7 @@ export default function ProductsPage() {
         onRefetch={refetch}
         canManage={canManageProducts}
         onRegisterLoss={handleRegisterLoss}
+        onAddStock={canManageProducts ? handleAddStock : undefined}
         page={page}
         totalPages={totalPages}
         totalItems={total}
@@ -483,6 +498,15 @@ export default function ProductsPage() {
         onClose={handleLossClose}
         initialProduct={productForLoss}
       />
+
+      {productForAddStock && (
+        <AddStockDialog
+          open={addStockDialogOpen}
+          onClose={handleAddStockClose}
+          product={productForAddStock}
+          onSuccess={refetch}
+        />
+      )}
 
       <PageHelpModal
         open={helpOpen}
