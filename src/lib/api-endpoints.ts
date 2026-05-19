@@ -144,6 +144,10 @@ export const fiscalApi = {
   getInboundReturns: (inboundDocumentId: string) =>
     api.get(`/fiscal/inbound-invoice/${inboundDocumentId}/returns`),
   parseInboundXml: (xml: string) => api.post('/fiscal/parse-inbound-xml', { xml }),
+  fetchInboundXmlByAccessKey: (accessKeyOrBarcode: string) =>
+    api.post<{ xml: string }>('/fiscal/inbound-nfe/xml-from-access-key', {
+      accessKey: accessKeyOrBarcode,
+    }),
   uploadXml: (file: File) => {
     const formData = new FormData();
     formData.append('xmlFile', file);

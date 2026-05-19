@@ -5,7 +5,8 @@ import { FeatureCard, StepItem, TipItem, TroubleshootItem, type PageHelpTab } fr
 const STAGGER = 50;
 
 export const inboundInvoicesHelpTitle = 'Central de Ajuda - Notas de Entrada';
-export const inboundInvoicesHelpDescription = 'Importe XML de notas de entrada, vincule ou crie produtos e confira duplicatas.';
+export const inboundInvoicesHelpDescription =
+  'Importe XML de notas de entrada, busque o XML pela chave na SEFAZ (leitor de código de barras), vincule ou crie produtos e confira duplicatas.';
 export const inboundInvoicesHelpIcon = <FileDown className="h-6 w-6 text-blue-600 dark:text-blue-400" />;
 
 export function getInboundInvoicesHelpTabs(): PageHelpTab[] {
@@ -23,9 +24,10 @@ export function getInboundInvoicesHelpTabs(): PageHelpTab[] {
           </Card>
           <div className="grid md:grid-cols-2 gap-4">
             <FeatureCard icon={<Upload className="h-5 w-5 text-green-500" />} title="Importar XML" description="Envie o arquivo XML da nota de entrada. O sistema extrai chave, fornecedor, valor e itens." badge="Importar" delay={0 * STAGGER} />
-            <FeatureCard icon={<Package className="h-5 w-5 text-blue-500" />} title="Vincular / Criar produtos" description="Para cada item da nota, vincule a um produto cadastrado ou crie um novo produto." delay={1 * STAGGER} />
-            <FeatureCard icon={<RefreshCw className="h-5 w-5 text-purple-500" />} title="Duplicatas" description="Confira as duplicatas (parcelas) da nota e registre pagamentos se necessário." delay={2 * STAGGER} />
-            <FeatureCard icon={<Download className="h-5 w-5 text-amber-500" />} title="Download PDF/XML" description="Baixe o PDF ou XML da nota após importação para arquivo." delay={3 * STAGGER} />
+            <FeatureCard icon={<FileText className="h-5 w-5 text-teal-500" />} title="Chave / código de barras" description="Com certificado A1 configurado, ao informar os 44 dígitos da chave (ou escanear a DANFE), o sistema consulta a Distribuição DF-e na SEFAZ e preenche o XML automaticamente quando a nota é destinada ao CNPJ da empresa." badge="SEFAZ" delay={1 * STAGGER} />
+            <FeatureCard icon={<Package className="h-5 w-5 text-blue-500" />} title="Vincular / Criar produtos" description="Para cada item da nota, vincule a um produto cadastrado ou crie um novo produto." delay={2 * STAGGER} />
+            <FeatureCard icon={<RefreshCw className="h-5 w-5 text-purple-500" />} title="Duplicatas" description="Confira as duplicatas (parcelas) da nota e registre pagamentos se necessário." delay={3 * STAGGER} />
+            <FeatureCard icon={<Download className="h-5 w-5 text-amber-500" />} title="Download PDF/XML" description="Baixe o PDF ou XML da nota após importação para arquivo." delay={4 * STAGGER} />
           </div>
         </div>
       ),
@@ -38,7 +40,7 @@ export function getInboundInvoicesHelpTabs(): PageHelpTab[] {
           <Card>
             <CardHeader><CardTitle>Importar uma nota de entrada</CardTitle><CardDescription>Use o XML da NF-e do fornecedor.</CardDescription></CardHeader>
             <CardContent className="space-y-3">
-              <StepItem number={1} text="Clique em Importar XML (ou equivalente) e selecione o arquivo XML da nota." />
+              <StepItem number={1} text="Em «Adicionar nota», você pode colar ou enviar o XML, ou informar a chave de 44 dígitos: use o leitor de código de barras da DANFE no campo da chave. Com certificado digital da empresa, o sistema busca o XML na SEFAZ (Distribuição DF-e) quando a nota está disponível para o seu CNPJ." />
               <StepItem number={2} text="O sistema exibirá chave, fornecedor, valor e itens. Confira os dados." />
               <StepItem number={3} text="Para cada item: vincule a um produto existente (por código/NCM) ou crie um novo produto." />
               <StepItem number={4} text="Salve. A nota ficará registrada e os produtos vinculados ou criados." />

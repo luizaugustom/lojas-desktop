@@ -89,7 +89,11 @@ export default function InboundInvoicesPage() {
   const [parsedData, setParsedData] = useState<ParsedData | null>(null);
   const [xmlPasted, setXmlPasted] = useState('');
   const [parsingXml, setParsingXml] = useState(false);
+  const [sefazInboundXmlLoading, setSefazInboundXmlLoading] = useState(false);
   const [xmlStringForSubmit, setXmlStringForSubmit] = useState<string | null>(null);
+  const inboundSefazFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inboundSefazFetchLockRef = useRef(false);
+  const lastSefazAutoFetchedKeyRef = useRef<string | null>(null);
   type ItemNewProductDataRow = { name: string; barcode: string; costPrice: number; stockQuantity: number; ncm: string; cfop: string; unitOfMeasure: string; price: number; category?: string; description?: string; expirationDate?: string; lowStockAlertThreshold?: number };
   const [itemDecisions, setItemDecisions] = useState<ItemDecision[]>([]);
   const [itemLinkedIds, setItemLinkedIds] = useState<string[]>([]);
@@ -152,6 +156,104 @@ export default function InboundInvoicesPage() {
         (p.id ?? '').toLowerCase().includes(q)
     );
   }, [productsList, linkProductSearch]);
+
+  const uomInbound = (v: string) => {
+    const u = (v ?? 'UN').slice(0, 6) || 'UN';
+    return ['kg', 'g', 'ml', 'l', 'm', 'cm', 'un'].includes(u.toLowerCase()) ? u.toLowerCase() : 'un';
+  };
+
+  const applyInboundParseResult = (res: ParsedData, xml: string) => {
+    setParsedData(res);
+    setXmlStringForSubmit(xml);
+    setAccessKey(res.form.accessKey ?? '');
+    setSupplierName(res.form.supplierName ?? '');
+    setTotalValue(String(res.form.totalValue ?? '').replace('.', ','));
+    setItemDecisions(res.items?.length ? res.items.map(() => 'skip') : []);
+    setItemLinkedIds(res.items?.length ? res.items.map(() => '') : []);
+    const defaultData: Record<number, ItemNewProductDataRow> = {};
+    (res.items ?? []).forEach((it: ParsedItem, i: number) => {
+      const rawBarcode = (it.barcode ?? '').toString().trim();
+      const isInvalidBarcode = !rawBarcode || /^sem\s*gtin$/i.test(rawBarcode);
+      const barcode = isInvalidBarcode
+        ? `NFe-${Date.now().toString(36)}-${i}`
+        : rawBarcode.length < 8
+          ? rawBarcode.padStart(8, '0')
+          : rawBarcode.slice(0, 20);
+      defaultData[i] = {
+        name: it.description || `Item ${i + 1}`,
+        barcode,
+        costPrice: it.unitPrice ?? 0,
+        stockQuantity: it.quantity ?? 0,
+        ncm: (it.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
+        cfop: (it.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102',
+        unitOfMeasure: uomInbound(it.unitOfMeasure ?? 'UN'),
+        price: Math.max(it.unitPrice ?? 0, 0.01),
+        category: '',
+        description: '',
+        expirationDate: '',
+        lowStockAlertThreshold: 3,
+      };
+    });
+    setItemNewProductData(defaultData);
+    setItemNewProductPhotos({});
+    setRegisterBillsFromXml((res.duplicatas?.length ?? 0) > 0);
+  };
+
+  const runSefazInboundFetchAndParse = async (key44: string) => {
+    if (inboundSefazFetchLockRef.current) return;
+    inboundSefazFetchLockRef.current = true;
+    setSefazInboundXmlLoading(true);
+    try {
+      const { data } = await fiscalApi.fetchInboundXmlByAccessKey(key44);
+      const xml = data.xml;
+      setXmlPasted(xml);
+      const { data: res } = await fiscalApi.parseInboundXml(xml);
+      applyInboundParseResult(res as ParsedData, xml);
+      lastSefazAutoFetchedKeyRef.current = key44;
+      toast.success('XML obtido na SEFAZ. Revise os dados e defina o que fazer com os produtos.');
+    } catch (err: any) {
+      lastSefazAutoFetchedKeyRef.current = null;
+      const { message } = handleApiError(err, { showToast: false });
+      toast.error(message);
+    } finally {
+      inboundSefazFetchLockRef.current = false;
+      setSefazInboundXmlLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!addOpen || editingDoc) {
+      if (inboundSefazFetchTimerRef.current) {
+        clearTimeout(inboundSefazFetchTimerRef.current);
+        inboundSefazFetchTimerRef.current = null;
+      }
+      lastSefazAutoFetchedKeyRef.current = null;
+      return;
+    }
+    if (accessKey.length !== 44) {
+      lastSefazAutoFetchedKeyRef.current = null;
+      return;
+    }
+    if (accessKey === lastSefazAutoFetchedKeyRef.current) return;
+    if (inboundSefazFetchTimerRef.current) {
+      clearTimeout(inboundSefazFetchTimerRef.current);
+      inboundSefazFetchTimerRef.current = null;
+    }
+    const scheduledKey = accessKey;
+    inboundSefazFetchTimerRef.current = setTimeout(() => {
+      inboundSefazFetchTimerRef.current = null;
+      if (!addOpen || editingDoc) return;
+      if (scheduledKey.length !== 44) return;
+      if (scheduledKey === lastSefazAutoFetchedKeyRef.current) return;
+      void runSefazInboundFetchAndParse(scheduledKey);
+    }, 450);
+    return () => {
+      if (inboundSefazFetchTimerRef.current) {
+        clearTimeout(inboundSefazFetchTimerRef.current);
+        inboundSefazFetchTimerRef.current = null;
+      }
+    };
+  }, [accessKey, addOpen, editingDoc]);
 
   const docs: InboundDoc[] = useMemo(() => {
     const raw: any = data;
@@ -850,42 +952,7 @@ export default function InboundInvoicesPage() {
                       setParsingXml(true);
                       try {
                         const { data: res } = await fiscalApi.parseInboundXml(xml);
-                        setParsedData(res);
-                        setXmlStringForSubmit(xml);
-                        setAccessKey(res.form.accessKey ?? '');
-                        setSupplierName(res.form.supplierName ?? '');
-                        setTotalValue(String(res.form.totalValue ?? '').replace('.', ','));
-                        setItemDecisions(res.items?.length ? res.items.map(() => 'skip') : []);
-                        setItemLinkedIds(res.items?.length ? res.items.map(() => '') : []);
-                        setItemNewProductData({});
-                        const defaultData: Record<number, ItemNewProductDataRow> = {};
-                        const uom = (v: string) => { const u = (v ?? 'UN').slice(0, 6) || 'UN'; return ['kg', 'g', 'ml', 'l', 'm', 'cm', 'un'].includes(u.toLowerCase()) ? u.toLowerCase() : 'un'; };
-                        (res.items ?? []).forEach((it: ParsedItem, i: number) => {
-                          const rawBarcode = (it.barcode ?? '').toString().trim();
-                          const isInvalidBarcode = !rawBarcode || /^sem\s*gtin$/i.test(rawBarcode);
-                          const barcode = isInvalidBarcode
-                            ? `NFe-${Date.now().toString(36)}-${i}`
-                            : rawBarcode.length < 8
-                              ? rawBarcode.padStart(8, '0')
-                              : rawBarcode.slice(0, 20);
-                          defaultData[i] = {
-                            name: it.description || `Item ${i + 1}`,
-                            barcode,
-                            costPrice: it.unitPrice ?? 0,
-                            stockQuantity: it.quantity ?? 0,
-                            ncm: (it.ncm ?? '99999999').replace(/\D/g, '').slice(0, 8) || '99999999',
-                            cfop: (it.cfop ?? '5102').replace(/\D/g, '').slice(0, 4) || '5102',
-                            unitOfMeasure: uom(it.unitOfMeasure ?? 'UN'),
-                            price: Math.max(it.unitPrice ?? 0, 0.01),
-                            category: '',
-                            description: '',
-                            expirationDate: '',
-                            lowStockAlertThreshold: 3,
-                          };
-                        });
-                        setItemNewProductData(defaultData);
-                        setItemNewProductPhotos({});
-                        setRegisterBillsFromXml((res.duplicatas?.length ?? 0) > 0);
+                        applyInboundParseResult(res as ParsedData, xml);
                         toast.success('XML lido. Revise os dados e defina o que fazer com os produtos.');
                       } catch (err: any) {
                         const msg = err?.response?.data?.message || err?.message || 'XML inválido ou não é NFe de entrada';
@@ -908,15 +975,38 @@ export default function InboundInvoicesPage() {
               <Label htmlFor="accessKey">Chave de Acesso (opcional)</Label>
               <Input
                 id="accessKey"
-                placeholder="44 dígitos da chave de acesso"
-                maxLength={44}
+                placeholder="44 dígitos ou leia o código de barras da DANFE"
                 value={accessKey}
+                disabled={sefazInboundXmlLoading}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '');
+                  const digits = e.target.value.replace(/\D/g, '');
+                  const value = digits.length > 44 ? digits.slice(-44) : digits;
                   setAccessKey(value);
                 }}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  if (editingDoc || !addOpen) return;
+                  if (accessKey.length !== 44) return;
+                  e.preventDefault();
+                  if (inboundSefazFetchTimerRef.current) {
+                    clearTimeout(inboundSefazFetchTimerRef.current);
+                    inboundSefazFetchTimerRef.current = null;
+                  }
+                  void runSefazInboundFetchAndParse(accessKey);
+                }}
               />
-              <p className="text-xs text-muted-foreground">{accessKey.length}/44 dígitos</p>
+              <p className="text-xs text-muted-foreground">
+                {sefazInboundXmlLoading ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                    Buscando XML na SEFAZ (certificado da empresa)…
+                  </span>
+                ) : (
+                  <>
+                    {accessKey.length}/44 dígitos — ao completar 44, a busca na Distribuição DF-e ocorre automaticamente; Enter aciona de imediato.
+                  </>
+                )}
+              </p>
             </div>
 
             <div className="space-y-1">
