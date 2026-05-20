@@ -3,11 +3,11 @@ import { getClientTimeContext } from './utils';
 import { getComputerIdCached } from './computer-id-cache';
 import { logger } from '@/lib/logger';
 
-/** Build: defina VITE_API_URL (ex.: https://api.montshop-api.uk). Sem env, usa API VPS. */
+/** Build: defina VITE_API_URL (ex.: https://api.montshop.app). Sem env, usa API de produção. */
 const API_BASE_URL = (() => {
   const fromEnv = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/+$/, '');
   if (fromEnv) return fromEnv;
-  return 'https://api.montshop-api.uk';
+  return 'https://api.montshop.app';
 })();
 
 // Armazenamento do access token: em Electron usa safeStorage no main; senão memória (e migração de localStorage)

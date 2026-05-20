@@ -25,16 +25,7 @@ import { parseScaleBarcode } from '../../lib/scale-barcode';
 import { checkPrinterStatus } from '../../lib/printer-check';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useRef } from 'react';
-
-interface Product {
-  id: string;
-  name: string;
-  barcode: string;
-  price: number;
-  stockQuantity?: number;
-  photos?: string[];
-  [key: string]: any;
-}
+import type { Product } from '../../types';
 
 export default function SalesPage() {
   const { api, user } = useAuth();
