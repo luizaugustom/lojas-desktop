@@ -131,8 +131,6 @@ export default function SettingsPage() {
     sefazEnvironment: 'homologacao' as 'homologacao' | 'producao',
     aliquotaCbsDefault: '0.9',
     aliquotaIbsDefault: '0.1',
-    csc: '',
-    idTokenCsc: '000001',
   });
   const [savingFiscalData, setSavingFiscalData] = useState(false);
 
@@ -758,8 +756,6 @@ export default function SettingsPage() {
         sefazEnvironment: (config.sefazEnvironment || 'homologacao') as 'homologacao' | 'producao',
         aliquotaCbsDefault: config.aliquotaCbsDefault?.toString() || '0.9',
         aliquotaIbsDefault: config.aliquotaIbsDefault?.toString() || '0.1',
-        csc: '', // Nunca pré-preencher senhas/tokens por segurança
-        idTokenCsc: config.idTokenCsc || '000001',
       });
     } catch (error) {
       console.error('Erro ao carregar configurações fiscais:', error);
@@ -849,11 +845,6 @@ export default function SettingsPage() {
 
     if (fiscalDataForm.municipioIbge.length !== 7) {
       toast.error('Código IBGE deve ter 7 dígitos');
-      return;
-    }
-
-    if (!fiscalDataForm.csc) {
-      toast.error('CSC (Código de Segurança do Contribuinte) é obrigatório');
       return;
     }
 
@@ -2047,7 +2038,7 @@ export default function SettingsPage() {
                         ✅ Certificado digital pronto
                       </p>
                       <p className="text-sm text-green-800 dark:text-green-200">
-                        Certificado A1 e senha configurados. Complete os dados fiscais abaixo e o CSC para NFC-e.
+                        Certificado A1 e senha configurados. Com CSC não é mais necessário.
                       </p>
                     </div>
                   )}
@@ -2257,53 +2248,6 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     </div>
-
-                    {/* CSC */}
-                    <div className="space-y-2">
-                      <Label htmlFor="csc">
-                        CSC (Código de Segurança do Contribuinte) *
-                      </Label>
-                      <Input
-                        id="csc"
-                        type="password"
-                        value={fiscalDataForm.csc}
-                        onChange={(e) =>
-                          setFiscalDataForm({ ...fiscalDataForm, csc: e.target.value })
-                        }
-                        placeholder="Digite o CSC fornecido pela SEFAZ"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Obtido no portal da SEFAZ do seu estado. Mantenha em sigilo!
-                      </p>
-                      {fiscalConfig?.hasCsc ? (
-                        <p className="text-xs text-green-600 dark:text-green-400">
-                          ✅ CSC já configurado
-                        </p>
-                      ) : (
-                        <p className="text-xs text-red-600 dark:text-red-400">
-                          ❌ Não configurado - obrigatório para emissão de NFC-e
-                        </p>
-                      )}
-                    </div>
-
-                    {/* ID Token CSC */}
-                    <div className="space-y-2">
-                      <Label htmlFor="idTokenCsc">
-                        ID Token CSC
-                      </Label>
-                      <Input
-                        id="idTokenCsc"
-                        value={fiscalDataForm.idTokenCsc}
-                        onChange={(e) =>
-                          setFiscalDataForm({ ...fiscalDataForm, idTokenCsc: e.target.value })
-                        }
-                        placeholder="000001"
-                        maxLength={6}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Geralmente "000001". Fornecido junto com o CSC pela SEFAZ.
-                      </p>
-                    </div>
                   </div>
 
                   <Button
@@ -2356,7 +2300,6 @@ export default function SettingsPage() {
                       <li>• Inscrição Estadual</li>
                       <li>• Código IBGE do Município</li>
                       <li>• Ambiente SEFAZ (homologação ou produção)</li>
-                      <li>• CSC (Código de Segurança do Contribuinte)</li>
                       <li>• Certificado digital A1 — senha e arquivo .pfx (próxima seção)</li>
                     </ul>
                   </div>

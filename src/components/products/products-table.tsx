@@ -166,8 +166,9 @@ export function ProductsTable({
             const stockNum = Number(product.stockQuantity ?? 0);
             const threshold = product.lowStockAlertThreshold ?? 3;
             const isLowStock = !Number.isNaN(stockNum) && stockNum <= threshold;
+            const effectiveExpirationDate = product.nearestExpirationDate ?? product.expirationDate;
             const isExpiringSoon =
-              product.expirationDate && new Date(product.expirationDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+              effectiveExpirationDate && new Date(effectiveExpirationDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
             return (
               <TableRow key={product.id}>
@@ -195,7 +196,7 @@ export function ProductsTable({
                 <TableCell>{product.category || '-'}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    {product.expirationDate && product.expirationDate !== 'null' ? formatDate(product.expirationDate) : '-'}
+                    {effectiveExpirationDate && effectiveExpirationDate !== 'null' ? formatDate(effectiveExpirationDate) : '-'}
                     {isExpiringSoon && <AlertCircle className="h-4 w-4 text-red-500" />}
                   </div>
                 </TableCell>

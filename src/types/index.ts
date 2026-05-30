@@ -137,6 +137,7 @@ export interface Product {
   costPrice?: number;
   stockQuantity: number;
   stockEntries?: StockEntry[];
+  nearestExpirationDate?: string | null;
   minStockQuantity?: number;
   lowStockAlertThreshold?: number;
   category?: string;
