@@ -62,8 +62,12 @@ export async function checkPrinterStatus(): Promise<{ success: boolean; message:
 
       if (match?.name) {
         setState('connected', match.name);
-        if (match.name !== settings.printerName) {
-          savePrintSettings({ printerName: match.name });
+        const matchPort = (match as { port?: string | null }).port ?? null;
+        if (match.name !== settings.printerName || (matchPort && matchPort !== settings.printerPort)) {
+          savePrintSettings({
+            printerName: match.name,
+            printerPort: matchPort ?? settings.printerPort ?? null,
+          });
         }
         return {
           success: true,

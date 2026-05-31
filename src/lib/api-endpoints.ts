@@ -116,6 +116,9 @@ export const companyApi = {
   getFiscalConfigForAdmin: (id: string) => api.get(`/company/${id}/fiscal-config`),
   updateFiscalConfigForAdmin: (id: string, data: any) =>
     api.patch(`/company/${id}/fiscal-config`, data),
+  getFocusNfeConfigForAdmin: (id: string) => api.get(`/company/${id}/focus-nfe-config`),
+  updateFocusNfeConfigForAdmin: (id: string, data: any) =>
+    api.patch(`/company/${id}/focus-nfe-config`, data),
   acceptTerms: (data: { accepted: boolean }) => api.post('/company/terms', data),
 };
 

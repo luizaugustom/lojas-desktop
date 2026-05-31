@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron';
 import ThermalPrinter from 'node-thermal-printer';
 import { PrinterTypes } from 'node-thermal-printer';
+import { SerialPort } from 'serialport';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -41,7 +42,68 @@ interface NormalizedContent {
 const ESC = 0x1b;
 const GS = 0x1d;
 const DEFAULT_CODE_PAGE = 19; // ESC/POS: Code page 19 = CP858 (Português)
+const DEFAULT_SERIAL_BAUD = 9600;
 const NEW_LINE = Buffer.from('\n', 'ascii');
+const ESC_POS_BINARY_MARKER = /<<ESC_POS_BINARY:([A-Za-z0-9+/=]+)>>/g;
+
+type EscPosSegmentPart =
+  | { kind: 'text'; value: string }
+  | { kind: 'binary'; value: Buffer };
+
+function parseEscPosSegment(segment: string): EscPosSegmentPart[] {
+  const parts: EscPosSegmentPart[] = [];
+  let remaining = segment;
+  const markerRegex = new RegExp(ESC_POS_BINARY_MARKER.source, 'g');
+  const hasBinaryMarkers = markerRegex.test(remaining);
+
+  if (!hasBinaryMarkers) {
+    return [{ kind: 'text', value: segment }];
+  }
+
+  markerRegex.lastIndex = 0;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = markerRegex.exec(remaining)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ kind: 'text', value: remaining.substring(lastIndex, match.index) });
+    }
+
+    try {
+      parts.push({ kind: 'binary', value: Buffer.from(match[1], 'base64') });
+    } catch (error) {
+      console.warn('Falha ao decodificar bloco ESC/POS binário:', error);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < remaining.length) {
+    parts.push({ kind: 'text', value: remaining.substring(lastIndex) });
+  }
+
+  return parts.length > 0 ? parts : [{ kind: 'text', value: segment }];
+}
+
+function appendEscPosSegmentBuffers(buffers: Buffer[], segment: string, columns: number): void {
+  const parts = parseEscPosSegment(segment);
+
+  for (const part of parts) {
+    if (part.kind === 'binary') {
+      buffers.push(part.value);
+      continue;
+    }
+
+    const lines = formatContentForThermal(part.value, columns);
+    for (const line of lines) {
+      const encodedLine = encodeForEscPos(line);
+      if (encodedLine.length > 0) {
+        buffers.push(encodedLine);
+      }
+      buffers.push(NEW_LINE);
+    }
+  }
+}
 
 function normalizePrintableContent(content: string | null | undefined): NormalizedContent {
   const normalized = (content ?? '')
@@ -98,6 +160,163 @@ function encodeForEscPos(text: string): Buffer {
 
 function buildInitializationBuffer(): Buffer {
   return Buffer.from([ESC, 0x40, ESC, 0x74, DEFAULT_CODE_PAGE]);
+}
+
+function isSerialPort(port: string | null | undefined): boolean {
+  if (!port?.trim()) {
+    return false;
+  }
+  const normalized = port.trim().toLowerCase().replace(/:$/, '');
+  return (
+    normalized.startsWith('com') ||
+    normalized.startsWith('/dev/tty') ||
+    normalized.startsWith('lpt') ||
+    normalized.startsWith('usb')
+  );
+}
+
+function normalizeSerialPortPath(port: string): string {
+  const trimmed = port.trim().replace(/:$/, '');
+  if (process.platform === 'win32' && /^com\d+$/i.test(trimmed)) {
+    return `\\\\.\\${trimmed.toUpperCase()}`;
+  }
+  return trimmed;
+}
+
+async function resolvePrinterPort(printerName: string, options?: PrintJobOptions): Promise<string | null> {
+  const configured = options?.port?.trim();
+  if (configured) {
+    return configured;
+  }
+
+  const cached = cachedPrinters.find((printer) => printer?.name === printerName)?.port;
+  if (typeof cached === 'string' && cached.trim()) {
+    return cached.trim();
+  }
+
+  const printers = await listPrinters();
+  cachedPrinters = printers;
+  const found = printers.find((printer) => printer?.name === printerName);
+  return typeof found?.port === 'string' && found.port.trim() ? found.port.trim() : null;
+}
+
+function buildSegmentEscPosBuffer(
+  segment: string,
+  columns: number,
+  isLast: boolean,
+  options?: PrintJobOptions,
+): Buffer {
+  const buffers: Buffer[] = [buildInitializationBuffer()];
+  appendEscPosSegmentBuffers(buffers, segment, columns);
+  buffers.push(NEW_LINE, NEW_LINE, NEW_LINE);
+
+  if (options?.autoCut !== false || !isLast) {
+    buffers.push(Buffer.from([GS, 0x56, 0x00]));
+  }
+
+  return Buffer.concat(buffers);
+}
+
+async function writeRawToSerialPort(
+  port: string,
+  data: Buffer,
+  baudRate = DEFAULT_SERIAL_BAUD,
+): Promise<void> {
+  const candidates = [normalizeSerialPortPath(port)];
+  const stripped = port.trim().replace(/:$/, '');
+  if (!candidates.includes(stripped)) {
+    candidates.push(stripped);
+  }
+
+  let lastError: Error | null = null;
+
+  for (const path of candidates) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const serial = new SerialPort({
+          path,
+          baudRate,
+          dataBits: 8,
+          stopBits: 1,
+          parity: 'none',
+          autoOpen: false,
+        });
+
+        serial.open((openError) => {
+          if (openError) {
+            reject(openError);
+            return;
+          }
+
+          serial.write(data, (writeError) => {
+            if (writeError) {
+              serial.close(() => reject(writeError));
+              return;
+            }
+
+            serial.drain((drainError) => {
+              serial.close((closeError) => {
+                if (drainError) {
+                  reject(drainError);
+                } else if (closeError) {
+                  reject(closeError);
+                } else {
+                  resolve();
+                }
+              });
+            });
+          });
+        });
+      });
+      return;
+    } catch (error: any) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw lastError ?? new Error(`Não foi possível abrir a porta ${port}`);
+}
+
+/**
+ * Imprime via porta serial (COM/USB) — evita corrupção do spooler Windows.
+ * Necessário para QR Code ESC/POS em impressoras como Bematech MP-4200.
+ */
+async function printWithSerialPort(
+  printerName: string,
+  content: string,
+  options?: PrintJobOptions,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const port = await resolvePrinterPort(printerName, options);
+    if (!port || !isSerialPort(port)) {
+      return { success: false, error: 'Porta serial não identificada para a impressora' };
+    }
+
+    const columns = normalizePaperWidth(options);
+    const segments = splitReceiptCopies(content);
+    const parts = segments.length > 0 ? segments : [ensureTrailingNewlines(content)];
+
+    if (parts.length > 2) {
+      console.warn(`Número de partes excedeu 2 (${parts.length}), usando apenas as 2 primeiras`);
+      parts.splice(2);
+    }
+
+    for (let index = 0; index < parts.length; index++) {
+      const segment = parts[index];
+      const isLast = index === parts.length - 1;
+      const buffer = buildSegmentEscPosBuffer(segment, columns, isLast, options);
+      await writeRawToSerialPort(port, buffer);
+
+      if (!isLast && parts.length === 2) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Erro ao imprimir via porta serial:', error);
+    return { success: false, error: error?.message || 'Erro na impressão serial' };
+  }
 }
 
 function escapeHtml(value: string): string {
@@ -532,17 +751,25 @@ async function printWithThermalPrinter(
       });
 
       const initBuffer = buildInitializationBuffer();
-      
+
       printer.raw(initBuffer); // Reset e define code page CP858
       printer.alignLeft();
 
-      const lines = formatContentForThermal(segment, columns);
-      for (const line of lines) {
-        const encodedLine = encodeForEscPos(line);
-        if (encodedLine.length > 0) {
-          printer.raw(encodedLine);
+      const parts = parseEscPosSegment(segment);
+      for (const part of parts) {
+        if (part.kind === 'binary') {
+          printer.raw(part.value);
+          continue;
         }
-        printer.raw(NEW_LINE);
+
+        const lines = formatContentForThermal(part.value, columns);
+        for (const line of lines) {
+          const encodedLine = encodeForEscPos(line);
+          if (encodedLine.length > 0) {
+            printer.raw(encodedLine);
+          }
+          printer.raw(NEW_LINE);
+        }
       }
 
       printer.raw(NEW_LINE);
@@ -612,7 +839,7 @@ async function printWithSystemPrinter(
       
       const buffers: Buffer[] = [];
       buffers.push(initBuffer);
-      buffers.push(encodeForEscPos(segment));
+      appendEscPosSegmentBuffers(buffers, segment, normalizePaperWidth(options));
       buffers.push(newlineBuffer);
 
       if (shouldAutoCut || !isLast) {
@@ -626,13 +853,17 @@ async function printWithSystemPrinter(
 
       try {
         if (platform === 'win32') {
-          const command = `print /D:"${target}" "${tempFile}"`;
-          await execAsync(command);
+          const ps = `
+            $filePath = '${tempFile.replace(/\\/g, '/').replace(/'/g, "''")}';
+            $printerName = "${target.replace(/"/g, '`"')}";
+            Get-Content -Path $filePath -Raw -Encoding Byte | Out-Printer -Name $printerName;
+          `;
+          await execAsync(`powershell.exe -NoProfile -NonInteractive -Command "${ps.replace(/\n/g, ' ')}"`);
         } else if (platform === 'darwin') {
-          const command = `lp -d "${target}" "${tempFile}"`;
+          const command = `lp -d "${target}" -o raw "${tempFile}"`;
           await execAsync(command);
         } else {
-          const command = `lp -d "${target}" "${tempFile}"`;
+          const command = `lp -d "${target}" -o raw "${tempFile}"`;
           await execAsync(command);
         }
       } finally {
@@ -684,12 +915,22 @@ async function performPrintJob(content: string, options?: PrintJobOptions): Prom
       return { success: false, error: 'Nenhuma impressora encontrada ou configurada' };
     }
 
+    const resolvedPort = await resolvePrinterPort(printerName, options);
     const jobOptions: PrintJobOptions = {
       ...options,
       printerName,
+      port: resolvedPort ?? options?.port ?? null,
     };
 
     if (!normalized.hasExtendedCharacters) {
+      if (isSerialPort(jobOptions.port)) {
+        const serialResult = await printWithSerialPort(printerName, normalized.compatText, jobOptions);
+        if (serialResult.success) {
+          return serialResult;
+        }
+        console.warn('Impressão serial falhou, tentando métodos alternativos.', serialResult.error);
+      }
+
       const thermalResult = await printWithThermalPrinter(printerName, normalized.compatText, jobOptions);
       if (thermalResult.success) {
         return thermalResult;
