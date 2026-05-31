@@ -43,65 +43,90 @@ const GS = 0x1d;
 const DEFAULT_CODE_PAGE = 19; // ESC/POS: Code page 19 = CP858 (Português)
 const DEFAULT_SERIAL_BAUD = 9600;
 const NEW_LINE = Buffer.from('\n', 'ascii');
-const ESC_POS_BINARY_MARKER = /<<ESC_POS_BINARY:([A-Za-z0-9+/=]+)>>/g;
-
-type SerialPortClass = typeof import('serialport').SerialPort;
-
-let serialPortModule: { SerialPort: SerialPortClass } | null = null;
-let serialPortLoadError: Error | null = null;
-
-async function loadSerialPortClass(): Promise<SerialPortClass> {
-  if (serialPortLoadError) {
-    throw serialPortLoadError;
-  }
-
-  if (!serialPortModule) {
-    try {
-      serialPortModule = await import('serialport');
-    } catch (error) {
-      serialPortLoadError = error instanceof Error ? error : new Error(String(error));
-      console.error('Módulo serialport indisponível:', serialPortLoadError.message);
-      throw serialPortLoadError;
-    }
-  }
-
-  return serialPortModule.SerialPort;
-}
+const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\n]+))>>/g;
 
 type EscPosSegmentPart =
   | { kind: 'text'; value: string }
   | { kind: 'binary'; value: Buffer };
 
-function parseEscPosSegment(segment: string): EscPosSegmentPart[] {
-  const parts: EscPosSegmentPart[] = [];
-  let remaining = segment;
-  const markerRegex = new RegExp(ESC_POS_BINARY_MARKER.source, 'g');
-  const hasBinaryMarkers = markerRegex.test(remaining);
+function buildNativeQrEscPos(url: string, moduleSize = 3): Buffer {
+  const data = Buffer.from(url, 'ascii');
+  const commands: Buffer[] = [
+    Buffer.from([0x1b, 0x61, 0x01]),
+    Buffer.from([0x1d, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]),
+    Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, moduleSize]),
+    Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x31]),
+  ];
 
-  if (!hasBinaryMarkers) {
+  const storeLen = data.length + 3;
+  const storeCmd = Buffer.alloc(8 + data.length);
+  storeCmd[0] = 0x1d;
+  storeCmd[1] = 0x28;
+  storeCmd[2] = 0x6b;
+  storeCmd[3] = storeLen & 0xff;
+  storeCmd[4] = (storeLen >> 8) & 0xff;
+  storeCmd[5] = 0x31;
+  storeCmd[6] = 0x50;
+  storeCmd[7] = 0x30;
+  data.copy(storeCmd, 8);
+  commands.push(storeCmd);
+  commands.push(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30]));
+  commands.push(Buffer.from([0x1b, 0x61, 0x00]));
+  commands.push(Buffer.from('\n', 'utf8'));
+
+  return Buffer.concat(commands);
+}
+
+function stripPrintMarkersForDisplay(content: string): string {
+  return content
+    .replace(/<<ESC_POS_BINARY:[A-Za-z0-9+/=]+>>/g, '')
+    .replace(/<<NFC_E_QR:[^>\n]+>>/g, '')
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+function decodePrintMarkerMatch(match: RegExpExecArray): Buffer | null {
+  if (match[1]) {
+    try {
+      return Buffer.from(match[1], 'base64');
+    } catch (error) {
+      console.warn('Falha ao decodificar ESC_POS_BINARY:', error);
+      return null;
+    }
+  }
+
+  if (match[2]) {
+    return buildNativeQrEscPos(match[2]);
+  }
+
+  return null;
+}
+
+function parseEscPosSegment(segment: string): EscPosSegmentPart[] {
+  const markerRegex = new RegExp(PRINT_MARKER_REGEX.source, 'g');
+  if (!markerRegex.test(segment)) {
     return [{ kind: 'text', value: segment }];
   }
 
   markerRegex.lastIndex = 0;
+  const parts: EscPosSegmentPart[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = markerRegex.exec(remaining)) !== null) {
+  while ((match = markerRegex.exec(segment)) !== null) {
     if (match.index > lastIndex) {
-      parts.push({ kind: 'text', value: remaining.substring(lastIndex, match.index) });
+      parts.push({ kind: 'text', value: segment.substring(lastIndex, match.index) });
     }
 
-    try {
-      parts.push({ kind: 'binary', value: Buffer.from(match[1], 'base64') });
-    } catch (error) {
-      console.warn('Falha ao decodificar bloco ESC/POS binário:', error);
+    const binary = decodePrintMarkerMatch(match);
+    if (binary) {
+      parts.push({ kind: 'binary', value: binary });
     }
 
     lastIndex = match.index + match[0].length;
   }
 
-  if (lastIndex < remaining.length) {
-    parts.push({ kind: 'text', value: remaining.substring(lastIndex) });
+  if (lastIndex < segment.length) {
+    parts.push({ kind: 'text', value: segment.substring(lastIndex) });
   }
 
   return parts.length > 0 ? parts : [{ kind: 'text', value: segment }];
@@ -197,14 +222,6 @@ function isSerialPort(port: string | null | undefined): boolean {
   );
 }
 
-function normalizeSerialPortPath(port: string): string {
-  const trimmed = port.trim().replace(/:$/, '');
-  if (process.platform === 'win32' && /^com\d+$/i.test(trimmed)) {
-    return `\\\\.\\${trimmed.toUpperCase()}`;
-  }
-  return trimmed;
-}
-
 async function resolvePrinterPort(printerName: string, options?: PrintJobOptions): Promise<string | null> {
   const configured = options?.port?.trim();
   if (configured) {
@@ -244,60 +261,53 @@ async function writeRawToSerialPort(
   data: Buffer,
   baudRate = DEFAULT_SERIAL_BAUD,
 ): Promise<void> {
-  const SerialPort = await loadSerialPortClass();
-  const candidates = [normalizeSerialPortPath(port)];
-  const stripped = port.trim().replace(/:$/, '');
-  if (!candidates.includes(stripped)) {
-    candidates.push(stripped);
+  if (process.platform === 'win32') {
+    await writeRawToSerialPortWindows(port, data, baudRate);
+    return;
   }
 
-  let lastError: Error | null = null;
-
-  for (const path of candidates) {
+  const tempFile = path.join(os.tmpdir(), `montshop-escpos-${Date.now()}.bin`);
+  fs.writeFileSync(tempFile, data);
+  try {
+    await execAsync(`lp -o raw '${tempFile.replace(/'/g, "'\\''")}'`);
+  } finally {
     try {
-      await new Promise<void>((resolve, reject) => {
-        const serial = new SerialPort({
-          path,
-          baudRate,
-          dataBits: 8,
-          stopBits: 1,
-          parity: 'none',
-          autoOpen: false,
-        });
-
-        serial.open((openError) => {
-          if (openError) {
-            reject(openError);
-            return;
-          }
-
-          serial.write(data, (writeError) => {
-            if (writeError) {
-              serial.close(() => reject(writeError));
-              return;
-            }
-
-            serial.drain((drainError) => {
-              serial.close((closeError) => {
-                if (drainError) {
-                  reject(drainError);
-                } else if (closeError) {
-                  reject(closeError);
-                } else {
-                  resolve();
-                }
-              });
-            });
-          });
-        });
-      });
-      return;
-    } catch (error: any) {
-      lastError = error instanceof Error ? error : new Error(String(error));
+      fs.unlinkSync(tempFile);
+    } catch {
+      // ignore
     }
   }
+}
 
-  throw lastError ?? new Error(`Não foi possível abrir a porta ${port}`);
+async function writeRawToSerialPortWindows(
+  port: string,
+  data: Buffer,
+  baudRate: number,
+): Promise<void> {
+  const comPort = port.trim().replace(/:$/, '');
+  const tempFile = path.join(os.tmpdir(), `montshop-escpos-${Date.now()}.bin`);
+  fs.writeFileSync(tempFile, data);
+
+  const filePathPs = tempFile.replace(/\\/g, '/').replace(/'/g, "''");
+  const portPs = comPort.replace(/'/g, "''");
+  const ps = [
+    `$portName='${portPs}'`,
+    `$filePath='${filePathPs}'`,
+    '$bytes=[System.IO.File]::ReadAllBytes($filePath)',
+    '$sp=New-Object System.IO.Ports.SerialPort $portName,' + baudRate + ',([System.IO.Ports.Parity]::None),8,([System.IO.Ports.StopBits]::One)',
+    '$sp.WriteTimeout=10000',
+    'try { $sp.Open(); $sp.Write($bytes,0,$bytes.Length); Start-Sleep -Milliseconds 300 } finally { if ($sp.IsOpen) { $sp.Close() }; $sp.Dispose() }',
+  ].join('; ');
+
+  try {
+    await execAsync(`powershell.exe -NoProfile -NonInteractive -Command "${ps}"`);
+  } finally {
+    try {
+      fs.unlinkSync(tempFile);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 /**
@@ -386,7 +396,7 @@ function getHtmlPaperStyle(paperSize: PaperSizeOption = '80mm', customPaperWidth
 
 function buildHtmlDocument(content: string, options?: PrintJobOptions): string {
   const paperStyle = getHtmlPaperStyle(options?.paperSize, options?.customPaperWidth);
-  const copies = splitReceiptCopies(content);
+  const copies = splitReceiptCopies(stripPrintMarkersForDisplay(content));
 
   const htmlCopies = copies
     .map((copy) => `<pre class="copy">${escapeHtml(copy)}</pre>`)
@@ -945,40 +955,48 @@ async function performPrintJob(content: string, options?: PrintJobOptions): Prom
       port: resolvedPort ?? options?.port ?? null,
     };
 
-    if (!normalized.hasExtendedCharacters) {
+    const hasThermalMarkers = PRINT_MARKER_REGEX.test(content);
+    PRINT_MARKER_REGEX.lastIndex = 0;
+    const preferEscPos = isSerialPort(jobOptions.port) || hasThermalMarkers;
+
+    if (preferEscPos) {
       if (isSerialPort(jobOptions.port)) {
-        const serialResult = await printWithSerialPort(printerName, normalized.compatText, jobOptions);
+        const serialResult = await printWithSerialPort(printerName, content, jobOptions);
         if (serialResult.success) {
           return serialResult;
         }
         console.warn('Impressão serial falhou, tentando métodos alternativos.', serialResult.error);
       }
 
-      const thermalResult = await printWithThermalPrinter(printerName, normalized.compatText, jobOptions);
+      const thermalResult = await printWithThermalPrinter(printerName, content, jobOptions);
       if (thermalResult.success) {
         return thermalResult;
       }
 
-      const systemResult = await printWithSystemPrinter(printerName, normalized.compatText, jobOptions);
+      const systemResult = await printWithSystemPrinter(printerName, content, jobOptions);
       if (systemResult.success) {
         return systemResult;
       }
+    } else if (!normalized.hasExtendedCharacters) {
+      const thermalResult = await printWithThermalPrinter(printerName, content, jobOptions);
+      if (thermalResult.success) {
+        return thermalResult;
+      }
 
-      console.warn('Impressão padrão falhou, utilizando fallback HTML.', {
-        thermalError: thermalResult.error,
-        systemError: systemResult.error,
-      });
-
-      return await printWithHtmlRenderer(normalized.text, jobOptions);
+      const systemResult = await printWithSystemPrinter(printerName, content, jobOptions);
+      if (systemResult.success) {
+        return systemResult;
+      }
     }
 
-    const htmlResult = await printWithHtmlRenderer(normalized.text, jobOptions);
+    console.warn('Impressão ESC/POS indisponível, utilizando fallback HTML.');
+    const htmlResult = await printWithHtmlRenderer(stripPrintMarkersForDisplay(normalized.text), jobOptions);
     if (htmlResult.success) {
       return htmlResult;
     }
 
     console.warn('Impressão HTML falhou, utilizando versão reduzida em Latin-1.', htmlResult.error);
-    return await printWithSystemPrinter(printerName, normalized.compatText, jobOptions);
+    return await printWithSystemPrinter(printerName, content, jobOptions);
   } catch (error: any) {
     console.error('Erro na impressão:', error);
     return { success: false, error: error?.message || 'Erro desconhecido na impressão' };
