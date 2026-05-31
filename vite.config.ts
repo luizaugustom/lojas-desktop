@@ -17,7 +17,13 @@ export default defineConfig(({ mode }) => {
             build: {
               outDir: 'dist-electron',
               rollupOptions: {
-                external: ['electron']
+                external: [
+                  'electron',
+                  'serialport',
+                  '@serialport/bindings-cpp',
+                  'node-thermal-printer',
+                  'usb',
+                ],
               }
             }
           }
@@ -31,7 +37,13 @@ export default defineConfig(({ mode }) => {
             build: {
               outDir: 'dist-electron',
               rollupOptions: {
-                external: ['electron']
+                external: [
+                  'electron',
+                  'serialport',
+                  '@serialport/bindings-cpp',
+                  'node-thermal-printer',
+                  'usb',
+                ],
               }
             }
           }

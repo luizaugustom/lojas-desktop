@@ -1,7 +1,6 @@
 import { BrowserWindow, ipcMain } from 'electron';
 import ThermalPrinter from 'node-thermal-printer';
 import { PrinterTypes } from 'node-thermal-printer';
-import { SerialPort } from 'serialport';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -45,6 +44,29 @@ const DEFAULT_CODE_PAGE = 19; // ESC/POS: Code page 19 = CP858 (Português)
 const DEFAULT_SERIAL_BAUD = 9600;
 const NEW_LINE = Buffer.from('\n', 'ascii');
 const ESC_POS_BINARY_MARKER = /<<ESC_POS_BINARY:([A-Za-z0-9+/=]+)>>/g;
+
+type SerialPortClass = typeof import('serialport').SerialPort;
+
+let serialPortModule: { SerialPort: SerialPortClass } | null = null;
+let serialPortLoadError: Error | null = null;
+
+async function loadSerialPortClass(): Promise<SerialPortClass> {
+  if (serialPortLoadError) {
+    throw serialPortLoadError;
+  }
+
+  if (!serialPortModule) {
+    try {
+      serialPortModule = await import('serialport');
+    } catch (error) {
+      serialPortLoadError = error instanceof Error ? error : new Error(String(error));
+      console.error('Módulo serialport indisponível:', serialPortLoadError.message);
+      throw serialPortLoadError;
+    }
+  }
+
+  return serialPortModule.SerialPort;
+}
 
 type EscPosSegmentPart =
   | { kind: 'text'; value: string }
@@ -222,6 +244,7 @@ async function writeRawToSerialPort(
   data: Buffer,
   baudRate = DEFAULT_SERIAL_BAUD,
 ): Promise<void> {
+  const SerialPort = await loadSerialPortClass();
   const candidates = [normalizeSerialPortPath(port)];
   const stripped = port.trim().replace(/:$/, '');
   if (!candidates.includes(stripped)) {
