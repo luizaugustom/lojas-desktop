@@ -1,6 +1,4 @@
 import { BrowserWindow, ipcMain } from 'electron';
-import ThermalPrinter from 'node-thermal-printer';
-import { PrinterTypes } from 'node-thermal-printer';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -44,6 +42,29 @@ const DEFAULT_CODE_PAGE = 19; // ESC/POS: Code page 19 = CP858 (Português)
 const DEFAULT_SERIAL_BAUD = 9600;
 const NEW_LINE = Buffer.from('\n', 'ascii');
 const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\n]+))>>/g;
+
+type ThermalPrinterModule = typeof import('node-thermal-printer');
+
+let thermalPrinterModule: ThermalPrinterModule | null = null;
+let thermalPrinterLoadError: Error | null = null;
+
+async function loadThermalPrinterModule(): Promise<ThermalPrinterModule> {
+  if (thermalPrinterLoadError) {
+    throw thermalPrinterLoadError;
+  }
+
+  if (!thermalPrinterModule) {
+    try {
+      thermalPrinterModule = await import('node-thermal-printer');
+    } catch (error) {
+      thermalPrinterLoadError = error instanceof Error ? error : new Error(String(error));
+      console.error('Módulo node-thermal-printer indisponível:', thermalPrinterLoadError.message);
+      throw thermalPrinterLoadError;
+    }
+  }
+
+  return thermalPrinterModule;
+}
 
 type EscPosSegmentPart =
   | { kind: 'text'; value: string }
@@ -761,6 +782,7 @@ async function printWithThermalPrinter(
   options?: PrintJobOptions
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const { default: ThermalPrinter, PrinterTypes } = await loadThermalPrinterModule();
     const interfaceTarget = resolveThermalInterface(printerName, options);
     const columns = normalizePaperWidth(options);
     const segments = splitReceiptCopies(content);

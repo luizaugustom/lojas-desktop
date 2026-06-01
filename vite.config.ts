@@ -19,10 +19,7 @@ export default defineConfig(({ mode }) => {
               rollupOptions: {
                 external: [
                   'electron',
-                  'serialport',
-                  '@serialport/bindings-cpp',
                   'node-thermal-printer',
-                  'usb',
                 ],
               }
             }
@@ -39,10 +36,7 @@ export default defineConfig(({ mode }) => {
               rollupOptions: {
                 external: [
                   'electron',
-                  'serialport',
-                  '@serialport/bindings-cpp',
                   'node-thermal-printer',
-                  'usb',
                 ],
               }
             }
