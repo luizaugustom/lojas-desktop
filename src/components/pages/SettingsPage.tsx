@@ -32,6 +32,8 @@ import { settingsHelpTitle, settingsHelpDescription, settingsHelpIcon, getSettin
 import { logger } from '@/lib/logger';
 import { WhatsAppConnectionCard } from '../whatsapp/whatsapp-connection-card';
 import { WhatsAppGlobalStatus } from '../whatsapp/whatsapp-global-status';
+import { FocusNfeConfigModal } from '../companies/focus-nfe-config-modal';
+import { Company } from '../../types';
 
 const PUBLIC_SITE_URL = (import.meta.env.VITE_PUBLIC_SITE_URL || 'https://montshop.app').replace(/\/+$/, '');
 
@@ -78,15 +80,8 @@ export default function SettingsPage() {
   const [companyPasswordForm, setCompanyPasswordForm] = useState({ newPassword: '', confirmPassword: '' });
   const [savingCompanyPassword, setSavingCompanyPassword] = useState(false);
 
-  // Gestor: configurar token Focus das empresas
-  const [companyFocusConfigModal, setCompanyFocusConfigModal] = useState<{ companyId: string; companyName: string } | null>(null);
-  const [companyFocusConfigForm, setCompanyFocusConfigForm] = useState({
-    focusNfeApiKey: '',
-    focusNfeEnvironment: 'sandbox' as 'sandbox' | 'production',
-    ibptToken: '',
-  });
-  const [savingCompanyFocusConfig, setSavingCompanyFocusConfig] = useState(false);
-  const [loadingCompanyFocusConfig, setLoadingCompanyFocusConfig] = useState(false);
+  // Gestor: configurar token FocusNFE das empresas
+  const [companyFocusConfigModal, setCompanyFocusConfigModal] = useState<Company | null>(null);
 
   // Estado das preferências de notificação
   const [notificationPreferences, setNotificationPreferences] = useState<any>(null);
@@ -542,47 +537,7 @@ export default function SettingsPage() {
     }
   };
 
-  // Carregar configuração Focus da empresa
-  const loadCompanyFocusConfig = async (companyId: string) => {
-    try {
-      setLoadingCompanyFocusConfig(true);
-      const response = await companyApi.getFocusNfeConfigForAdmin(companyId);
-      const data = response.data;
-      setCompanyFocusConfigForm({
-        focusNfeApiKey: data?.focusNfeApiKey || '',
-        focusNfeEnvironment: data?.focusNfeEnvironment === 'production' ? 'production' : 'sandbox',
-        ibptToken: data?.ibptToken || '',
-      });
-    } catch (error: any) {
-      console.error('Erro ao carregar configuração Focus da empresa:', error);
-      toast.error('Erro ao carregar configuração Focus da empresa');
-    } finally {
-      setLoadingCompanyFocusConfig(false);
-    }
-  };
-
-  // Salvar configuração Focus da empresa
-  const handleSaveCompanyFocusConfig = async () => {
-    if (!companyFocusConfigModal) return;
-    if (!companyFocusConfigForm.focusNfeApiKey.trim()) {
-      toast.error('Token FocusNFE é obrigatório');
-      return;
-    }
-    try {
-      setSavingCompanyFocusConfig(true);
-      await companyApi.updateFocusNfeConfigForAdmin(companyFocusConfigModal.companyId, {
-        focusNfeApiKey: companyFocusConfigForm.focusNfeApiKey.trim(),
-        focusNfeEnvironment: companyFocusConfigForm.focusNfeEnvironment,
-        ibptToken: companyFocusConfigForm.ibptToken.trim() || undefined,
-      });
-      toast.success('Configuração Focus da empresa salva com sucesso!');
-      setCompanyFocusConfigModal(null);
-    } catch (error: any) {
-      handleApiError(error);
-    } finally {
-      setSavingCompanyFocusConfig(false);
-    }
-  };
+  // Salvar configuração Focus da empresa (delegada para FocusNfeConfigModal).
 
   const loadNotificationPreferences = async () => {
     try {
@@ -1674,10 +1629,9 @@ export default function SettingsPage() {
                           size="sm"
                           onClick={() => {
                             setCompanyFocusConfigModal({
-                              companyId: c.id,
-                              companyName: (c.name || c.fantasyName || c.id) as string,
-                            });
-                            loadCompanyFocusConfig(c.id);
+                              id: c.id,
+                              name: (c.name || c.fantasyName || c.id) as string,
+                            } as Company);
                           }}
                         >
                           <Key className="mr-2 h-4 w-4" />
@@ -1756,97 +1710,13 @@ export default function SettingsPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Modal: Configurar token Focus da empresa */}
-        <Dialog open={!!companyFocusConfigModal} onOpenChange={(open) => !open && setCompanyFocusConfigModal(null)}>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Configuração FocusNFE — {companyFocusConfigModal?.companyName}</DialogTitle>
-              <DialogDescription>
-                Token da API FocusNFE e ambiente para emissão de NF-e e NFC-e desta empresa.
-              </DialogDescription>
-            </DialogHeader>
-
-            {loadingCompanyFocusConfig ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="companyFocusNfeApiKey">Token FocusNFE *</Label>
-                  <Input
-                    id="companyFocusNfeApiKey"
-                    type="password"
-                    value={companyFocusConfigForm.focusNfeApiKey}
-                    onChange={(e) => setCompanyFocusConfigForm({ ...companyFocusConfigForm, focusNfeApiKey: e.target.value })}
-                    placeholder="Token da API FocusNFE (v2)"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Obrigatório. Token da conta FocusNFE para esta empresa.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="companyFocusNfeEnvironment">Ambiente FocusNFE *</Label>
-                  <Select
-                    value={companyFocusConfigForm.focusNfeEnvironment}
-                    onValueChange={(value) =>
-                      setCompanyFocusConfigForm({ ...companyFocusConfigForm, focusNfeEnvironment: value as 'sandbox' | 'production' })
-                    }
-                  >
-                    <SelectTrigger id="companyFocusNfeEnvironment">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sandbox">Homologação (testes)</SelectItem>
-                      <SelectItem value="production">Produção</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Define se as notas serão emitidas no ambiente de testes ou produção da FocusNFE.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="companyIbptToken">Token IBPT (opcional)</Label>
-                  <Input
-                    id="companyIbptToken"
-                    type="password"
-                    value={companyFocusConfigForm.ibptToken}
-                    onChange={(e) => setCompanyFocusConfigForm({ ...companyFocusConfigForm, ibptToken: e.target.value })}
-                    placeholder="Token para tributos aproximados (Lei 12.741)"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Opcional. Token IBPT para cálculo de tributos aproximados (Lei 12.741).
-                  </p>
-                </div>
-
-                <div className="rounded-lg border p-3 text-sm bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 flex items-start gap-2">
-                  <Key className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                  <span>
-                    A FocusNFE gerencia os certificados digitais automaticamente. Não é necessário enviar arquivo .pfx.
-                  </span>
-                </div>
-
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setCompanyFocusConfigModal(null)} disabled={savingCompanyFocusConfig}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={handleSaveCompanyFocusConfig} disabled={savingCompanyFocusConfig}>
-                    {savingCompanyFocusConfig ? (
-                      <>
-                        <span className="animate-spin mr-2">⏳</span>
-                        Salvando...
-                      </>
-                    ) : (
-                      'Salvar'
-                    )}
-                  </Button>
-                </DialogFooter>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* Modal: Configurar token FocusNFE da empresa — usa o componente compartilhado */}
+        <FocusNfeConfigModal
+          open={!!companyFocusConfigModal}
+          onOpenChange={(open) => !open && setCompanyFocusConfigModal(null)}
+          company={companyFocusConfigModal}
+          onSuccess={() => setCompanyFocusConfigModal(null)}
+        />
 
         {/* WhatsApp Evolution — apenas admin pode gerenciar a instância */}
         {user?.role === 'admin' && (

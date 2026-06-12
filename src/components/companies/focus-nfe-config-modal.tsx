@@ -9,56 +9,72 @@ import { companyApi } from '../../lib/api-endpoints';
 import { toast } from 'react-hot-toast';
 import { Loader2, Lock, Eye, EyeOff, Copy } from 'lucide-react';
 
-interface SefazFiscalConfigModalProps {
+interface FocusNfeConfigModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   company: Company | null;
   onSuccess?: () => void;
 }
 
-export function SefazFiscalConfigModal({
+/**
+ * Modal de configuração FocusNFE por empresa.
+ * Substitui o antigo `SefazFiscalConfigModal` (que ainda misturava NFe.io + SEFAZ).
+ * Mostra:
+ *  - Token FocusNFE (apiKey) e ambiente (sandbox/production)
+ *  - Token IBPT (opcional)
+ *  - Status do certificado A1 (se foi enviado à FocusNFE)
+ *  - Senha do certificado (somente leitura, com botão de copiar)
+ */
+export function FocusNfeConfigModal({
   open,
   onOpenChange,
   company,
   onSuccess,
-}: SefazFiscalConfigModalProps) {
+}: FocusNfeConfigModalProps) {
   const [loading, setLoading] = useState(false);
-  const [loadingFiscalConfig, setLoadingFiscalConfig] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(false);
   const [fiscalConfig, setFiscalConfig] = useState<any>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    sefazEnvironment: 'homologacao' as 'homologacao' | 'producao',
+    focusNfeApiKey: '',
+    focusNfeEnvironment: 'sandbox' as 'sandbox' | 'production',
     ibptToken: '',
   });
 
-  const loadFiscalConfig = useCallback(async () => {
+  const loadConfig = useCallback(async () => {
     if (!company) return;
 
-    setLoadingFiscalConfig(true);
+    setLoadingConfig(true);
     try {
-      const response = await companyApi.getFiscalConfigForAdmin(company.id);
-      const data = response.data;
-      setFiscalConfig(data);
+      // Carrega config FocusNFE (do Admin) e config fiscal (da Empresa) em paralelo.
+      const [focusResponse, fiscalResponse] = await Promise.all([
+        companyApi.getFocusNfeConfigForAdmin(company.id),
+        companyApi.getFiscalConfigForAdmin(company.id),
+      ]);
+
+      const focus = focusResponse.data;
       setFormData({
-        sefazEnvironment: (data?.sefazEnvironment || 'homologacao') as 'homologacao' | 'producao',
-        ibptToken: data?.ibptToken || '',
+        focusNfeApiKey: focus?.focusNfeApiKey || '',
+        focusNfeEnvironment: focus?.focusNfeEnvironment === 'production' ? 'production' : 'sandbox',
+        ibptToken: focus?.ibptToken || '',
       });
+      setFiscalConfig(fiscalResponse.data);
     } catch (error: any) {
-      console.error('Erro ao carregar configurações fiscais:', error);
-      toast.error('Erro ao carregar configurações fiscais');
+      console.error('Erro ao carregar configurações FocusNFE:', error);
+      toast.error('Erro ao carregar configurações FocusNFE');
     } finally {
-      setLoadingFiscalConfig(false);
+      setLoadingConfig(false);
     }
   }, [company]);
 
   useEffect(() => {
     if (open && company) {
-      loadFiscalConfig();
+      loadConfig();
     } else {
-      setFormData({ sefazEnvironment: 'homologacao', ibptToken: '' });
+      setFormData({ focusNfeApiKey: '', focusNfeEnvironment: 'sandbox', ibptToken: '' });
       setFiscalConfig(null);
     }
-  }, [open, company, loadFiscalConfig]);
+  }, [open, company, loadConfig]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,16 +82,17 @@ export function SefazFiscalConfigModal({
 
     setLoading(true);
     try {
-      await companyApi.updateFiscalConfigForAdmin(company.id, {
-        sefazEnvironment: formData.sefazEnvironment,
+      await companyApi.updateFocusNfeConfigForAdmin(company.id, {
+        focusNfeApiKey: formData.focusNfeApiKey.trim(),
+        focusNfeEnvironment: formData.focusNfeEnvironment,
         ibptToken: formData.ibptToken.trim() || undefined,
       });
-      toast.success('Configuração fiscal (SEFAZ) salva com sucesso!');
+      toast.success('Configuração FocusNFE salva com sucesso!');
       onSuccess?.();
       onOpenChange(false);
     } catch (error: any) {
       console.error('Erro ao salvar:', error);
-      toast.error(error.response?.data?.message || 'Erro ao salvar configuração fiscal');
+      toast.error(error.response?.data?.message || 'Erro ao salvar configuração FocusNFE');
     } finally {
       setLoading(false);
     }
@@ -96,36 +113,50 @@ export function SefazFiscalConfigModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Configuração fiscal — {company.name}</DialogTitle>
+          <DialogTitle>Configuração FocusNFE — {company.name}</DialogTitle>
           <DialogDescription>
-            Ambiente SEFAZ (homologação ou produção), token IBPT opcional e visão do certificado digital A1.
+            Token da API FocusNFE, ambiente de emissão e visualização do certificado digital A1.
           </DialogDescription>
         </DialogHeader>
 
-        {loadingFiscalConfig ? (
+        {loadingConfig ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="sefazEnvironment">Ambiente SEFAZ *</Label>
+              <Label htmlFor="focusNfeApiKey">Token FocusNFE *</Label>
+              <Input
+                id="focusNfeApiKey"
+                type="password"
+                value={formData.focusNfeApiKey}
+                onChange={(e) => setFormData({ ...formData, focusNfeApiKey: e.target.value })}
+                placeholder="Token da API FocusNFE (v2)"
+              />
+              <p className="text-xs text-muted-foreground">
+                Obrigatório. Token da conta FocusNFE (v2) para emissão de NF-e/NFC-e.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="focusNfeEnvironment">Ambiente FocusNFE *</Label>
               <Select
-                value={formData.sefazEnvironment}
+                value={formData.focusNfeEnvironment}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, sefazEnvironment: value as 'homologacao' | 'producao' })
+                  setFormData({ ...formData, focusNfeEnvironment: value as 'sandbox' | 'production' })
                 }
               >
-                <SelectTrigger id="sefazEnvironment">
+                <SelectTrigger id="focusNfeEnvironment">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="homologacao">Homologação (testes)</SelectItem>
-                  <SelectItem value="producao">Produção</SelectItem>
+                  <SelectItem value="sandbox">Homologação (testes)</SelectItem>
+                  <SelectItem value="production">Produção</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Define para qual ambiente da SEFAZ as NF-e / NFC-e serão transmitidas.
+                Define se as notas serão emitidas no ambiente de testes ou produção da FocusNFE.
               </p>
             </div>
 
@@ -139,7 +170,7 @@ export function SefazFiscalConfigModal({
                 placeholder="Token para tributos aproximados (Lei 12.741)"
               />
               <p className="text-xs text-muted-foreground">
-                Opcional. Armazenado na empresa para consultas IBPT.
+                Opcional. Armazenado no Admin para consultas IBPT.
               </p>
             </div>
 
@@ -152,14 +183,16 @@ export function SefazFiscalConfigModal({
                 <div className="space-y-4">
                   <div
                     className={`rounded-lg border p-3 text-sm ${
-                      fiscalConfig.hasCertificateBlob
+                      fiscalConfig.certificateUploadedAt
                         ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800 text-green-900 dark:text-green-100'
                         : 'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100'
                     }`}
                   >
-                    {fiscalConfig.hasCertificateBlob
-                      ? '✅ Arquivo .pfx / .p12 armazenado no servidor (BLOB).'
-                      : '⚠️ Nenhum certificado A1 no servidor. A empresa deve enviar o .pfx em Configurações.'}
+                    {fiscalConfig.certificateUploadedAt
+                      ? `✅ Arquivo ${fiscalConfig.certificateFileName || '.pfx/.p12'} enviado à FocusNFE em ${new Date(
+                          fiscalConfig.certificateUploadedAt,
+                        ).toLocaleString('pt-BR')}.`
+                      : '⚠️ Nenhum certificado A1 foi enviado à FocusNFE. A empresa deve enviar o .pfx em Configurações → Certificado Digital.'}
                   </div>
 
                   <div className="space-y-2">

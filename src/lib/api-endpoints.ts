@@ -116,9 +116,14 @@ export const companyApi = {
   getFiscalConfigForAdmin: (id: string) => api.get(`/company/${id}/fiscal-config`),
   updateFiscalConfigForAdmin: (id: string, data: any) =>
     api.patch(`/company/${id}/fiscal-config`, data),
-  getFocusNfeConfigForAdmin: (id: string) => api.get(`/company/${id}/focus-nfe-config`),
-  updateFocusNfeConfigForAdmin: (id: string, data: any) =>
-    api.patch(`/company/${id}/focus-nfe-config`, data),
+  /**
+   * FocusNFE config — como o token é global no Admin, esses endpoints delegam
+   * para as rotas /admin/focus-nfe-config. O `id` é ignorado e mantido apenas
+   * por compatibilidade de assinatura com o modal.
+   */
+  getFocusNfeConfigForAdmin: (_id?: string) => api.get('/admin/focus-nfe-config'),
+  updateFocusNfeConfigForAdmin: (_id: string, data: any) =>
+    api.patch('/admin/focus-nfe-config', data),
   acceptTerms: (data: { accepted: boolean }) => api.post('/company/terms', data),
 };
 

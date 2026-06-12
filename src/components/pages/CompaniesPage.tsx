@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { CompaniesTable } from '../companies/companies-table';
 import { CompanyDialog } from '../companies/company-dialog';
 import { CompanyStatusModal } from '../companies/company-status-modal';
-import { SefazFiscalConfigModal } from '../companies/sefaz-fiscal-config-modal';
+import { FocusNfeConfigModal } from '../companies/focus-nfe-config-modal';
 import { Company, CreateCompanyDto } from '../../types';
 import { companyApi } from '../../lib/api-endpoints';
 import { toast } from 'react-hot-toast';
@@ -262,7 +262,7 @@ export default function CompaniesPage() {
         loading={isTogglingStatus}
       />
 
-      <SefazFiscalConfigModal
+      <FocusNfeConfigModal
         open={isFiscalModalOpen}
         onOpenChange={(open) => {
           setIsFiscalModalOpen(open);
