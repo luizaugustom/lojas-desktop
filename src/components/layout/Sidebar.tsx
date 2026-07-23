@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Package,
@@ -25,11 +24,11 @@ import {
   Briefcase,
   BarChart3,
   Banknote,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/ui-store';
 import { useAuth } from '@/contexts/AuthContext';
-import { companyApi } from '@/lib/api-endpoints';
 import { logger } from '@/lib/logger';
 import logoImage from '@/logosvg.svg';
 
@@ -45,11 +44,13 @@ const navigation = [
   { name: 'Contas e Gastos', route: 'bills', icon: CreditCard, roles: ['admin', 'empresa'] },
   { name: 'Fechamento de Caixa', route: 'cash-closure', icon: DollarSign, roles: ['admin', 'empresa', 'vendedor'] },
   { name: 'Relatórios', route: 'reports', icon: FileBarChart, roles: ['admin', 'empresa', 'gestor'] },
+  // Ponto Eletrônico - entrada única; demais ações via abas internas
+  { name: 'Ponto Eletrônico', route: 'time-clock', icon: Clock, roles: ['vendedor', 'empresa', 'admin', 'gestor'] },
   { name: 'Métricas', route: 'metrics', icon: BarChart3, roles: ['gestor'] },
   { name: 'Transferência de estoque', route: 'stock-transfer', icon: ArrowLeftRight, roles: ['gestor'] },
   { name: 'Notas Fiscais', route: 'invoices', icon: Receipt, roles: ['empresa'] },
   { name: 'Notas de Entrada', route: 'inbound-invoices', icon: FileDown, roles: ['empresa'] },
-  { name: 'Boletos', route: 'boletos', icon: Banknote, roles: ['empresa', 'vendedor'] },
+  { name: 'Boletos', route: 'boletos', icon: Banknote, roles: ['empresa'] },
   { name: 'Empresas', route: 'companies', icon: Building2, roles: ['admin'] },
   { name: 'Gestores', route: 'gestores', icon: Briefcase, roles: ['admin'] },
   { name: 'Testes da API', route: 'test-api', icon: TestTube, roles: ['admin'] },
@@ -65,16 +66,6 @@ interface SidebarProps {
 export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
   const { sidebarOpen, setSidebarOpen, sidebarCollapsed, toggleSidebarCollapsed } = useUIStore();
   const { user } = useAuth();
-
-  const { data: companyData } = useQuery({
-    queryKey: ['my-company-sidebar', user?.companyId],
-    queryFn: async () => {
-      const res = await companyApi.myCompany();
-      return res.data as { boletoAllowed?: boolean; boletoEnabled?: boolean };
-    },
-    enabled: !!user && (user.role === 'empresa' || user.role === 'vendedor'),
-  });
-  const boletoEnabled = companyData?.boletoAllowed === true && companyData?.boletoEnabled === true;
 
   const filteredNavigation = navigation.filter((item) => {
     if (!user) {
@@ -106,11 +97,6 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
     // Notas Fiscais: empresa sempre; vendedor apenas se nfeEmissionEnabled
     if (item.name === 'Notas Fiscais') {
       return normalizedRole === 'empresa' || (normalizedRole === 'vendedor' && user.nfeEmissionEnabled === true);
-    }
-
-    // Boletos: apenas se empresa/vendedor e company.boletoEnabled
-    if (item.name === 'Boletos') {
-      return item.roles.includes(normalizedRole) && boletoEnabled === true;
     }
 
     return item.roles.includes(normalizedRole);
@@ -173,7 +159,9 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
 
           <nav className={cn('flex-1 space-y-1 overflow-y-auto', sidebarCollapsed ? 'p-2' : 'p-4')}>
             {filteredNavigation.map((item) => {
-              const isActive = currentRoute === item.route;
+              const isActive =
+                currentRoute === item.route ||
+                currentRoute.startsWith(`${item.route}/`);
               return (
                 <button
                   key={item.route}
@@ -217,23 +205,23 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
                   </button>
                 </div>
               )}
-              <div className={cn('border-t', sidebarCollapsed ? 'p-2' : 'p-4')}>
-                <div className={cn('flex items-center', sidebarCollapsed ? 'justify-center' : 'gap-3')}>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    {(
-                      (user.name && user.name.charAt(0)) ||
-                      (user.login && user.login.charAt(0)) ||
-                      '?'
-                    ).toUpperCase()}
-                  </div>
-                  {!sidebarCollapsed && (
+              {!sidebarCollapsed && (
+                <div className="border-t p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      {(
+                        (user.name && user.name.charAt(0)) ||
+                        (user.login && user.login.charAt(0)) ||
+                        '?'
+                      ).toUpperCase()}
+                    </div>
                     <div className="flex-1 overflow-hidden">
                       <p className="truncate text-sm font-medium">{user.name || user.login || 'Usuário'}</p>
                       <p className="truncate text-xs text-muted-foreground capitalize">{user.role}</p>
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           )}
         </div>

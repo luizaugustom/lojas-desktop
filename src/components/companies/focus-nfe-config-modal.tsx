@@ -54,8 +54,11 @@ export function FocusNfeConfigModal({
 
       const focus = focusResponse.data;
       setFormData({
-        focusNfeApiKey: focus?.focusNfeApiKey || '',
-        focusNfeEnvironment: focus?.focusNfeEnvironment === 'production' ? 'production' : 'sandbox',
+        focusNfeApiKey: focus?.focusNfeApiKey || focus?.nfeioApiKey || '',
+        focusNfeEnvironment:
+          (focus?.focusNfeEnvironment || focus?.nfeioEnvironment) === 'production'
+            ? 'production'
+            : 'sandbox',
         ibptToken: focus?.ibptToken || '',
       });
       setFiscalConfig(fiscalResponse.data);
@@ -76,17 +79,38 @@ export function FocusNfeConfigModal({
     }
   }, [open, company, loadConfig]);
 
+  const isMaskedOrEmptyToken = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return true;
+    if (trimmed === '••••••••') return true;
+    if (/^.{1,4}\*{4,}$/.test(trimmed)) return true;
+    return false;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!company) return;
 
     setLoading(true);
     try {
-      await companyApi.updateFocusNfeConfigForAdmin(company.id, {
-        focusNfeApiKey: formData.focusNfeApiKey.trim(),
+      const payload: {
+        focusNfeApiKey?: string;
+        focusNfeEnvironment: 'sandbox' | 'production';
+        ibptToken?: string;
+      } = {
         focusNfeEnvironment: formData.focusNfeEnvironment,
-        ibptToken: formData.ibptToken.trim() || undefined,
-      });
+      };
+
+      if (!isMaskedOrEmptyToken(formData.focusNfeApiKey)) {
+        payload.focusNfeApiKey = formData.focusNfeApiKey.trim();
+      }
+
+      const ibptToken = formData.ibptToken.trim();
+      if (ibptToken && !isMaskedOrEmptyToken(ibptToken)) {
+        payload.ibptToken = ibptToken;
+      }
+
+      await companyApi.updateFocusNfeConfigForAdmin(company.id, payload);
       toast.success('Configuração FocusNFE salva com sucesso!');
       onSuccess?.();
       onOpenChange(false);
@@ -126,7 +150,7 @@ export function FocusNfeConfigModal({
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="focusNfeApiKey">Token FocusNFE *</Label>
+              <Label htmlFor="focusNfeApiKey">Token FocusNFE</Label>
               <Input
                 id="focusNfeApiKey"
                 type="password"
@@ -135,7 +159,7 @@ export function FocusNfeConfigModal({
                 placeholder="Token da API FocusNFE (v2)"
               />
               <p className="text-xs text-muted-foreground">
-                Obrigatório. Token da conta FocusNFE (v2) para emissão de NF-e/NFC-e.
+                Deixe em branco para manter o token atual. Informe apenas se quiser alterá-lo.
               </p>
             </div>
 
