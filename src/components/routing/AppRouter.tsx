@@ -3,6 +3,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { MainLayout } from '../layout/MainLayout';
 import { TimeClockTabProvider } from '../../contexts/TimeClockTabContext';
 import { SettingsRoot } from '../settings/SettingsRoot';
+import { getSettingsCategory, isUserRole, type SettingsRole } from '../settings/settings-categories';
+import { isValidRoute, sanitizeRoutePath } from '../../lib/allowed-routes';
 import LoginPage from '../pages/LoginPage';
 import DashboardPage from '../pages/DashboardPage';
 import ProductsPage from '../pages/ProductsPage';
@@ -61,14 +63,30 @@ export default function AppRouter() {
 
     window.addEventListener('navigate' as any, handleNavigate as EventListener);
 
-    // Listener IPC para cliques em notificações nativas (Electron → renderer)
+    // Listener IPC para cliques em notificações nativas (Electron → renderer).
+    // Validação obrigatória: o main já filtra via allowlist antes de enviar,
+    // mas defendemos em profundidade aqui para nunca aceitar uma rota
+    // arbitrária que mude o estado de navegação do renderer.
     const api = (window as any).electronAPI;
     let cleanupNavigate: (() => void) | undefined;
     if (api?.notifications?.onNavigate) {
-      cleanupNavigate = api.notifications.onNavigate((path: string) => {
-        // Mapeia path (ex: "/time-clock") → route (ex: "time-clock")
-        const route = path.replace(/^\//, '');
-        setCurrentRoute(route);
+      cleanupNavigate = api.notifications.onNavigate((rawPath: unknown) => {
+        const normalized = sanitizeRoutePath(rawPath);
+        if (!normalized) return;
+        const role: SettingsRole | null = isUserRole(user?.role) ? user!.role : null;
+        if (!role) return;
+        const allowed = isValidRoute(normalized, role, {
+          isSettingsCategoryVisible: (r: SettingsRole, slug: string) => {
+            try {
+              const category = getSettingsCategory(slug as Parameters<typeof getSettingsCategory>[0]);
+              return category.roles.includes(r);
+            } catch {
+              return false;
+            }
+          },
+        });
+        if (!allowed) return;
+        setCurrentRoute(normalized);
       });
     }
 
