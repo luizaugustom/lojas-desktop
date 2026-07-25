@@ -22,6 +22,9 @@ export interface ElectronAPI {
     close: () => Promise<void>;
     isMaximized: () => Promise<boolean>;
   };
+  external: {
+    openWindow: (url: string) => Promise<{ success: boolean; error?: string }>;
+  };
   theme: {
     getSystemTheme: () => Promise<'light' | 'dark'>;
     getSystemColorScheme: () => Promise<{ accent: string; theme: 'light' | 'dark' }>;

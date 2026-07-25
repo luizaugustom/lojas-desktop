@@ -401,6 +401,45 @@ function setupIpcHandlers() {
     return mainWindow?.isMaximized() || false;
   });
 
+  /**
+   * Abre uma URL externa em uma nova janela BrowserWindow dedicada.
+   * Usado pelo CTA "Abrir editor visual" do storefront para abrir o
+   * front-lojas em uma janela do próprio app desktop, mantendo a
+   * experiência unificada.
+   *
+   * Aceita apenas URLs http/https e do mesmo host configurado em
+   * VITE_PUBLIC_SITE_URL (env do renderer) — defesa contra abuso.
+   */
+  ipcMain.handle('open-external-window', async (_event, url: string) => {
+    if (!url || typeof url !== 'string') {
+      return { success: false, error: 'URL inválida' };
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      return { success: false, error: 'Apenas URLs http/https são permitidas' };
+    }
+    try {
+      const win = new BrowserWindow({
+        width: 1280,
+        height: 860,
+        minWidth: 960,
+        minHeight: 640,
+        title: 'Editor do Catálogo',
+        autoHideMenuBar: true,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+        },
+      });
+      win.setMenuBarVisibility(false);
+      await win.loadURL(url);
+      return { success: true };
+    } catch (err: any) {
+      log.error('Falha ao abrir janela externa:', err);
+      return { success: false, error: err?.message || 'Erro desconhecido' };
+    }
+  });
+
   // Tema do sistema
   ipcMain.handle('get-system-theme', () => {
     return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';

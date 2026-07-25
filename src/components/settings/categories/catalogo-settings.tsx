@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Lock, Save, Store } from 'lucide-react';
+import { Lock, Save, Store, ExternalLink, Layout } from 'lucide-react';
 import { Alert, AlertDescription } from '../../ui/alert';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
@@ -222,11 +222,39 @@ export function CatalogoSettings({ locked, lockReason }: CatalogoSettingsProps) 
           </Button>
         </div>
 
+        <div className="bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950 dark:to-violet-950 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-white dark:bg-indigo-900 rounded-md shadow-sm">
+              <Layout className="h-5 w-5 text-indigo-600 dark:text-indigo-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-indigo-900 dark:text-indigo-100">
+                Editor visual do catálogo
+              </p>
+              <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-0.5">
+                Monte sua página pública arrastando blocos (banner, produtos, promoções,
+                depoimentos, etc.), escolha cores e fontes, e publique em segundos.
+              </p>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="mt-3"
+                onClick={handleOpenEditor}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Abrir editor visual
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
           <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
             ℹ️ Sobre a Página de Catálogo
           </p>
           <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
+            <li>• Personalize visualmente com o editor de arrastar-e-soltar</li>
             <li>• Lista todos os seus produtos com estoque disponível</li>
             <li>• Exibe fotos, preços e informações dos produtos</li>
             <li>• Mostra suas informações de contato (telefone, email, endereço)</li>
@@ -237,6 +265,28 @@ export function CatalogoSettings({ locked, lockReason }: CatalogoSettingsProps) 
       </CardContent>
     </Card>
   );
+}
+
+async function handleOpenEditor() {
+  const editorUrl = `${PUBLIC_SITE_URL}/settings/catalogo/editor`;
+
+  // Preferência: abrir em uma nova janela do próprio desktop (via IPC)
+  // para manter a experiência unificada. Fallback: se electronAPI não
+  // estiver disponível (ex: rodando só no browser), abre nova aba.
+  if (typeof window !== 'undefined' && window.electronAPI?.external?.openWindow) {
+    try {
+      const res = await window.electronAPI.external.openWindow(editorUrl);
+      if (!res?.success) {
+        toast.error(res?.error || 'Falha ao abrir o editor');
+      }
+      return;
+    } catch (err) {
+      console.error('IPC open-external-window falhou:', err);
+      // cai no fallback abaixo
+    }
+  }
+
+  window.open(editorUrl, '_blank', 'noopener,noreferrer');
 }
 
 export default CatalogoSettings;

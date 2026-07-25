@@ -25,6 +25,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
   },
 
+  // Abrir URL em uma nova janela do app
+  external: {
+    openWindow: (url: string) =>
+      ipcRenderer.invoke('open-external-window', url) as Promise<{ success: boolean; error?: string }>,
+  },
+
   // Tema do sistema
   theme: {
     getSystemTheme: () => ipcRenderer.invoke('get-system-theme'),
