@@ -30,6 +30,8 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/ui-store';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/lib/logger';
+import { useQuery } from '@tanstack/react-query';
+import { companyApi } from '@/lib/api-endpoints';
 import logoImage from '@/logosvg.svg';
 
 const navigation = [
@@ -67,6 +69,15 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
   const { sidebarOpen, setSidebarOpen, sidebarCollapsed, toggleSidebarCollapsed } = useUIStore();
   const { user } = useAuth();
 
+  const { data: company } = useQuery({
+    queryKey: ['company', 'my-company'],
+    queryFn: () => companyApi.myCompany().then((res) => res.data),
+    enabled: !!user && user.role === 'empresa',
+    staleTime: 60_000,
+  });
+
+  const boletoAllowed = company?.boletoAllowed === true;
+
   const filteredNavigation = navigation.filter((item) => {
     if (!user) {
       logger.log('[Sidebar] Sem usuário, filtrando todos os itens');
@@ -97,6 +108,10 @@ export function Sidebar({ currentRoute, onNavigate }: SidebarProps) {
     // Notas Fiscais: empresa sempre; vendedor apenas se nfeEmissionEnabled
     if (item.name === 'Notas Fiscais') {
       return normalizedRole === 'empresa' || (normalizedRole === 'vendedor' && user.nfeEmissionEnabled === true);
+    }
+
+    if (item.name === 'Boletos') {
+      return normalizedRole === 'empresa' && boletoAllowed;
     }
 
     return item.roles.includes(normalizedRole);

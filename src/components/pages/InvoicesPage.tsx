@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Download, RefreshCw, Search, PlusCircle, Trash2, Plus, Package, XCircle, CheckCircle2, AlertCircle, Info, HelpCircle, FileX, FileEdit, WifiOff, Wifi } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { FileText, Download, RefreshCw, Search, PlusCircle, Trash2, Plus, Package, XCircle, CheckCircle2, AlertCircle, Info, HelpCircle, FileX, FileEdit, Link2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDateRange } from '../../hooks/useDateRange';
@@ -14,11 +14,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Switch } from '../ui/switch';
 import { handleApiError } from '@/lib/handleApiError';
-import { formatCurrency, formatDateTime, downloadFile } from '@/lib/utils';
+import { formatCurrency, formatDateTime, downloadFile, getBlobErrorMessage } from '@/lib/utils';
 import { fiscalApi, customerApi } from '@/lib/api-endpoints';
 import { AcquirerCnpjSelect } from '../ui/acquirer-cnpj-select';
 import { isValidCPF, isValidCNPJ, isValidCPFOrCNPJ } from '@/lib/validations';
 import { InvoiceHelpModal } from '../invoices/InvoiceHelpModal';
+import { NfeSuccessModal, type NfeEmitidaResumo } from '../fiscal/nfe-success-modal';
 
 interface FiscalDoc {
   id: string;
@@ -29,6 +30,8 @@ interface FiscalDoc {
   cbsValue?: number | null;
   ibsValue?: number | null;
   createdAt?: string;
+  focusRef?: string | null;
+  hasFocusArtifacts?: boolean;
 }
 
 interface NFeItem {
@@ -38,6 +41,26 @@ interface NFeItem {
   ncm: string;
   cfop: string;
   unitOfMeasure: string;
+  // Campos fiscais híbridos por item (opcional; IBPT segue automático no backend)
+  icmsOrigem?: string;
+  icmsSituacaoTributaria?: string;
+  icmsAliquota?: number | '';
+  icmsBaseCalculo?: number | '';
+  icmsValor?: number | '';
+  pisSituacaoTributaria?: string;
+  pisAliquota?: number | '';
+  pisBaseCalculo?: number | '';
+  pisValor?: number | '';
+  cofinsSituacaoTributaria?: string;
+  cofinsAliquota?: number | '';
+  cofinsBaseCalculo?: number | '';
+  cofinsValor?: number | '';
+  ipiSituacaoTributaria?: string;
+  ipiAliquota?: number | '';
+  ipiValor?: number | '';
+  cest?: string;
+  codigoBeneficioFiscal?: string;
+  barcode?: string;
 }
 
 interface Product {
@@ -69,7 +92,9 @@ export default function InvoicesPage() {
   const [recipientName, setRecipientName] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
-  
+  // IE do destinatário — vazio = não contribuinte; "ISENTO" = isento; demais valores = contribuinte.
+  const [recipientStateRegistration, setRecipientStateRegistration] = useState('');
+
   // Endereço do destinatário
   const [recipientZipCode, setRecipientZipCode] = useState('');
   const [recipientStreet, setRecipientStreet] = useState('');
@@ -78,7 +103,14 @@ export default function InvoicesPage() {
   const [recipientDistrict, setRecipientDistrict] = useState('');
   const [recipientCity, setRecipientCity] = useState('');
   const [recipientState, setRecipientState] = useState('');
-  
+
+  // Bloco de frete / despesas acessórias — quando vazio, NF-e sai sem frete (modalidade 9).
+  const [freightModality, setFreightModality] = useState<0 | 1 | 2 | 3 | 4 | 9>(9);
+  const [freightValue, setFreightValue] = useState<number | ''>('');
+  const [freightInsurance, setFreightInsurance] = useState<number | ''>('');
+  const [freightOtherExpenses, setFreightOtherExpenses] = useState<number | ''>('');
+  const [freightDiscount, setFreightDiscount] = useState<number | ''>('');
+
   // Itens da nota
   const [items, setItems] = useState<NFeItem[]>([{
     description: '',
@@ -105,7 +137,9 @@ export default function InvoicesPage() {
   // Estados para o diálogo de busca de produtos
   const [productSearchOpen, setProductSearchOpen] = useState(false);
   const [productSearch, setProductSearch] = useState('');
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  // Guardar o produto completo: a lista da API muda com a busca e IDs
+  // sozinhos deixariam de resolver ao adicionar vários itens.
+  const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
   
   // Estados para cancelamento
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -138,15 +172,15 @@ export default function InvoicesPage() {
   // Modal de ajuda
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Contingência NFC-e
-  const [contingenciaLoading, setContingenciaLoading] = useState(false);
-  const queryClient = useQueryClient();
-  const { data: contingenciaData } = useQuery({
-    queryKey: ['fiscal-contingencia-status'],
-    queryFn: async () => (await fiscalApi.getContingenciaStatus()).data,
-    enabled: !!user?.companyId && user?.role === 'empresa',
-  });
-  const contingenciaEnabled = contingenciaData?.contingenciaEnabled ?? false;
+  // Pós-emissão NF-e (download / e-mail)
+  const [nfeSuccessOpen, setNfeSuccessOpen] = useState(false);
+  const [nfeSuccessDoc, setNfeSuccessDoc] = useState<NfeEmitidaResumo | null>(null);
+
+  // Vincular referência Focus em notas sem chave/focusRef
+  const [linkFocusOpen, setLinkFocusOpen] = useState(false);
+  const [documentToLinkFocus, setDocumentToLinkFocus] = useState<FiscalDoc | null>(null);
+  const [linkFocusRefValue, setLinkFocusRefValue] = useState('');
+  const [linkFocusSubmitting, setLinkFocusSubmitting] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['fiscal-outbound', queryKeyPart, search],
@@ -254,42 +288,39 @@ export default function InvoicesPage() {
       return;
     }
 
-    const products = productsData?.products || [];
-    const newItems = selectedProducts.map(productId => {
-      const product = products.find((p: Product) => p.id === productId);
-      if (!product) return null;
+    const newItems: NFeItem[] = selectedProducts.map((product) => ({
+      description: product.name,
+      quantity: 1,
+      unitPrice: Number(product.price),
+      ncm: product.ncm || '99999999',
+      cfop: product.cfop || '5102',
+      unitOfMeasure: 'UN',
+      barcode: product.barcode || undefined,
+    }));
 
-      return {
-        description: product.name,
-        quantity: 1,
-        unitPrice: Number(product.price),
-        ncm: product.ncm || '99999999',
-        cfop: product.cfop || '5102',
-        unitOfMeasure: 'UN'
-      };
-    }).filter(item => item !== null) as NFeItem[];
+    setItems((prev) => {
+      const filteredItems = prev.filter((item) => item.description.trim() !== '');
+      return [...filteredItems, ...newItems];
+    });
 
-    // Remove o item vazio inicial se existir
-    const filteredItems = items.filter(item => item.description.trim() !== '');
-    setItems([...filteredItems, ...newItems]);
-    
-    // Reset do diálogo
     setProductSearchOpen(false);
     setSelectedProducts([]);
     setProductSearch('');
-    
+
     toast.success(`${newItems.length} produto(s) adicionado(s)`);
   };
 
-  const toggleProductSelection = (productId: string) => {
-    setSelectedProducts(prev => {
-      if (prev.includes(productId)) {
-        return prev.filter(id => id !== productId);
-      } else {
-        return [...prev, productId];
+  const toggleProductSelection = (product: Product) => {
+    setSelectedProducts((prev) => {
+      if (prev.some((p) => p.id === product.id)) {
+        return prev.filter((p) => p.id !== product.id);
       }
+      return [...prev, product];
     });
   };
+
+  const isProductSelected = (productId: string) =>
+    selectedProducts.some((p) => p.id === productId);
 
   const openEmitDialog = (type: 'nfe') => {
     setEmitType(type);
@@ -301,6 +332,7 @@ export default function InvoicesPage() {
     setRecipientName('');
     setRecipientEmail('');
     setRecipientPhone('');
+    setRecipientStateRegistration('');
     setRecipientZipCode('');
     setRecipientStreet('');
     setRecipientNumber('');
@@ -308,6 +340,11 @@ export default function InvoicesPage() {
     setRecipientDistrict('');
     setRecipientCity('');
     setRecipientState('');
+    setFreightModality(9);
+    setFreightValue('');
+    setFreightInsurance('');
+    setFreightOtherExpenses('');
+    setFreightDiscount('');
     setItems([{
       description: '',
       quantity: 1,
@@ -443,16 +480,38 @@ export default function InvoicesPage() {
       if (emissionMode === 'sale') {
         // Emissão vinculada a uma venda
         payload.saleId = saleId.trim();
+        // Overrides opcionais do destinatário (IE, endereço, contato) e frete:
+        // venda é a fonte dos dados comerciais; modal pode complementar o fiscal.
+        const documentCleanedSale = recipientDocument.replace(/\D/g, '');
+        if (documentCleanedSale || recipientName.trim() || recipientStateRegistration.trim()) {
+          payload.recipient = {
+            document: documentCleanedSale || undefined,
+            name: recipientName.trim() || undefined,
+            email: recipientEmail?.trim() || undefined,
+            phone: recipientPhone?.replace(/\D/g, '') || undefined,
+            stateRegistration: recipientStateRegistration.trim() || undefined,
+            address: {
+              zipCode: recipientZipCode?.replace(/\D/g, '') || undefined,
+              street: recipientStreet?.trim() || undefined,
+              number: recipientNumber?.trim() || undefined,
+              complement: recipientComplement?.trim() || undefined,
+              district: recipientDistrict?.trim() || undefined,
+              city: recipientCity?.trim() || undefined,
+              state: recipientState?.trim().toUpperCase() || undefined,
+            },
+          };
+        }
       } else {
         // Emissão manual com dados completos
         // Limpar formatação do documento (CPF/CNPJ)
         const documentCleaned = recipientDocument.replace(/\D/g, '');
-        
+
         payload.recipient = {
           document: documentCleaned,
           name: recipientName.trim(),
           email: recipientEmail?.trim() || undefined,
           phone: recipientPhone?.replace(/\D/g, '') || undefined,
+          stateRegistration: recipientStateRegistration.trim() || undefined,
           address: {
             zipCode: recipientZipCode?.replace(/\D/g, '') || undefined,
             street: recipientStreet?.trim() || undefined,
@@ -463,12 +522,14 @@ export default function InvoicesPage() {
             state: recipientState?.trim().toUpperCase() || undefined,
           }
         };
-        
+
         payload.items = items.map(item => {
           // Limpar formatação de NCM e CFOP
           const ncmCleaned = item.ncm?.replace(/\D/g, '') || '';
           const cfopCleaned = item.cfop?.replace(/\D/g, '') || '';
-          
+          const toNumberOrUndefined = (v: unknown) =>
+            typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+
           return {
             description: item.description.trim(),
             quantity: item.quantity ?? 0,
@@ -476,9 +537,33 @@ export default function InvoicesPage() {
             ncm: ncmCleaned || undefined,
             cfop: cfopCleaned,
             unitOfMeasure: item.unitOfMeasure.trim(),
+            barcode: item.barcode || undefined,
+            // ICMS
+            icmsOrigem: item.icmsOrigem || undefined,
+            icmsSituacaoTributaria: item.icmsSituacaoTributaria || undefined,
+            icmsAliquota: toNumberOrUndefined(item.icmsAliquota),
+            icmsBaseCalculo: toNumberOrUndefined(item.icmsBaseCalculo),
+            icmsValor: toNumberOrUndefined(item.icmsValor),
+            // PIS
+            pisSituacaoTributaria: item.pisSituacaoTributaria || undefined,
+            pisAliquota: toNumberOrUndefined(item.pisAliquota),
+            pisBaseCalculo: toNumberOrUndefined(item.pisBaseCalculo),
+            pisValor: toNumberOrUndefined(item.pisValor),
+            // COFINS
+            cofinsSituacaoTributaria: item.cofinsSituacaoTributaria || undefined,
+            cofinsAliquota: toNumberOrUndefined(item.cofinsAliquota),
+            cofinsBaseCalculo: toNumberOrUndefined(item.cofinsBaseCalculo),
+            cofinsValor: toNumberOrUndefined(item.cofinsValor),
+            // IPI
+            ipiSituacaoTributaria: item.ipiSituacaoTributaria || undefined,
+            ipiAliquota: toNumberOrUndefined(item.ipiAliquota),
+            ipiValor: toNumberOrUndefined(item.ipiValor),
+            // Outros
+            cest: item.cest?.trim() || undefined,
+            codigoBeneficioFiscal: item.codigoBeneficioFiscal?.trim() || undefined,
           };
         });
-        
+
         payload.payment = {
           method: paymentMethod,
         };
@@ -524,6 +609,24 @@ export default function InvoicesPage() {
         }
       }
 
+      // Bloco de frete — enviado em ambos os modos (venda e manual).
+      // Quando vazio, backend assume modalidade 9 (sem frete).
+      const freightValueNum = typeof freightValue === 'number' ? freightValue : 0;
+      const hasAnyFreightValue =
+        freightValueNum > 0 ||
+        (typeof freightInsurance === 'number' && freightInsurance > 0) ||
+        (typeof freightOtherExpenses === 'number' && freightOtherExpenses > 0) ||
+        (typeof freightDiscount === 'number' && freightDiscount > 0);
+      if (hasAnyFreightValue || freightModality !== 9) {
+        payload.freight = {
+          modality: freightModality,
+          value: freightValueNum,
+          insurance: typeof freightInsurance === 'number' ? freightInsurance : 0,
+          otherExpenses: typeof freightOtherExpenses === 'number' ? freightOtherExpenses : 0,
+          discount: typeof freightDiscount === 'number' ? freightDiscount : 0,
+        };
+      }
+
       if (emitBoleto && boletoCustomerId) {
         payload.emitBoleto = true;
         payload.boletoCustomerId = boletoCustomerId;
@@ -531,9 +634,19 @@ export default function InvoicesPage() {
         if (boletoAmount !== '' && typeof boletoAmount === 'number') payload.boletoAmount = boletoAmount;
       }
       
-      await api.post('/fiscal/nfe', payload);
+      const { data: emitted } = await api.post('/fiscal/nfe', payload);
       toast.success('NF-e emitida com sucesso');
       setEmitOpen(false);
+      setNfeSuccessDoc({
+        id: emitted.id,
+        documentNumber: emitted.documentNumber,
+        accessKey: emitted.accessKey,
+        status: emitted.status,
+        pdfUrl: emitted.pdfUrl,
+        recipientEmail: recipientEmail?.trim() || null,
+        recipientName: recipientName?.trim() || null,
+      });
+      setNfeSuccessOpen(true);
       refetch();
     } catch (error: any) {
       // Verificar se é erro de dados fiscais incompletos da empresa
@@ -582,73 +695,6 @@ export default function InvoicesPage() {
           )}
         </div>
       </div>
-
-      {/* Status contingência NFC-e */}
-      {user?.role === 'empresa' && (
-        <Card className={`p-3 ${contingenciaEnabled ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'border-muted'}`}>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              {contingenciaEnabled ? (
-                <>
-                  <WifiOff className="h-5 w-5 text-amber-600" />
-                  <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Modo contingência NFC-e ativo</span>
-                  {contingenciaData?.contingenciaMotivo && (
-                    <span className="text-xs text-amber-700 dark:text-amber-300">— {contingenciaData.contingenciaMotivo}</span>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Wifi className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Conexão normal com SEFAZ</span>
-                </>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {contingenciaEnabled ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={contingenciaLoading}
-                  onClick={async () => {
-                    try {
-                      setContingenciaLoading(true);
-                      await fiscalApi.desativarContingencia();
-                      toast.success('Contingência desativada.');
-                      await queryClient.invalidateQueries({ queryKey: ['fiscal-contingencia-status'] });
-                    } catch (e: any) {
-                      toast.error(e?.response?.data?.message || 'Erro ao desativar contingência');
-                    } finally {
-                      setContingenciaLoading(false);
-                    }
-                  }}
-                >
-                  Desativar contingência
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={contingenciaLoading}
-                  onClick={async () => {
-                    try {
-                      setContingenciaLoading(true);
-                      await fiscalApi.ativarContingencia({ motivo: 'Indisponibilidade do ambiente de autorização' });
-                      toast.success('Modo contingência ativado.');
-                      await queryClient.invalidateQueries({ queryKey: ['fiscal-contingencia-status'] });
-                    } catch (e: any) {
-                      toast.error(e?.response?.data?.message || 'Erro ao ativar contingência');
-                    } finally {
-                      setContingenciaLoading(false);
-                    }
-                  }}
-                >
-                  Ativar contingência
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
-      )}
 
       <Card className="p-4">
         <InputWithIcon
@@ -746,8 +792,16 @@ export default function InvoicesPage() {
                             setCheckingStatus(null);
                           }
                         }}
-                        disabled={checkingStatus === doc.id || !doc.accessKey}
-                        title="Consultar status na SEFAZ"
+                        disabled={
+                          checkingStatus === doc.id ||
+                          (!doc.accessKey &&
+                            !String(doc.status || '').toLowerCase().includes('processando'))
+                        }
+                        title={
+                          !doc.accessKey
+                            ? 'Consulta Focus (pode completar chave/XML/DANFE)'
+                            : 'Consultar status na SEFAZ'
+                        }
                       >
                         {checkingStatus === doc.id ? (
                           <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -759,14 +813,23 @@ export default function InvoicesPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        disabled={!doc.accessKey}
+                        title={
+                          !doc.accessKey
+                            ? 'Indisponível: nota sem chave de acesso Focus — emita novamente'
+                            : 'Baixar DANFE (PDF)'
+                        }
                         onClick={async () => {
                           try {
                             const response = await api.get(`/fiscal/${doc.id}/download`, { params: { format: 'pdf' }, responseType: 'blob' });
                             const blob = response.data as Blob;
+                            if (blob.type?.includes('application/json')) {
+                              throw { response: { data: blob } };
+                            }
                             downloadFile(blob, `documento-${doc.id}.pdf`);
                           } catch (e) {
                             console.error(e);
-                            toast.error('Não foi possível baixar o PDF');
+                            toast.error(await getBlobErrorMessage(e, 'Não foi possível baixar o PDF'));
                           }
                         }}
                       >
@@ -775,19 +838,42 @@ export default function InvoicesPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        disabled={!doc.accessKey}
+                        title={
+                          !doc.accessKey
+                            ? 'Indisponível: nota sem chave de acesso Focus — emita novamente'
+                            : 'Baixar XML'
+                        }
                         onClick={async () => {
                           try {
                             const response = await api.get(`/fiscal/${doc.id}/download`, { params: { format: 'xml' }, responseType: 'blob' });
                             const blob = response.data as Blob;
+                            if (blob.type?.includes('application/json')) {
+                              throw { response: { data: blob } };
+                            }
                             downloadFile(blob, `documento-${doc.id}.xml`);
                           } catch (e) {
                             console.error(e);
-                            toast.error('Não foi possível baixar o XML');
+                            toast.error(await getBlobErrorMessage(e, 'Não foi possível baixar o XML'));
                           }
                         }}
                       >
                         <Download className="mr-2 h-4 w-4" /> XML
                       </Button>
+                      {!doc.accessKey && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            setDocumentToLinkFocus(doc);
+                            setLinkFocusRefValue(doc.focusRef || '');
+                            setLinkFocusOpen(true);
+                          }}
+                          title="Informar a ref da nota no painel FocusNFE para recuperar XML/DANFE"
+                        >
+                          <Link2 className="mr-2 h-4 w-4" /> Vincular Focus
+                        </Button>
+                      )}
                       {doc.documentType === 'NFe' && (doc.status === 'Autorizada' || doc.status === 'Autorizado') && doc.accessKey && (
                         <Button
                           size="sm"
@@ -863,16 +949,59 @@ export default function InvoicesPage() {
             <TabsContent value="sale" className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="saleId">ID da Venda *</Label>
-                <Input 
-                  id="saleId" 
-                  placeholder="Ex.: 123" 
-                  value={saleId} 
-                  onChange={(e) => setSaleId(e.target.value)} 
+                <Input
+                  id="saleId"
+                  placeholder="Ex.: 123"
+                  value={saleId}
+                  onChange={(e) => setSaleId(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Informe o ID de uma venda existente para emitir a NF-e com os dados dela
+                  Informe o ID de uma venda existente para emitir a NF-e com os dados dela.
+                  Os campos abaixo complementam o frete; quantidade, preço e itens sempre vêm da
+                  venda.
                 </p>
               </div>
+
+              <Card className="p-4">
+                <h3 className="font-semibold mb-4">Frete da NF-e</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Modalidade</Label>
+                    <Select
+                      value={String(freightModality)}
+                      onValueChange={(v) =>
+                        setFreightModality(Number(v) as 0 | 1 | 2 | 3 | 4 | 9)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="9">9 — Sem frete</SelectItem>
+                        <SelectItem value="0">0 — Por conta do emitente</SelectItem>
+                        <SelectItem value="1">1 — Por conta do destinatário</SelectItem>
+                        <SelectItem value="2">2 — Por conta de terceiros</SelectItem>
+                        <SelectItem value="3">3 — Próprio / remetente</SelectItem>
+                        <SelectItem value="4">4 — Próprio / destinatário</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="freightValueSale">Valor do Frete (R$)</Label>
+                    <Input
+                      id="freightValueSale"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      disabled={freightModality === 9}
+                      value={freightValue}
+                      onChange={(e) =>
+                        setFreightValue(e.target.value === '' ? '' : Number(e.target.value))
+                      }
+                    />
+                  </div>
+                </div>
+              </Card>
             </TabsContent>
 
             <TabsContent value="manual" className="space-y-6">
@@ -1016,6 +1145,116 @@ export default function InvoicesPage() {
                       value={recipientCity}
                       onChange={(e) => setRecipientCity(e.target.value)}
                     />
+                  </div>
+
+                  {/* Inscrição Estadual do destinatário */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="recipientStateRegistration">
+                        Inscrição Estadual
+                      </Label>
+                      <Input
+                        id="recipientStateRegistration"
+                        placeholder="000.000.000.000 ou ISENTO"
+                        value={recipientStateRegistration}
+                        onChange={(e) =>
+                          setRecipientStateRegistration(e.target.value.toUpperCase())
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Bloco de Frete / Despesas Acessórias */}
+              <Card className="p-4">
+                <h3 className="font-semibold mb-4">Frete e Despesas Acessórias</h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Modalidade do Frete</Label>
+                      <Select
+                        value={String(freightModality)}
+                        onValueChange={(v) =>
+                          setFreightModality(Number(v) as 0 | 1 | 2 | 3 | 4 | 9)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="9">9 — Sem frete</SelectItem>
+                          <SelectItem value="0">0 — Por conta do emitente</SelectItem>
+                          <SelectItem value="1">1 — Por conta do destinatário</SelectItem>
+                          <SelectItem value="2">2 — Por conta de terceiros</SelectItem>
+                          <SelectItem value="3">3 — Próprio / remetente</SelectItem>
+                          <SelectItem value="4">4 — Próprio / destinatário</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="freightValue">Valor do Frete (R$)</Label>
+                      <Input
+                        id="freightValue"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={freightModality === 9}
+                        value={freightValue}
+                        onChange={(e) =>
+                          setFreightValue(e.target.value === '' ? '' : Number(e.target.value))
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="freightInsurance">Seguro (R$)</Label>
+                      <Input
+                        id="freightInsurance"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={freightModality === 9}
+                        value={freightInsurance}
+                        onChange={(e) =>
+                          setFreightInsurance(
+                            e.target.value === '' ? '' : Number(e.target.value),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="freightOtherExpenses">Outras Despesas (R$)</Label>
+                      <Input
+                        id="freightOtherExpenses"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={freightModality === 9}
+                        value={freightOtherExpenses}
+                        onChange={(e) =>
+                          setFreightOtherExpenses(
+                            e.target.value === '' ? '' : Number(e.target.value),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="freightDiscount">Desconto (R$)</Label>
+                      <Input
+                        id="freightDiscount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={freightDiscount}
+                        onChange={(e) =>
+                          setFreightDiscount(
+                            e.target.value === '' ? '' : Number(e.target.value),
+                          )
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -1377,17 +1616,17 @@ export default function InvoicesPage() {
                       <div
                         key={product.id}
                         className={`p-4 cursor-pointer hover:bg-muted/50 transition-colors ${
-                          selectedProducts.includes(product.id) ? 'bg-primary/10' : ''
+                          isProductSelected(product.id) ? 'bg-primary/10' : ''
                         }`}
-                        onClick={() => toggleProductSelection(product.id)}
+                        onClick={() => toggleProductSelection(product)}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                checked={selectedProducts.includes(product.id)}
-                                onChange={() => toggleProductSelection(product.id)}
+                                checked={isProductSelected(product.id)}
+                                onChange={() => toggleProductSelection(product)}
                                 className="cursor-pointer"
                                 onClick={(e) => e.stopPropagation()}
                               />
@@ -1569,6 +1808,83 @@ export default function InvoicesPage() {
       </Dialog>
 
       {/* Modal de Cancelamento */}
+      <Dialog
+        open={linkFocusOpen}
+        onOpenChange={(open) => {
+          setLinkFocusOpen(open);
+          if (!open) {
+            setDocumentToLinkFocus(null);
+            setLinkFocusRefValue('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vincular referência FocusNFE</DialogTitle>
+            <DialogDescription>
+              Esta nota não tem chave/focusRef salvos. No painel da FocusNFE, abra a NF-e
+              correspondente e copie o campo <strong>ref</strong> (referência). Com isso
+              recuperamos XML e DANFE.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Documento: {documentToLinkFocus?.id}
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="link-focus-ref">Referência Focus (ref)</Label>
+              <Input
+                id="link-focus-ref"
+                value={linkFocusRefValue}
+                onChange={(e) => setLinkFocusRefValue(e.target.value.trim())}
+                placeholder="Ex: nfe_a1b2c3d4e5f6..."
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={linkFocusSubmitting}
+              onClick={() => setLinkFocusOpen(false)}
+            >
+              Fechar
+            </Button>
+            <Button
+              disabled={linkFocusSubmitting || linkFocusRefValue.length < 3 || !documentToLinkFocus}
+              onClick={async () => {
+                if (!documentToLinkFocus) return;
+                setLinkFocusSubmitting(true);
+                try {
+                  await fiscalApi.linkFocusRef(documentToLinkFocus.id, linkFocusRefValue);
+                  toast.success('Referência vinculada. XML/DANFE disponíveis para download.');
+                  setLinkFocusOpen(false);
+                  setDocumentToLinkFocus(null);
+                  setLinkFocusRefValue('');
+                  await refetch();
+                } catch (error) {
+                  handleApiError(error);
+                } finally {
+                  setLinkFocusSubmitting(false);
+                }
+              }}
+            >
+              {linkFocusSubmitting ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Vinculando...
+                </>
+              ) : (
+                <>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Vincular e sincronizar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1657,6 +1973,15 @@ export default function InvoicesPage() {
       </Dialog>
 
       <InvoiceHelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      <NfeSuccessModal
+        open={nfeSuccessOpen}
+        onOpenChange={(open) => {
+          setNfeSuccessOpen(open);
+          if (!open) setNfeSuccessDoc(null);
+        }}
+        nfe={nfeSuccessDoc}
+      />
     </div>
   );
 }

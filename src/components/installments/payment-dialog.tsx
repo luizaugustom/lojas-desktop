@@ -24,8 +24,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatCurrency } from '../../lib/utils';
 import { DollarSign, CreditCard, Banknote, Smartphone } from 'lucide-react';
 import { PaymentReceiptConfirmDialog } from './payment-receipt-confirm-dialog';
-import { InstallmentBilletViewer } from './installment-billet-viewer';
-import { ConfirmationModal } from '../ui/confirmation-modal';
 import { printContent } from '../../lib/print-service';
 import { getFriendlyPrintErrorMessage } from '../../lib/print-error-message';
 import { handleApiError } from '../../lib/handleApiError';
@@ -69,9 +67,6 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
   const [paymentData, setPaymentData] = useState<any>(null);
   const [printing, setPrinting] = useState(false);
   const [customerTotalAfterPayment, setCustomerTotalAfterPayment] = useState<number | null>(null);
-  const [newBilletPdf, setNewBilletPdf] = useState<string | null>(null);
-  const [showNewBillet, setShowNewBillet] = useState(false);
-  const [showNewBilletConfirm, setShowNewBilletConfirm] = useState(false);
 
   const {
     register,
@@ -98,9 +93,6 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
       reset();
       setShowReceiptConfirm(false);
       setPaymentData(null);
-      setNewBilletPdf(null);
-      setShowNewBillet(false);
-      setShowNewBilletConfirm(false);
     }
   }, [open, installment?.id, installment?.remainingAmount, setValue, reset]);
 
@@ -135,16 +127,10 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
         sellerName: user?.name,
       });
 
-      // Verificar se há novo boleto (pagamento parcial)
-      if (response.data?.newBilletPdf) {
-        setNewBilletPdf(response.data.newBilletPdf);
-        toast.success('Pagamento registrado! Novo boleto gerado para o valor restante.');
-        setShowNewBilletConfirm(true);
-      } else {
-        toast.success(response.data.message || 'Pagamento registrado com sucesso!');
-        // Mostra o diálogo de confirmação de impressão apenas se não houver novo boleto
-        setShowReceiptConfirm(true);
-      }
+      // Pagamento parcial: o boleto existente na Unimake permanece. A empresa
+      // baixa o PDF atualizado em /boletos (sem reimpressão local).
+      toast.success(response.data.message || 'Pagamento registrado com sucesso!');
+      setShowReceiptConfirm(true);
     },
     onError: (error: any) => {
       handleApiError(error);
@@ -264,33 +250,7 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
   const handleSkipReceipt = () => {
     setShowReceiptConfirm(false);
     reset();
-    setNewBilletPdf(null);
-    setShowNewBillet(false);
     onClose();
-  };
-
-  const handleConfirmNewBillet = () => {
-    setShowNewBilletConfirm(false);
-    setShowNewBillet(true);
-  };
-
-  const handleSkipNewBillet = () => {
-    setShowNewBilletConfirm(false);
-    setShowNewBillet(false);
-    setNewBilletPdf(null);
-    setShowReceiptConfirm(true);
-  };
-
-  const handleNewBilletClose = () => {
-    setShowNewBillet(false);
-    setNewBilletPdf(null);
-    // Após fechar o boleto, mostrar confirmação de comprovante se necessário
-    if (paymentData) {
-      setShowReceiptConfirm(true);
-    } else {
-      reset();
-      onClose();
-    }
   };
 
   if (!installment) return null;
@@ -468,26 +428,6 @@ export function PaymentDialog({ open, onClose, installment }: PaymentDialogProps
         onConfirm={handlePrintReceipt}
         onCancel={handleSkipReceipt}
       />
-
-      <ConfirmationModal
-        open={showNewBilletConfirm}
-        onClose={handleSkipNewBillet}
-        onConfirm={handleConfirmNewBillet}
-        title="Boleto do restante"
-        description="Deseja visualizar ou imprimir o boleto referente ao valor restante da dívida?"
-        confirmText="Visualizar boleto"
-        cancelText="Não agora"
-      />
-
-      {/* Visualizador de novo boleto (pagamento parcial) */}
-      {newBilletPdf && installment && (
-        <InstallmentBilletViewer
-          open={showNewBillet}
-          onClose={handleNewBilletClose}
-          saleId={installment.saleId}
-          billetsPdfBase64={newBilletPdf}
-        />
-      )}
     </Dialog>
   );
 }

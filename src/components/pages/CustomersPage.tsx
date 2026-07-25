@@ -27,8 +27,9 @@ export default function CustomersPage() {
       logger.log('[CustomersPage] Usuário completo:', user);
       try {
         const response = await customerApi.list({
-          search,
-          companyId: user?.companyId ?? undefined,
+          search: search || undefined,
+          page: 1,
+          limit: 1000,
         });
         logger.log('[CustomersPage] Resposta da API:', response);
         return response;
@@ -107,7 +108,7 @@ export default function CustomersPage() {
               Novo Cliente
             </Button>
           )}
-          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <Button variant="ghost" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
             <HelpCircle className="h-5 w-5" />
           </Button>
         </div>
@@ -128,13 +129,12 @@ export default function CustomersPage() {
       {error && (
         <Card className="p-4 bg-destructive/10 border-destructive/20">
           <div className="text-destructive">
-            <h3 className="font-semibold">Erro ao carregar clientes:</h3>
+            <h3 className="font-semibold">Erro ao carregar clientes</h3>
             <p className="text-sm mt-1">
               {error instanceof Error ? error.message : 'Erro desconhecido'}
             </p>
             <p className="text-xs mt-2 opacity-75">
-              CompanyId: {user?.companyId || 'Não definido'} | 
-              Role: {user?.role || 'Não definido'}
+              Se o erro persistir, verifique se as migrações do banco estão atualizadas.
             </p>
           </div>
         </Card>

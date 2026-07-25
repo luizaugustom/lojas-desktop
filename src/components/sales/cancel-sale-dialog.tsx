@@ -10,13 +10,16 @@ import {
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { XCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '../ui/alert';
+import { XCircle, AlertTriangle } from 'lucide-react';
 
 interface CancelSaleDialogProps {
   open: boolean;
   onClose: () => void;
   onConfirm: (reason: string) => Promise<void>;
   loading?: boolean;
+  /** Indica se a venda tem NFC-e/NF-e emitida (exibe alerta de prazo). */
+  hasNfce?: boolean;
 }
 
 export function CancelSaleDialog({
@@ -24,6 +27,7 @@ export function CancelSaleDialog({
   onClose,
   onConfirm,
   loading = false,
+  hasNfce = false,
 }: CancelSaleDialogProps) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
@@ -80,6 +84,20 @@ export function CancelSaleDialog({
             <strong>Esta ação não pode ser desfeita.</strong>
           </DialogDescription>
         </DialogHeader>
+
+        {/* ATO DIAT 38/2020 — Art. 14: prazo de cancelamento da NFC-e */}
+        {hasNfce && (
+          <Alert variant="destructive" className="my-2 border-yellow-500 bg-yellow-50 text-yellow-900">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Prazo de cancelamento (Art. 14 do ATO DIAT 38/2020):</strong>
+              <br />• <strong>NF-e (modelo 55):</strong> até 24 horas após a autorização.
+              <br />• <strong>NFC-e (modelo 65):</strong> até 30 minutos após a autorização.
+              <br />
+              Após o prazo, o cancelamento só é possível via DAF (Documento Auxiliar Fiscal).
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="reason" className="text-base">

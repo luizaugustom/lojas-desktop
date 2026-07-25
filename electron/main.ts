@@ -6,7 +6,9 @@ import * as fs from 'fs';
 import { registerDeviceHandlers } from './handlers/device-handlers';
 import { registerPrinterHandlers } from './handlers/printer-handlers';
 import { registerScaleHandlers } from './handlers/scale-handlers';
-import { registerAuthHandlers } from './handlers/auth-handlers';
+import { registerAuthHandlers, readStoredAuthToken } from './handlers/auth-handlers';
+import { registerNotificationHandlers } from './handlers/notification-handlers';
+import axios from 'axios';
 // registerPrinterDriverHandlers removido - funcionalidades de impressão removidas
 // impressao-handler removido - funcionalidades de impressão removidas
 
@@ -69,11 +71,59 @@ if (!isDev) {
         });
       }
     }, 4 * 60 * 60 * 1000); // 4 horas em milissegundos
-    
+
     log.info('Auto-updater configurado: download automático e instalação ao fechar');
   } catch (error) {
     log.warn('Erro ao configurar auto-updater:', error);
   }
+}
+
+// ============================================================================
+// ATO DIAT 38/2020 — Sincronização periódica de NFC-e contingenciais
+// ============================================================================
+
+/**
+ * Job periódico que tenta sincronizar NFC-e em contingência pendentes
+ * com a SEFAZ (via FocusNFE). Disparado a cada 5 minutos.
+ *
+ * Conforme ATO DIAT 38/2020, NFC-e emitidas em contingência devem ser
+ * enviadas à SEFAZ assim que o ambiente for restabelecido.
+ */
+let contingencySyncInProgress = false;
+function startContingencySyncJob(): void {
+  setInterval(async () => {
+    if (contingencySyncInProgress) return;
+    contingencySyncInProgress = true;
+    try {
+      const apiBaseUrl = process.env.VITE_API_URL || 'https://api.montshop.app';
+      const token = readStoredAuthToken();
+      if (!token) return;
+
+      const response = await axios.post(
+        `${apiBaseUrl}/fiscal/contingencia/sincronizar-todos`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 120_000,
+        },
+      );
+
+      const data = response.data;
+      if (data?.total > 0) {
+        log.info(
+          `[ATO DIAT 38/2020] Sync contingência: ${data.sucessos}/${data.total} sincronizados, ${data.erros} erro(s).`,
+        );
+      }
+    } catch (err: any) {
+      log.error('Erro no job de sincronização de contingência:', err);
+    } finally {
+      contingencySyncInProgress = false;
+    }
+  }, 5 * 60 * 1000); // 5 minutos
+  log.info('[ATO DIAT 38/2020] Job periódico de sincronização de contingência iniciado (5min).');
 }
 
 // Função para encontrar o index.html em produção
@@ -174,7 +224,7 @@ function createWindow() {
     minHeight: 768,
     frame: false, // Janela sem bordas para customização total
     titleBarStyle: 'hidden',
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1F1F1F' : '#f7f7f7',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -191,6 +241,24 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowOptions);
+
+  // Permissões: geolocalização, câmera (QR) e notificações para o ponto eletrônico.
+  // Electron exige RequestHandler + CheckHandler — sem o Check, APIs como
+  // navigator.geolocation falham com PERMISSION_DENIED sem exibir o prompt.
+  const allowPermission = (permission: string) =>
+    permission === 'geolocation' ||
+    permission === 'notifications' ||
+    permission === 'media';
+
+  mainWindow.webContents.session.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      callback(allowPermission(permission));
+    },
+  );
+
+  mainWindow.webContents.session.setPermissionCheckHandler(
+    (_webContents, permission) => allowPermission(permission),
+  );
 
   // Tratamento de erros
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
@@ -368,6 +436,7 @@ function setupIpcHandlers() {
   registerPrinterHandlers();
   registerScaleHandlers();
   registerAuthHandlers();
+  registerNotificationHandlers();
 }
 
 // App lifecycle
@@ -378,6 +447,8 @@ app.whenReady().then(() => {
     setupIpcHandlers();
     createWindow();
     log.info('Janela criada com sucesso');
+    // ATO DIAT 38/2020 — inicia job de sincronização de contingência
+    startContingencySyncJob();
   } catch (error) {
     log.error('Erro ao criar janela:', error);
   }

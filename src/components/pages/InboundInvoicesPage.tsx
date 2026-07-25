@@ -12,9 +12,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
 import { formatCurrency, formatDateTime, downloadFile, generateCoherentUUID } from '@/lib/utils';
-import { MAX_PRODUCT_PHOTOS, ACCEPTED_IMAGE_STRING, validateImageFile } from '@/lib/constants/upload.constants';
-import { fiscalApi, productApi, billApi } from '@/lib/api-endpoints';
+import {
+  ACCEPTED_IMAGE_STRING,
+  validateImageFile,
+  formatPhotoLimitDisplay,
+  canAddMorePhotos,
+  getAvailablePhotoSlots,
+  getTooManyFilesMessage,
+  type PhotoLimit,
+} from '@/lib/constants/upload.constants';
+import { fiscalApi, productApi, billApi, companyApi } from '@/lib/api-endpoints';
 import { handleApiError } from '@/lib/handleApiError';
+import { extractNfeAccessKey, expandNfeAccessKeyCandidates } from '@/lib/nfe-access-key';
 import { PageHelpModal } from '../help/page-help-modal';
 import { inboundInvoicesHelpTitle, inboundInvoicesHelpDescription, inboundInvoicesHelpIcon, getInboundInvoicesHelpTabs } from '../help/contents/inbound-invoices-help';
 
@@ -52,6 +61,12 @@ type ParsedData = { form: ParsedForm; items: ParsedItem[]; duplicatas: ParsedDup
 
 export default function InboundInvoicesPage() {
   const { api, user } = useAuth();
+  const { data: companyData } = useQuery({
+    queryKey: ['my-company', user?.companyId],
+    queryFn: () => companyApi.myCompany().then((r) => r.data),
+    enabled: !!user?.companyId,
+  });
+  const maxPhotosPerProduct: PhotoLimit = companyData?.maxPhotosPerProduct ?? null;
   const { queryParams, queryKeyPart } = useDateRange();
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
@@ -91,9 +106,7 @@ export default function InboundInvoicesPage() {
   const [parsingXml, setParsingXml] = useState(false);
   const [sefazInboundXmlLoading, setSefazInboundXmlLoading] = useState(false);
   const [xmlStringForSubmit, setXmlStringForSubmit] = useState<string | null>(null);
-  const inboundSefazFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inboundSefazFetchLockRef = useRef(false);
-  const lastSefazAutoFetchedKeyRef = useRef<string | null>(null);
   type ItemNewProductDataRow = { name: string; barcode: string; costPrice: number; stockQuantity: number; ncm: string; cfop: string; unitOfMeasure: string; price: number; category?: string; description?: string; expirationDate?: string; lowStockAlertThreshold?: number };
   const [itemDecisions, setItemDecisions] = useState<ItemDecision[]>([]);
   const [itemLinkedIds, setItemLinkedIds] = useState<string[]>([]);
@@ -209,10 +222,8 @@ export default function InboundInvoicesPage() {
       setXmlPasted(xml);
       const { data: res } = await fiscalApi.parseInboundXml(xml);
       applyInboundParseResult(res as ParsedData, xml);
-      lastSefazAutoFetchedKeyRef.current = key44;
       toast.success('XML obtido na SEFAZ. Revise os dados e defina o que fazer com os produtos.');
     } catch (err: any) {
-      lastSefazAutoFetchedKeyRef.current = null;
       const { message } = handleApiError(err, { showToast: false });
       toast.error(message);
     } finally {
@@ -220,40 +231,6 @@ export default function InboundInvoicesPage() {
       setSefazInboundXmlLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (!addOpen || editingDoc) {
-      if (inboundSefazFetchTimerRef.current) {
-        clearTimeout(inboundSefazFetchTimerRef.current);
-        inboundSefazFetchTimerRef.current = null;
-      }
-      lastSefazAutoFetchedKeyRef.current = null;
-      return;
-    }
-    if (accessKey.length !== 44) {
-      lastSefazAutoFetchedKeyRef.current = null;
-      return;
-    }
-    if (accessKey === lastSefazAutoFetchedKeyRef.current) return;
-    if (inboundSefazFetchTimerRef.current) {
-      clearTimeout(inboundSefazFetchTimerRef.current);
-      inboundSefazFetchTimerRef.current = null;
-    }
-    const scheduledKey = accessKey;
-    inboundSefazFetchTimerRef.current = setTimeout(() => {
-      inboundSefazFetchTimerRef.current = null;
-      if (!addOpen || editingDoc) return;
-      if (scheduledKey.length !== 44) return;
-      if (scheduledKey === lastSefazAutoFetchedKeyRef.current) return;
-      void runSefazInboundFetchAndParse(scheduledKey);
-    }, 450);
-    return () => {
-      if (inboundSefazFetchTimerRef.current) {
-        clearTimeout(inboundSefazFetchTimerRef.current);
-        inboundSefazFetchTimerRef.current = null;
-      }
-    };
-  }, [accessKey, addOpen, editingDoc]);
 
   const docs: InboundDoc[] = useMemo(() => {
     const raw: any = data;
@@ -465,7 +442,7 @@ export default function InboundInvoicesPage() {
           <Button variant="outline" onClick={() => refetch()} disabled={isLoading} className="text-foreground">
             <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
           </Button>
-          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <Button variant="ghost" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
             <HelpCircle className="h-5 w-5" />
           </Button>
         </div>
@@ -973,28 +950,61 @@ export default function InboundInvoicesPage() {
           <div className="space-y-3">
             <div className="space-y-1">
               <Label htmlFor="accessKey">Chave de Acesso (opcional)</Label>
-              <Input
-                id="accessKey"
-                placeholder="44 dígitos ou leia o código de barras da DANFE"
-                value={accessKey}
-                disabled={sefazInboundXmlLoading}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/\D/g, '');
-                  const value = digits.length > 44 ? digits.slice(-44) : digits;
-                  setAccessKey(value);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter') return;
-                  if (editingDoc || !addOpen) return;
-                  if (accessKey.length !== 44) return;
-                  e.preventDefault();
-                  if (inboundSefazFetchTimerRef.current) {
-                    clearTimeout(inboundSefazFetchTimerRef.current);
-                    inboundSefazFetchTimerRef.current = null;
-                  }
-                  void runSefazInboundFetchAndParse(accessKey);
-                }}
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  id="accessKey"
+                  className="flex-1"
+                  placeholder="44 dígitos ou leia o código de barras da DANFE"
+                  value={accessKey}
+                  disabled={sefazInboundXmlLoading}
+                  onChange={(e) => {
+                    const extracted = extractNfeAccessKey(e.target.value);
+                    const digits = e.target.value.replace(/\D/g, '');
+                    const value = extracted ?? digits.slice(0, 128);
+                    setAccessKey(value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== 'NumpadEnter') return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (editingDoc || !addOpen || sefazInboundXmlLoading) return;
+                    // Lê do input (não do state): leitores enviam Enter antes do React atualizar
+                    const raw = (e.currentTarget as HTMLInputElement).value;
+                    const extracted = extractNfeAccessKey(raw);
+                    const digits = raw.replace(/\D/g, '');
+                    const key = extracted ?? digits;
+                    setAccessKey(key);
+                    if (expandNfeAccessKeyCandidates(key).length === 0) {
+                      toast.error(
+                        'Chave inválida para busca. Informe 44 dígitos ou leia o código de barras (42) e pressione Enter.',
+                      );
+                      return;
+                    }
+                    void runSefazInboundFetchAndParse(key);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="shrink-0"
+                  disabled={sefazInboundXmlLoading || expandNfeAccessKeyCandidates(accessKey).length === 0}
+                  onClick={() => {
+                    if (expandNfeAccessKeyCandidates(accessKey).length === 0) {
+                      toast.error(
+                        'Chave inválida para busca. Informe 44 dígitos ou leia o código de barras (42).',
+                      );
+                      return;
+                    }
+                    void runSefazInboundFetchAndParse(accessKey);
+                  }}
+                >
+                  {sefazInboundXmlLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Buscar'
+                  )}
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground">
                 {sefazInboundXmlLoading ? (
                   <span className="inline-flex items-center gap-1">
@@ -1003,7 +1013,7 @@ export default function InboundInvoicesPage() {
                   </span>
                 ) : (
                   <>
-                    {accessKey.length}/44 dígitos — ao completar 44, a busca na Distribuição DF-e ocorre automaticamente; Enter aciona de imediato.
+                    {accessKey.replace(/\D/g, '').length} dígitos — aceita 44 completos ou 42 do código de barras (sem UF). Pressione Enter ou clique em Buscar.
                   </>
                 )}
               </p>
@@ -1223,9 +1233,12 @@ export default function InboundInvoicesPage() {
             </Button>
             <Button
               onClick={async () => {
-                if (accessKey && accessKey.length !== 44) {
-                  toast.error('Chave de acesso deve ter 44 dígitos');
-                  return;
+                if (accessKey) {
+                  const candidates = expandNfeAccessKeyCandidates(accessKey);
+                  if (candidates.length === 0) {
+                    toast.error('Chave de acesso inválida. Leia ou informe os 44 dígitos completos.');
+                    return;
+                  }
                 }
                 if (!supplierName.trim()) {
                   toast.error('Nome do fornecedor é obrigatório');
@@ -1397,7 +1410,7 @@ export default function InboundInvoicesPage() {
                 uploading ||
                 !supplierName.trim() ||
                 !totalValue.trim() ||
-                (accessKey.length > 0 && accessKey.length !== 44)
+                (accessKey.length > 0 && expandNfeAccessKeyCandidates(accessKey).length === 0)
               }
             >
               {uploading ? (
@@ -1626,7 +1639,9 @@ export default function InboundInvoicesPage() {
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label className="text-xs">Fotos do produto</Label>
-                <p className="text-xs text-muted-foreground">{createProductModalPhotos.length} / {MAX_PRODUCT_PHOTOS} fotos</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatPhotoLimitDisplay(createProductModalPhotos.length, maxPhotosPerProduct)} fotos
+                </p>
                 <input
                   ref={createProductModalFileInputRef}
                   type="file"
@@ -1642,8 +1657,12 @@ export default function InboundInvoicesPage() {
                       if (!valid) { toast.error(error ?? 'Arquivo inválido'); continue; }
                       toAdd.push(f);
                     }
-                    const next = [...createProductModalPhotos, ...toAdd].slice(0, MAX_PRODUCT_PHOTOS);
-                    if (next.length > createProductModalPhotos.length + toAdd.length) toast.error(`Máximo de ${MAX_PRODUCT_PHOTOS} fotos.`);
+                    const slots = getAvailablePhotoSlots(createProductModalPhotos.length, maxPhotosPerProduct);
+                    const photosToAdd = slots === Infinity ? toAdd : toAdd.slice(0, slots);
+                    const next = [...createProductModalPhotos, ...photosToAdd];
+                    if (photosToAdd.length < toAdd.length && maxPhotosPerProduct !== null) {
+                      toast.error(getTooManyFilesMessage(maxPhotosPerProduct));
+                    }
                     setCreateProductModalPhotos(next);
                   }}
                 />
@@ -1651,9 +1670,9 @@ export default function InboundInvoicesPage() {
                   <div
                     role="button"
                     tabIndex={0}
-                    onClick={() => createProductModalPhotos.length < MAX_PRODUCT_PHOTOS && createProductModalFileInputRef.current?.click()}
-                    onKeyDown={(e) => e.key === 'Enter' && createProductModalPhotos.length < MAX_PRODUCT_PHOTOS && createProductModalFileInputRef.current?.click()}
-                    className={`w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${createProductModalPhotos.length >= MAX_PRODUCT_PHOTOS ? 'opacity-50 cursor-not-allowed border-muted' : 'border-border hover:border-primary hover:bg-muted'}`}
+                    onClick={() => canAddMorePhotos(createProductModalPhotos.length, maxPhotosPerProduct) && createProductModalFileInputRef.current?.click()}
+                    onKeyDown={(e) => e.key === 'Enter' && canAddMorePhotos(createProductModalPhotos.length, maxPhotosPerProduct) && createProductModalFileInputRef.current?.click()}
+                    className={`w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${!canAddMorePhotos(createProductModalPhotos.length, maxPhotosPerProduct) ? 'opacity-50 cursor-not-allowed border-muted' : 'border-border hover:border-primary hover:bg-muted'}`}
                   >
                     <Plus className="h-5 w-5 text-muted-foreground" />
                     <span className="text-xs text-muted-foreground">Adicionar</span>

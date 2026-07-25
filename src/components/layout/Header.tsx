@@ -1,18 +1,15 @@
-import { Menu, Moon, Sun, LogOut, Megaphone, RefreshCw, CalendarRange } from 'lucide-react';
+import { Menu, Moon, Sun, LogOut, Megaphone, CalendarRange } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useUIStore } from '@/store/ui-store';
 import { useAuth } from '@/contexts/AuthContext';
-import { useDeviceStore } from '@/store/device-store';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { AdminBroadcastDialog } from '../admin-broadcast-dialog';
 import { DateRangeModal } from '../date-range/DateRangeModal';
 import { NotesButton } from '../notes/NotesButton';
 import { ContactsButton } from '../contacts/ContactsButton';
 import { CalendarButton } from '../calendar/CalendarButton';
-import { checkPrinterStatus } from '@/lib/printer-check';
 import { companyApi } from '@/lib/api-endpoints';
 import { getImageUrl } from '@/lib/image-utils';
-import { toast } from 'react-hot-toast';
 import { useState, useEffect } from 'react';
 
 interface HeaderProps {
@@ -22,8 +19,6 @@ interface HeaderProps {
 export function Header({ onLogout }: HeaderProps) {
   const { theme, toggleTheme, toggleSidebar } = useUIStore();
   const { user } = useAuth();
-  const { printerStatus, printerName } = useDeviceStore();
-  const [checkingPrinter, setCheckingPrinter] = useState(false);
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   const [dateRangeModalOpen, setDateRangeModalOpen] = useState(false);
 
@@ -51,56 +46,6 @@ export function Header({ onLogout }: HeaderProps) {
     }
     fetchCompanyLogo();
   }, [user?.companyId, user?.role]);
-
-  const handleCheckPrinter = async () => {
-    setCheckingPrinter(true);
-    try {
-      toast.loading('Verificando impressoras...', { id: 'printer-check' });
-      const result = await checkPrinterStatus();
-      
-      if (result.success) {
-        toast.success(result.message, { id: 'printer-check' });
-      } else {
-        toast.error(result.message, { id: 'printer-check' });
-      }
-    } catch (error) {
-      console.error('Erro ao verificar impressoras:', error);
-      toast.error('Erro ao verificar impressoras', { id: 'printer-check' });
-    } finally {
-      setCheckingPrinter(false);
-    }
-  };
-
-  useEffect(() => {
-    checkPrinterStatus().catch((error) => {
-      console.error('[Header] Erro ao inicializar status da impressora:', error);
-    });
-  }, []);
-
-  const printerTooltip =
-    printerStatus === 'connected'
-      ? printerName
-        ? `Impressora configurada: ${printerName}`
-        : 'Impressora configurada e pronta'
-      : printerStatus === 'checking'
-        ? 'Verificando impressora configurada'
-        : printerStatus === 'error'
-          ? printerName
-            ? `Erro ao acessar a impressora "${printerName}".`
-            : 'Erro ao acessar a impressora configurada.'
-          : 'Nenhuma impressora configurada.';
-
-  const printerDisplayName =
-    printerStatus === 'checking'
-      ? 'Verificando...'
-      : printerName || 'Sem impressora';
-
-  const printerStatusSuffix =
-    printerStatus === 'error'
-      ? ' (erro)'
-      : printerStatus === 'disconnected'
-        ? ' (desconectada)'
-        : '';
 
   return (
     <header
@@ -146,39 +91,6 @@ export function Header({ onLogout }: HeaderProps) {
             {user?.name || 'Montshop'}
           </div>
         )}
-      </div>
-
-      <div className="hidden sm:flex items-center gap-2 mr-2">
-        <div
-          className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
-            printerStatus === 'connected' 
-              ? 'bg-green-500/10 text-green-600 dark:text-green-400' 
-              : printerStatus === 'checking'
-                ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-                : printerStatus === 'error'
-                  ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
-                  : 'bg-red-500/10 text-red-600 dark:text-red-400'
-          }`}
-          title={printerTooltip}
-        >
-          <span className="text-[11px]">🖨️</span>
-          <span className="text-[11px] font-medium truncate max-w-[140px]">
-            {printerDisplayName}
-            {printerStatusSuffix}
-          </span>
-        </div>
-
-        {/* Botão de atualizar impressora */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={handleCheckPrinter}
-          disabled={checkingPrinter}
-          title="Verificar impressoras manualmente"
-        >
-          <RefreshCw className={`h-4 w-4 ${checkingPrinter ? 'animate-spin' : ''}`} />
-        </Button>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 lg:px-6">
@@ -234,4 +146,3 @@ export function Header({ onLogout }: HeaderProps) {
     </header>
   );
 }
-

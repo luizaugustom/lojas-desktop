@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  CreditCard, 
-  TrendingUp, 
+import {
+  User,
+  Mail,
+  Phone,
+  Calendar,
+  CreditCard,
+  TrendingUp,
   DollarSign,
   ShoppingCart,
   BarChart3,
   Edit,
-  RefreshCw
+  RefreshCw,
+  Clock,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
@@ -19,6 +20,7 @@ import { Badge } from '../ui/badge';
 import { sellerApi } from '../../lib/api-endpoints';
 import { formatDate, formatCurrency } from '../../lib/utils';
 import { SellerCharts } from './seller-charts';
+import { SellerScheduleDialog } from './seller-schedule-dialog';
 import type { Seller, SellerStats, Sale } from '../../types';
 
 interface SellerDetailsDialogProps {
@@ -29,6 +31,7 @@ interface SellerDetailsDialogProps {
 }
 
 export function SellerDetailsDialog({ isOpen, onClose, onEdit, seller }: SellerDetailsDialogProps) {
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [stats, setStats] = useState<SellerStats | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
@@ -81,6 +84,18 @@ export function SellerDetailsDialog({ isOpen, onClose, onEdit, seller }: SellerD
   const handleEdit = () => {
     if (seller) {
       onEdit(seller);
+    }
+  };
+
+  const handleEditSchedule = () => {
+    if (!seller) return;
+    setScheduleOpen(true);
+  };
+
+  const handleScheduleDialogChange = (open: boolean) => {
+    setScheduleOpen(open);
+    if (!open) {
+      // Mantém o details aberto após fechar o modal de jornada
     }
   };
 
@@ -288,6 +303,14 @@ export function SellerDetailsDialog({ isOpen, onClose, onEdit, seller }: SellerD
           <div className="flex items-center justify-end gap-3 pt-6 border-t border-border">
             <Button
               variant="outline"
+              onClick={handleEditSchedule}
+              className="text-foreground"
+            >
+              <Clock className="h-4 w-4 mr-2" />
+              Editar Jornada
+            </Button>
+            <Button
+              variant="outline"
               onClick={handleClose}
               className="text-foreground"
             >
@@ -303,6 +326,13 @@ export function SellerDetailsDialog({ isOpen, onClose, onEdit, seller }: SellerD
           </div>
         </div>
       </DialogContent>
+
+      <SellerScheduleDialog
+        open={scheduleOpen}
+        onClose={() => handleScheduleDialogChange(false)}
+        sellerId={seller.id}
+        sellerName={seller.name}
+      />
     </Dialog>
   );
 }

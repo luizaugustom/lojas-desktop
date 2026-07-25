@@ -129,6 +129,29 @@ export function downloadFile(blob: Blob, filename: string) {
   window.URL.revokeObjectURL(url);
 }
 
+/** Extrai mensagem de erro de respostas blob (ex.: download com responseType: 'blob'). */
+export async function getBlobErrorMessage(error: unknown, fallback: string): Promise<string> {
+  const err = error as { response?: { data?: unknown }; message?: string };
+  const data = err?.response?.data;
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    try {
+      const text = await data.text();
+      const json = JSON.parse(text) as { message?: string | string[] };
+      if (typeof json?.message === 'string') return json.message;
+      if (Array.isArray(json?.message)) return json.message.join(', ');
+    } catch {
+      /* ignore */
+    }
+  }
+  if (data && typeof data === 'object' && data !== null && 'message' in data) {
+    const msg = (data as { message?: unknown }).message;
+    if (typeof msg === 'string') return msg;
+    if (Array.isArray(msg)) return msg.join(', ');
+  }
+  if (typeof err?.message === 'string' && err.message) return err.message;
+  return fallback;
+}
+
 export function convertPrismaIdToUUID(prismaId: string): string {
   // Prisma CUIDs são strings de 21 caracteres (base36)
   // Para converter para UUID, vamos usar o hash do CUID

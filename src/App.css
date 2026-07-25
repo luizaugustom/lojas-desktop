@@ -4,9 +4,9 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #ffffff;
+  background: #f7f7f7;
   background: hsl(var(--background));
-  color: #0a0a0a;
+  color: #171717;
   color: hsl(var(--foreground));
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Barcode, Info, HelpCircle } from 'lucide-react';
+import { Search, HelpCircle, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Label } from '../ui/label';
@@ -16,26 +16,29 @@ import { Cart } from '../sales/cart';
 import { BarcodeScanner } from '../sales/barcode-scanner';
 import { CheckoutDialog } from '../sales/checkout-dialog';
 import { BudgetDialog } from '../sales/budget-dialog';
-import { KeyboardShortcutsHelpDialog } from '../sales/keyboard-shortcuts-help-dialog';
 import { PageHelpModal } from '../help/page-help-modal';
 import { salesHelpTitle, salesHelpDescription, salesHelpIcon, getSalesHelpTabs } from '../help/contents/sales-help';
 import { handleNumberInputChange, isValidId } from '../../lib/utils-clean';
 import { useDeviceStore } from '../../store/device-store';
+import { useUIStore } from '../../store/ui-store';
 import { parseScaleBarcode } from '../../lib/scale-barcode';
 import { checkPrinterStatus } from '../../lib/printer-check';
+import { companyApi } from '../../lib/api-endpoints';
+import { getImageUrl } from '../../lib/image-utils';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useRef } from 'react';
 import type { Product } from '../../types';
 
 export default function SalesPage() {
   const { api, user } = useAuth();
+  const { sidebarHidden, toggleSidebarHidden, setSidebarHidden } = useUIStore();
   const [search, setSearch] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [budgetOpen, setBudgetOpen] = useState(false);
-  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [quantityModalOpen, setQuantityModalOpen] = useState(false);
+  const [cartExpandedOpen, setCartExpandedOpen] = useState(false);
   const [productForQuantity, setProductForQuantity] = useState<Product | null>(null);
   const { addItem, items, clearCart } = useCartStore();
   const [lastScanned, setLastScanned] = useState(0);
@@ -54,6 +57,24 @@ export default function SalesPage() {
   const [openingDialogOpen, setOpeningDialogOpen] = useState(false);
   const [openingBalance, setOpeningBalance] = useState('');
   const [creatingClosure, setCreatingClosure] = useState(false);
+
+  useEffect(() => {
+    return () => setSidebarHidden(false);
+  }, [setSidebarHidden]);
+
+  const { data: companyData } = useQuery({
+    queryKey: ['my-company', user?.companyId],
+    queryFn: () => companyApi.myCompany().then((r) => r.data),
+    enabled: !!user?.companyId && (user.role === 'empresa' || user.role === 'vendedor'),
+  });
+  const companyLogoUrl = companyData?.logoUrl;
+  const companyLogoSrc =
+    companyLogoUrl &&
+    companyLogoUrl.trim() !== '' &&
+    companyLogoUrl !== 'null' &&
+    companyLogoUrl !== 'undefined'
+      ? getImageUrl(companyLogoUrl)
+      : null;
 
   const { data: productsResponse, isLoading } = useQuery({
     queryKey: ['products', search],
@@ -219,7 +240,7 @@ export default function SalesPage() {
   };
 
   // Quando qualquer modal está aberto, atalhos da página não devem interferir (apenas o modal responde)
-  const anyModalOpen = checkoutOpen || budgetOpen || openingDialogOpen || helpDialogOpen || scannerOpen || quantityModalOpen;
+  const anyModalOpen = checkoutOpen || budgetOpen || openingDialogOpen || helpOpen || scannerOpen || quantityModalOpen || cartExpandedOpen;
 
   const handleRequestQuantity = (product: Product) => {
     setProductForQuantity(product);
@@ -240,6 +261,20 @@ export default function SalesPage() {
   // Atalhos de teclado para página de vendas (desabilitados quando há modal aberto)
   useKeyboardShortcuts({
     shortcuts: [
+      {
+        key: 'F4',
+        handler: () => {
+          window.dispatchEvent(new CustomEvent('navigate', { detail: { route: 'installments' } }));
+        },
+        context: ['sales'],
+      },
+      {
+        key: 'F8',
+        handler: () => {
+          window.dispatchEvent(new CustomEvent('navigate', { detail: { route: 'cash-closure' } }));
+        },
+        context: ['sales'],
+      },
       {
         key: 'F6',
         handler: () => {
@@ -333,28 +368,43 @@ export default function SalesPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4 relative">
+    <div className={`flex gap-4 relative ${sidebarHidden ? 'h-full min-h-0' : 'h-[calc(100vh-8rem)]'}`}>
+      {sidebarHidden && companyLogoSrc && (
+        <div className="absolute inset-x-0 top-0 z-10 flex justify-center pointer-events-none">
+          <div className="h-16 sm:h-20 w-[55%] max-w-[400px]">
+            <img
+              src={companyLogoSrc}
+              alt="Logomarca da empresa"
+              className="h-full w-full object-contain"
+            />
+          </div>
+        </div>
+      )}
       <div
         className={`flex-1 flex flex-col overflow-hidden rounded-lg transition-all ${
           keyboardFocusArea === 'products' ? 'ring-1 ring-primary/20 ring-offset-1 ring-offset-background' : ''
         }`}
       >
         <div className="mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-2xl font-bold tracking-tight">Vendas</h1>
+          <div className="flex items-center gap-2 mb-2 relative min-h-10">
             <button
               type="button"
-              onClick={() => setHelpDialogOpen(true)}
-              className="inline-flex items-center justify-center rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              aria-label="Ver atalhos de teclado"
-              title="Ver atalhos de teclado"
+              onClick={toggleSidebarHidden}
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+              aria-label={sidebarHidden ? 'Mostrar menu' : 'Ocultar menu'}
+              title={sidebarHidden ? 'Mostrar menu' : 'Ocultar menu'}
             >
-              <Info className="h-5 w-5" />
+              {sidebarHidden ? (
+                <PanelLeftOpen className="h-5 w-5" />
+              ) : (
+                <PanelLeftClose className="h-5 w-5" />
+              )}
             </button>
+            <h1 className={`text-2xl font-bold tracking-tight ${sidebarHidden ? 'sr-only' : ''}`}>Vendas</h1>
             <button
               type="button"
               onClick={() => setHelpOpen(true)}
-              className="inline-flex items-center justify-center rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted hover:scale-105 transition-transform"
+              className="inline-flex items-center justify-center rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted hover:scale-105 transition-transform shrink-0"
               aria-label="Ajuda"
               title="Central de ajuda"
             >
@@ -371,10 +421,6 @@ export default function SalesPage() {
               iconPosition="left"
               className="flex-1"
             />
-            <Button onClick={() => setScannerOpen(true)}>
-              <Barcode className="mr-2 h-4 w-4" />
-              Escanear
-            </Button>
           </div>
         </div>
 
@@ -408,6 +454,7 @@ export default function SalesPage() {
           keyboardShortcutsEnabled={!anyModalOpen}
           onCheckout={handleCheckout}
           onBudget={handleBudget}
+          onExpandedChange={setCartExpandedOpen}
         />
       </div>
 
@@ -426,11 +473,6 @@ export default function SalesPage() {
         open={budgetOpen}
         onClose={() => setBudgetOpen(false)}
         onSuccess={handleBudgetSuccess}
-      />
-
-      <KeyboardShortcutsHelpDialog
-        open={helpDialogOpen}
-        onClose={() => setHelpDialogOpen(false)}
       />
 
       <PageHelpModal

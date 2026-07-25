@@ -49,6 +49,17 @@ export interface ElectronAPI {
     checkDrivers: () => Promise<any>;
     installDrivers: () => Promise<void>;
   };
+  notifications: {
+    show: (payload: {
+      title: string;
+      body: string;
+      icon?: string;
+      silent?: boolean;
+      onClickPath?: string;
+    }) => Promise<{ ok: boolean; reason?: string }>;
+    isSupported: () => Promise<boolean>;
+    onNavigate: (callback: (path: string) => void) => (() => void) | void;
+  };
   updater: {
     checkForUpdates: () => Promise<void>;
     restartAndInstall: () => Promise<void>;

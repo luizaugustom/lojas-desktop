@@ -57,7 +57,7 @@ export default function DevicesPage() {
           <h1 className="text-3xl font-bold tracking-tight">Dispositivos</h1>
           <p className="text-muted-foreground">Gerencie impressoras e balanças</p>
         </div>
-        <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+        <Button variant="ghost" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
           <HelpCircle className="h-5 w-5" />
         </Button>
       </div>

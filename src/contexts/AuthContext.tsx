@@ -52,10 +52,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               seller: 'vendedor',
               manager: 'gestor',
             };
+            const role = (roleMap[data.role] || data.role) as User['role'];
+            // Empresa: companyId = próprio id (mesmo mapeamento do login)
+            const companyId =
+              data.companyId ??
+              (role === 'empresa' || data.role === 'company' ? data.id : undefined);
             setUser({
               ...data,
               name: data.name ?? data.login,
-              role: (roleMap[data.role] || data.role) as User['role'],
+              role,
+              companyId,
             });
           }
         } catch {
@@ -134,6 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...data.user,
         role: normalizedRole,
         companyIds: data.user?.companyIds,
+        companyId:
+          data.user?.companyId ??
+          (normalizedRole === 'empresa' ? data.user?.id : data.user?.companyId),
       };
       
       setUser(normalizedUser);

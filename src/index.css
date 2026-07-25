@@ -5,9 +5,9 @@
 /* Garantir que html e body usem o background do tema */
 html,
 body {
-  background-color: #ffffff;
+  background-color: #f7f7f7;
   background-color: hsl(var(--background));
-  color: #0a0a0a;
+  color: #171717;
   color: hsl(var(--foreground));
   margin: 0;
   padding: 0;
@@ -25,10 +25,10 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Scrollbar personalizada - usa a cor da empresa */
+/* Scrollbar personalizada - fina, alinhada ao visual do web */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
   background: transparent;
 }
 
@@ -38,7 +38,7 @@ html {
 
 ::-webkit-scrollbar-thumb {
   background: hsl(var(--scrollbar-color, 221.2 83.2% 53.3%));
-  border-radius: 4px;
+  border-radius: 9999px;
   border: none;
 }
 
@@ -50,7 +50,7 @@ html {
   background: transparent;
 }
 
-/* Para Firefox */
+/* Para Firefox / Chromium com scrollbar padrão */
 * {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--scrollbar-color, 221.2 83.2% 53.3%)) transparent;
@@ -70,25 +70,25 @@ input[type="number"]::-webkit-inner-spin-button {
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --background: 0 0% 97%;
+    --foreground: 0 0% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 0 0% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
+    --popover-foreground: 0 0% 9%;
     --primary: 221.2 83.2% 53.3%; /* Azul padrão - será substituído pela cor da empresa */
     --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
+    --secondary: 0 0% 93%;
     --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
+    --muted: 0 0% 93%;
     --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
+    --accent: 0 0% 93%;
     --accent-foreground: 0 0% 9%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 0 0% 9%;
     --radius: 0.5rem;
     --scrollbar-color: 221.2 83.2% 53.3%; /* Cor da scrollbar - será sincronizada com a cor da empresa */
     --scrollbar-color-hover: 221.2 83.2% 45%; /* Cor da scrollbar no hover */
@@ -276,48 +276,48 @@ input[type="number"]::-webkit-inner-spin-button {
 
 /* Modo claro explícito via classe .light */
 .light {
-  --background: 0 0% 100%;
-  --foreground: 0 0% 3.9%;
+  --background: 0 0% 97%;
+  --foreground: 0 0% 9%;
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 3.9%;
+  --card-foreground: 0 0% 9%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 3.9%;
+  --popover-foreground: 0 0% 9%;
   /* --primary não definido aqui, será sobrescrito pela cor da empresa via JavaScript */
   --primary-foreground: 0 0% 98%;
-  --secondary: 0 0% 96.1%;
+  --secondary: 0 0% 93%;
   --secondary-foreground: 0 0% 9%;
-  --muted: 0 0% 96.1%;
+  --muted: 0 0% 93%;
   --muted-foreground: 0 0% 45.1%;
-  --accent: 0 0% 96.1%;
+  --accent: 0 0% 93%;
   --accent-foreground: 0 0% 9%;
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 89.8%;
-  --input: 0 0% 89.8%;
-  --ring: 0 0% 3.9%;
+  --border: 0 0% 89%;
+  --input: 0 0% 89%;
+  --ring: 0 0% 9%;
   --radius: 0.5rem;
 }
 
 /* Modo escuro via classe .dark */
 .dark {
-  --background: 0 0% 3.9%;
+  --background: 0 0% 12%;
   --foreground: 0 0% 98%;
-  --card: 0 0% 3.9%;
+  --card: 0 0% 16%;
   --card-foreground: 0 0% 98%;
-  --popover: 0 0% 3.9%;
+  --popover: 0 0% 16%;
   --popover-foreground: 0 0% 98%;
   /* --primary não definido aqui, será sobrescrito pela cor da empresa via JavaScript */
   --primary-foreground: 0 0% 9%;
-  --secondary: 0 0% 14.9%;
+  --secondary: 0 0% 20%;
   --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 14.9%;
-  --muted-foreground: 0 0% 63.9%;
-  --accent: 0 0% 14.9%;
+  --muted: 0 0% 20%;
+  --muted-foreground: 0 0% 65%;
+  --accent: 0 0% 20%;
   --accent-foreground: 0 0% 98%;
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 25.1%; /* gray-700 equivalente */
-  --input: 0 0% 25.1%; /* gray-700 equivalente */
+  --border: 0 0% 26%;
+  --input: 0 0% 26%;
   --ring: 0 0% 83.1%;
   --radius: 0.5rem;
 }

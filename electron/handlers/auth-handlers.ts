@@ -8,6 +8,28 @@ function getTokenPath(): string {
   return path.join(app.getPath('userData'), TOKEN_FILE);
 }
 
+/** Lê o token JWT persistido pelo renderer (usado pelo job de sync no main). */
+export function readStoredAuthToken(): string | null {
+  const tokenPath = getTokenPath();
+  try {
+    if (!fs.existsSync(tokenPath)) {
+      return null;
+    }
+    const data = fs.readFileSync(tokenPath, { encoding: 'utf8' });
+    const buf = Buffer.from(data, 'base64');
+    if (safeStorage.isEncryptionAvailable()) {
+      try {
+        return safeStorage.decryptString(buf);
+      } catch {
+        return buf.toString('utf8');
+      }
+    }
+    return buf.toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
 export function registerAuthHandlers() {
   ipcMain.handle('auth:set-token', async (_event, token: string | null) => {
     const tokenPath = getTokenPath();

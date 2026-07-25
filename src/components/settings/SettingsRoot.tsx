@@ -18,6 +18,7 @@ import ParcelamentoSettings from './categories/parcelamento-settings';
 import BoletosSettings from './categories/boletos-settings';
 import TaxasCartaoSettings from './categories/taxas-cartao-settings';
 import NotificacoesSettings from './categories/notificacoes-settings';
+import PontoSettings from './categories/ponto-settings';
 import AdministracaoSettings from './categories/administracao-settings';
 
 export interface SettingsRootProps {
@@ -55,6 +56,7 @@ const CATEGORY_COMPONENTS: Record<
   boletos: BoletosSettings,
   'taxas-cartao': TaxasCartaoSettings,
   notificacoes: NotificacoesSettings,
+  ponto: PontoSettings,
   administracao: AdministracaoSettings,
 };
 

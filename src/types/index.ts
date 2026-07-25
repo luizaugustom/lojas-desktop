@@ -61,8 +61,71 @@ export interface User {
   plan?: PlanType;
   dataPeriod?: DataPeriodFilter | null;
   nfeEmissionEnabled?: boolean;
+  /** ATO DIAT 38/2020 — habilita o usuário a emitir NFC-e */
+  nfceEmissionEnabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+// ============================================================
+// ATO DIAT 38/2020 — Tipos fiscais NFC-e
+// ============================================================
+
+/** NFC-e autorizada exibida no PDV (Art. 8º — idônea como DANFE). */
+export interface NfceEmitida {
+  id: string;
+  documentNumber: string;
+  serie: string;
+  accessKey: string;
+  protocol: string;
+  authorizationDateTime: string;
+  qrCodeUrl?: string;
+  /** Texto base64/URL do QR Code (Art. 14). */
+  qrCode?: string;
+  pdfUrl?: string;
+  xmlUrl?: string;
+  totalValue: number;
+  contingencia: boolean;
+  ttdType?: 'TTD_706' | 'TTD_707' | 'TTD_710';
+  pdvCode?: string;
+  contingencyMessage?: string;
+}
+
+/** Status de contingência NFC-e (Art. 4º §1º). */
+export interface ContingencyStatus {
+  active: boolean;
+  ttdType?: 'TTD_706' | 'TTD_707' | 'TTD_710';
+  motivo?: string;
+  dataInicio?: string;
+  dataFim?: string;
+  pendentesCount: number;
+}
+
+/** Configuração fiscal da empresa (CSC, ID Token, etc.). */
+export interface FiscalConfig {
+  cnpj: string;
+  ie?: string;
+  im?: string;
+  cnae?: string;
+  /** 1=Simples Nacional, 2=Simples Excesso, 3=Regime Normal */
+  taxRegime?: number;
+  /** 1=Produção, 2=Homologação */
+  sefazEnvironment?: 1 | 2;
+  nfceSerie?: string;
+  nfeSerie?: string;
+  /** Código de Segurança do Contribuinte (NFC-e). */
+  csc?: string;
+  /** ID do token CSC (até 6 dígitos). */
+  idTokenCsc?: string;
+  hasCertificateBlob?: boolean;
+  hasCertificatePassword?: boolean;
+  nfceEmissionEnabled?: boolean;
+  nfeEmissionEnabled?: boolean;
+  emitOnlyNfe?: boolean;
+  isFuelRetailer?: boolean;
+  pdvSeries?: Record<string, string>;
+  ttdChangeCount?: number;
+  ttdChangeAllowed?: boolean;
 }
 
 export interface Company {
@@ -107,6 +170,12 @@ export interface Company {
   termsAccepted?: boolean;
   termsAcceptedAt?: string | null;
   termsRejectedAt?: string | null;
+  // ATO DIAT 38/2020 — Art. 2º (DTEC) e Art. 4º §1º (TTD)
+  dtecCredentialed?: boolean;
+  dtecCredentialedAt?: string | null;
+  dtecCredentialExpiresAt?: string | null;
+  dtecCredentialProtocol?: string | null;
+  nfcContingencyType?: 'NONE' | 'TTD_706' | 'TTD_707' | 'TTD_710' | null;
 }
 
 export interface Admin {
@@ -302,6 +371,8 @@ export interface Seller {
   commissionRate?: number;
   hasIndividualCash?: boolean;
   nfeEmissionEnabled?: boolean;
+  /** ATO DIAT 38/2020 */
+  nfceEmissionEnabled?: boolean;
   companyId: string;
   createdAt: string;
   updatedAt: string;
@@ -419,7 +490,7 @@ export interface CashClosure {
   updatedAt: string;
 }
 
-export type ReportType = 'sales' | 'products' | 'invoices' | 'inbound_invoices' | 'complete' | 'cancelled_sales';
+export type ReportType = 'sales' | 'products' | 'invoices' | 'inbound_invoices' | 'complete' | 'cancelled_sales' | 'time_clock';
 export type ReportFormat = 'json' | 'xml' | 'excel';
 
 export interface GenerateReportDto {
@@ -559,6 +630,10 @@ export interface CreateSaleDto {
   boletoDueDate?: string;
   /** ID do cliente cadastrado para o boleto. Obrigatório se emitBoleto = true. */
   boletoCustomerId?: string;
+  /** Se true, gera NFC-e mock sem enviar à SEFAZ */
+  forceMockNfce?: boolean;
+  /** Se true, força cupom não fiscal */
+  forceNonFiscal?: boolean;
 }
 
 export interface CreateCustomerDto {
@@ -689,5 +764,179 @@ export interface Cart {
   items: CartItem[];
   total: number;
   discount: number;
+}
+
+// ===========================
+// Time Clock (Ponto Eletrônico)
+// ===========================
+
+export type TimeClockType = 'ENTRY' | 'LUNCH_OUT' | 'LUNCH_IN' | 'EXIT';
+export type TimeClockStatus =
+  | 'VALID'
+  | 'PENDING_REVIEW'
+  | 'REJECTED'
+  | 'ADJUSTED';
+
+export interface TimeClock {
+  id: string;
+  companyId: string;
+  sellerId: string;
+  type: TimeClockType;
+  timestamp: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracyMeters?: number | null;
+  distanceMeters?: number | null;
+  withinRadius?: boolean | null;
+  status: TimeClockStatus;
+  notes?: string | null;
+  seller?: { id: string; name: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TimeClockConfig {
+  id: string;
+  companyId: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  qrToken: string;
+  requireQrCode: boolean;
+  requireLocation: boolean;
+  notifyOnEntryTime?: string | null;
+  notifyOnLunchOutTime?: string | null;
+  notifyOnLunchInTime?: string | null;
+  notifyOnExitTime?: string | null;
+  notificationsEnabled: boolean;
+  lateToleranceMinutes: number;
+}
+
+export interface TimeClockDaySummary {
+  date: string;
+  punches: Array<{ type: TimeClockType; timestamp: string }>;
+  workedMinutes: number;
+  lateMinutes: number;
+  overtimeMinutes: number;
+  completed: boolean;
+  status: 'NORMAL' | 'INCOMPLETE' | 'MISSED' | 'OFF';
+}
+
+export interface TimeClockTodayResponse {
+  date: string;
+  punches: TimeClock[];
+  nextExpected: TimeClockType | null;
+  daySummary: TimeClockDaySummary | null;
+  config: TimeClockConfig;
+}
+
+export interface TimeClockStats {
+  month: string;
+  totalDays: number;
+  workedDays: number;
+  missedDays: number;
+  totalWorkedMinutes: number;
+  totalLateMinutes: number;
+  totalOvertimeMinutes: number;
+  averageDailyMinutes: number;
+}
+
+export interface RegisterTimeClockDto {
+  type?: TimeClockType;
+  latitude?: number;
+  longitude?: number;
+  accuracyMeters?: number;
+  qrToken?: string;
+  deviceInfo?: Record<string, any>;
+  notes?: string;
+}
+
+export interface UpdateTimeClockConfigDto {
+  latitude?: number;
+  longitude?: number;
+  radiusMeters?: number;
+  requireQrCode?: boolean;
+  requireLocation?: boolean;
+  notifyOnEntryTime?: string | null;
+  notifyOnLunchOutTime?: string | null;
+  notifyOnLunchInTime?: string | null;
+  notifyOnExitTime?: string | null;
+  notificationsEnabled?: boolean;
+  lateToleranceMinutes?: number;
+}
+
+export interface AdjustTimeClockDto {
+  type?: TimeClockType;
+  timestamp?: string;
+  latitude?: number;
+  longitude?: number;
+  reason: string;
+}
+
+export interface RejectTimeClockDto {
+  reason: string;
+}
+
+export interface TimeClockFilterDto {
+  sellerId?: string;
+  startDate?: string;
+  endDate?: string;
+  type?: TimeClockType;
+  status?: TimeClockStatus;
+  page?: number;
+  limit?: number;
+  companyId?: string;
+}
+
+// ============================================================
+// Per-seller schedule (jornada individual com fallback para a empresa)
+// ============================================================
+
+export interface SellerDayConfig {
+  entryTime?: string | null;
+  lunchOutTime?: string | null;
+  lunchInTime?: string | null;
+  exitTime?: string | null;
+}
+
+export interface SellerSchedule {
+  id: string;
+  sellerId: string;
+  workDays: number[]; // 0=Dom .. 6=Sáb
+  defaultEntryTime?: string | null;
+  defaultLunchOutTime?: string | null;
+  defaultLunchInTime?: string | null;
+  defaultExitTime?: string | null;
+  lateToleranceMinutes?: number | null;
+  entryToleranceMinutes?: number | null;
+  /** Chaves são strings '0'..'6' (dayOfWeek). */
+  overrides: Record<string, SellerDayConfig>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TodaySchedule {
+  entry: string | null;
+  lunchOut: string | null;
+  lunchIn: string | null;
+  exit: string | null;
+  isWorkDay: boolean;
+  source: 'seller' | 'company';
+}
+
+export interface MyScheduleResponse {
+  sellerSchedule: SellerSchedule | null;
+  today: TodaySchedule;
+}
+
+export interface UpdateSellerScheduleDto {
+  workDays: number[];
+  defaultEntryTime?: string | null;
+  defaultLunchOutTime?: string | null;
+  defaultLunchInTime?: string | null;
+  defaultExitTime?: string | null;
+  lateToleranceMinutes?: number | null;
+  entryToleranceMinutes?: number | null;
+  overrides: Record<string, SellerDayConfig>;
 }
 

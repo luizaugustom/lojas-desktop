@@ -18,6 +18,7 @@ const expectedIds: SettingsCategoryId[] = [
   'boletos',
   'taxas-cartao',
   'notificacoes',
+  'ponto',
   'administracao',
 ];
 
@@ -25,12 +26,12 @@ const idsFor = (role: SettingsRole, company?: SettingsCompany) =>
   getSettingsCategories(role, company).map(({ id }) => id);
 
 describe('settings categories registry', () => {
-  it('defines exactly the 11 expected categories with complete metadata', () => {
+  it('defines exactly the 12 expected categories with complete metadata', () => {
     const categories = getAllSettingsCategories();
 
-    expect(categories).toHaveLength(11);
+    expect(categories).toHaveLength(12);
     expect(categories.map((category) => category.id)).toEqual(expectedIds);
-    expect(new Set(categories.map((category) => category.slug)).size).toBe(11);
+    expect(new Set(categories.map((category) => category.slug)).size).toBe(12);
     expect(categories.map((category) => category.slug)).toEqual(expectedIds);
 
     for (const category of categories) {
@@ -45,8 +46,8 @@ describe('settings categories registry', () => {
   });
 
   it.each<[SettingsRole, SettingsCategoryId[]]>([
-    ['empresa', expectedIds.filter((id) => id !== 'administracao')],
-    ['admin', ['empresa', 'whatsapp', 'notificacoes', 'administracao']],
+    ['empresa', expectedIds.filter((id) => id !== 'administracao' && id !== 'whatsapp' && id !== 'boletos')],
+    ['admin', ['empresa', 'whatsapp', 'notificacoes', 'ponto', 'administracao']],
     ['gestor', ['empresa', 'notificacoes', 'administracao']],
     ['vendedor', []],
   ])('returns the categories visible to %s', (role, expected) => {
@@ -74,12 +75,16 @@ describe('settings categories registry', () => {
     expect(getSettingsCategories('empresa', { plan: 'TRIAL_7_DAYS', autoMessageAllowed: true }).find(({ id }) => id === 'mensagens-automaticas')).toMatchObject({ locked: false, lockReason: undefined });
   });
 
-  it('locks boletos only when its entitlement is explicitly disabled', () => {
-    expect(getSettingsCategories('empresa', { boletoAllowed: false }).find(({ id }) => id === 'boletos')?.locked).toBe(true);
-    expect(getSettingsCategories('empresa', {}).find(({ id }) => id === 'boletos')).toMatchObject({ locked: false, lockReason: undefined });
+  it('shows boletos unlocked only when boletoAllowed is true', () => {
+    expect(getSettingsCategories('empresa', {}).find(({ id }) => id === 'boletos')).toBeUndefined();
+    expect(getSettingsCategories('empresa', { boletoAllowed: false }).find(({ id }) => id === 'boletos')).toBeUndefined();
+    expect(getSettingsCategories('empresa', { boletoAllowed: true }).find(({ id }) => id === 'boletos')).toMatchObject({
+      locked: false,
+      lockReason: undefined,
+    });
   });
 
-  it('does not invent locks for WhatsApp or card rates', () => {
+  it('does not invent locks for card rates', () => {
     const categories = getSettingsCategories('empresa', {
       plan: 'BASIC',
       catalogPageAllowed: false,
@@ -87,7 +92,8 @@ describe('settings categories registry', () => {
       boletoAllowed: false,
     });
 
-    expect(categories.find(({ id }) => id === 'whatsapp')).toMatchObject({ locked: false, lockReason: undefined });
+    expect(categories.find(({ id }) => id === 'whatsapp')).toBeUndefined();
+    expect(categories.find(({ id }) => id === 'boletos')).toBeUndefined();
     expect(categories.find(({ id }) => id === 'taxas-cartao')).toMatchObject({ locked: false, lockReason: undefined });
   });
 

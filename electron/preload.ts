@@ -64,6 +64,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     installDrivers: () => ipcRenderer.invoke('scales-install-drivers'),
   },
 
+  // Notificações nativas do SO
+  notifications: {
+    show: (payload: {
+      title: string;
+      body: string;
+      icon?: string;
+      silent?: boolean;
+      onClickPath?: string;
+    }) => ipcRenderer.invoke('notifications:show', payload),
+    isSupported: () => ipcRenderer.invoke('notifications:is-supported') as Promise<boolean>,
+    onNavigate: (callback: (path: string) => void) => {
+      const handler = (_event: any, p: string) => callback(p);
+      ipcRenderer.on('navigate', handler);
+      return () => ipcRenderer.removeListener('navigate', handler);
+    },
+  },
+
   // Atualizações
   updater: {
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),

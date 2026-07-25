@@ -23,7 +23,7 @@ const shortcuts = [
   { category: 'Foco', items: [{ keys: ['←'], desc: 'Mover foco para a lista de produtos' }, { keys: ['→'], desc: 'Mover foco para o carrinho' }] },
   { category: 'Navegação (produtos)', items: [{ keys: ['↑', '↓'], desc: 'Navegar entre produtos' }, { keys: ['Enter'], desc: 'Adicionar produto selecionado ao carrinho' }] },
   { category: 'Carrinho', items: [{ keys: ['+'], desc: 'Aumentar quantidade' }, { keys: ['-'], desc: 'Diminuir quantidade' }, { keys: ['Delete'], desc: 'Remover item' }, { keys: ['Ctrl', 'D'], desc: 'Focar desconto' }] },
-  { category: 'Ações gerais', items: [{ keys: ['F6'], desc: 'Abrir checkout' }, { keys: ['Ctrl', 'Enter'], desc: 'Checkout (alternativa)' }, { keys: ['Ctrl', 'L'], desc: 'Limpar carrinho' }, { keys: ['Ctrl', 'B'], desc: 'Buscar produtos' }] },
+  { category: 'Ações gerais', items: [{ keys: ['F4'], desc: 'Ir para Clientes com Dívidas' }, { keys: ['F8'], desc: 'Ir para Fechamento de Caixa' }, { keys: ['F6'], desc: 'Abrir checkout' }, { keys: ['Ctrl', 'Enter'], desc: 'Checkout (alternativa)' }, { keys: ['Ctrl', 'L'], desc: 'Limpar carrinho' }, { keys: ['Ctrl', 'B'], desc: 'Buscar produtos' }] },
   { category: 'Checkout', items: [{ keys: ['1', '2', '3', '4', '5'], desc: 'Selecionar forma de pagamento (Dinheiro, Crédito, Débito, PIX, A prazo)' }, { keys: ['Esc'], desc: 'Cancelar' }] },
 ];
 

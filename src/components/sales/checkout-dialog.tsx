@@ -24,9 +24,7 @@ import { InstallmentSaleModal } from './installment-sale-modal';
 import { CreditCardInstallmentModal } from './credit-card-installment-modal';
 import { PrintConfirmationDialog } from './print-confirmation-dialog';
 import { CustomerCopyConfirmationDialog } from './customer-copy-confirmation-dialog';
-import { BilletPrintConfirmationDialog } from './billet-print-confirmation-dialog';
 import { StoreCreditVoucherConfirmationDialog } from './store-credit-voucher-confirmation-dialog';
-import { InstallmentBilletViewer } from '../installments/installment-billet-viewer';
 import { useAuth } from '../../contexts/AuthContext';
 import { printContent as printContentService } from '../../lib/print-service';
 import { getFriendlyPrintErrorMessage } from '../../lib/print-error-message';
@@ -83,18 +81,22 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
   const [emitOnlyNfe, setEmitOnlyNfe] = useState(false);
   const [emitBoleto, setEmitBoleto] = useState(false);
   const [boletoDueDate, setBoletoDueDate] = useState('');
-  const [forceNonFiscal, setForceNonFiscal] = useState(false);
   // Cache do conteúdo de impressão para reimpressão
   const [cachedPrintContent, setCachedPrintContent] = useState<{ content: string | { storeCopy: string; customerCopy: string; isInstallmentSale: boolean }; type: string } | null>(null);
   const [currentPrintType, setCurrentPrintType] = useState<string | null>(null);
   const [customerCopyContent, setCustomerCopyContent] = useState<string | null>(null);
-  // Boletos PDF
-  const [billetsPdf, setBilletsPdf] = useState<string | null>(null);
-  const [showBillets, setShowBillets] = useState(false);
-  const [showBilletPrintConfirmation, setShowBilletPrintConfirmation] = useState(false);
   const [pendingPrintContent, setPendingPrintContent] = useState<{
     content: any;
     type: string;
+  } | null>(null);
+  // ATO DIAT 38/2020 — Art. 13 §único: seleção de série/PDV no PDV
+  const [pdvCode, setPdvCode] = useState<string>('');
+  const [nfceSeries, setNfceSeries] = useState<string>('1');
+  const [fiscalConfig, setFiscalConfig] = useState<{
+    csc?: string;
+    idTokenCsc?: string;
+    nfceSerie?: string;
+    pdvSeries?: Record<string, string>;
   } | null>(null);
   // Store credit
   const [storeCreditBalance, setStoreCreditBalance] = useState<number>(0);
@@ -154,6 +156,22 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       const response = await companyApi.getFiscalConfig();
       const config = response.data;
       setEmitOnlyNfe(!!config?.emitOnlyNfe);
+      // ATO DIAT 38/2020 — armazenar CSC, série e séries por PDV
+      setFiscalConfig({
+        csc: config?.csc,
+        idTokenCsc: config?.idTokenCsc,
+        nfceSerie: config?.nfceSerie || '1',
+        pdvSeries: config?.pdvSeries,
+      });
+      const pdvSeriesEntries = Object.entries(config?.pdvSeries || {});
+      if (pdvSeriesEntries.length > 0) {
+        const [firstPdv, firstSerie] = pdvSeriesEntries[0];
+        setPdvCode(firstPdv);
+        setNfceSeries(String(firstSerie));
+      } else {
+        setNfceSeries(config?.nfceSerie || '1');
+        setPdvCode('');
+      }
     } catch (error) {
       console.error('Erro ao carregar configuração fiscal:', error);
       setEmitOnlyNfe(false);
@@ -223,9 +241,6 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       setUseStoreCredit(false);
       setStoreCreditAmount(0);
       // Resetar boletos
-      setBilletsPdf(null);
-      setShowBillets(false);
-      setShowBilletPrintConfirmation(false);
       setPendingPrintContent(null);
       setEmitBoleto(false);
       setBoletoDueDate('');
@@ -512,7 +527,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       {
         key: 'Escape',
         handler: () => {
-          if (!showInstallmentModal && !showCreditCardInstallmentModal && !showPrintConfirmation && !showCustomerCopyConfirmation && !showBilletPrintConfirmation && !showStoreCreditVoucherConfirmation) {
+          if (!showInstallmentModal && !showCreditCardInstallmentModal && !showPrintConfirmation && !showCustomerCopyConfirmation && !showStoreCreditVoucherConfirmation) {
             onClose();
           }
         },
@@ -592,18 +607,15 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       {
         key: 'F7',
         handler: () => {
-          // Finalizar sem emissão fiscal
+          // Finalizar com NFC-e mock (sem SEFAZ)
           if (!showInstallmentModal && !showCreditCardInstallmentModal && !loading && paymentDetails.length > 0) {
-            setForceNonFiscal(true);
-            const formData = { clientName: watch('clientName'), clientCpfCnpj: watch('clientCpfCnpj') };
-            handleSubmit(onSubmit)(formData as any).catch(() => {});
-            setForceNonFiscal(false);
+            handleSubmit((data) => onSubmit(data, { forceMockNfce: true }))().catch(() => {});
           }
         },
         context: ['checkout'],
       },
     ],
-    enabled: open && !showPrintConfirmation && !showCustomerCopyConfirmation && !showBilletPrintConfirmation && !showStoreCreditVoucherConfirmation,
+    enabled: open && !showPrintConfirmation && !showCustomerCopyConfirmation && !showStoreCreditVoucherConfirmation,
     context: 'checkout',
     ignoreInputs: true, // Quando focado em input (valor, etc.), dígitos devem ir para o campo; atalhos 1-5 só fora de inputs
   });
@@ -777,44 +789,6 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
     handlePrintComplete();
   };
 
-  const handleBilletPrintConfirm = () => {
-    setShowBilletPrintConfirmation(false);
-    setShowBillets(true);
-  };
-
-  const handleBilletPrintCancel = () => {
-    setShowBilletPrintConfirmation(false);
-    // Se houver printContent pendente, mostrar modal de confirmação de NFCe/cupom
-    if (pendingPrintContent) {
-      const contentToCache = typeof pendingPrintContent.content === 'object' 
-        ? JSON.stringify(pendingPrintContent.content) 
-        : pendingPrintContent.content;
-      cachePrintPayload(contentToCache, pendingPrintContent.type);
-      setCachedPrintContent(pendingPrintContent);
-      setCurrentPrintType(pendingPrintContent.type);
-      setShowPrintConfirmation(true);
-      setPendingPrintContent(null);
-    } else {
-      handlePrintComplete();
-    }
-  };
-
-  const handleBilletsClose = () => {
-    setShowBillets(false);
-    // Se houver printContent pendente, mostrar modal de confirmação de NFCe/cupom
-    if (pendingPrintContent) {
-      const contentToCache = typeof pendingPrintContent.content === 'object' 
-        ? JSON.stringify(pendingPrintContent.content) 
-        : pendingPrintContent.content;
-      cachePrintPayload(contentToCache, pendingPrintContent.type);
-      setCachedPrintContent(pendingPrintContent);
-      setCurrentPrintType(pendingPrintContent.type);
-      setShowPrintConfirmation(true);
-      setPendingPrintContent(null);
-    } else {
-      handlePrintComplete();
-    }
-  };
 
   const handleStoreCreditVoucherConfirm = async () => {
     if (!pendingCreditVoucherData) return;
@@ -850,9 +824,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       setPendingCreditVoucherData(null);
       
       // Após imprimir comprovante de crédito, verificar se há conteúdo de impressão pendente
-      if (billetsPdf) {
-        setShowBilletPrintConfirmation(true);
-      } else if (pendingPrintContent) {
+      if (pendingPrintContent) {
         const contentToCache = typeof pendingPrintContent.content === 'object' 
           ? JSON.stringify(pendingPrintContent.content) 
           : pendingPrintContent.content;
@@ -872,11 +844,9 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
     setPendingCreditVoucherData(null);
     
     // Após fechar modal de crédito, verificar se há conteúdo de impressão pendente
-    if (billetsPdf) {
-      setShowBilletPrintConfirmation(true);
-    } else if (pendingPrintContent) {
-      const contentToCache = typeof pendingPrintContent.content === 'object' 
-        ? JSON.stringify(pendingPrintContent.content) 
+    if (pendingPrintContent) {
+      const contentToCache = typeof pendingPrintContent.content === 'object'
+        ? JSON.stringify(pendingPrintContent.content)
         : pendingPrintContent.content;
       cachePrintPayload(contentToCache, pendingPrintContent.type);
       setCachedPrintContent(pendingPrintContent);
@@ -899,7 +869,6 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
     setSelectedCustomerId('');
     setShowPrintConfirmation(false);
     setShowCustomerCopyConfirmation(false);
-    setShowBilletPrintConfirmation(false);
     setShowStoreCreditVoucherConfirmation(false);
     setCreatedSaleId(null);
     setCachedPrintContent(null);
@@ -910,7 +879,10 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
     onClose();
   };
 
-  const onSubmit = async (data: { clientName?: string; clientCpfCnpj?: string }) => {
+  const onSubmit = async (
+    data: { clientName?: string; clientCpfCnpj?: string },
+    options?: { forceMockNfce?: boolean },
+  ) => {
     logger.log('[Checkout] Iniciando finalização de venda...');
     
     for (const [index, item] of items.entries()) {
@@ -1100,7 +1072,10 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         clientName: data.clientName,
         clientCpfCnpj: data.clientCpfCnpj,
         sellerId: selectedSellerId || undefined,
-        ...(forceNonFiscal && { forceNonFiscal: true }),
+        ...(options?.forceMockNfce && { forceMockNfce: true }),
+        // ATO DIAT 38/2020 — Art. 13 §único + Art. 4º §2º
+        ...(pdvCode && { pdvCode }),
+        ...(nfceSeries && { nfceSerie: nfceSeries }),
         ...(emitOnlyNfe && {
           emitBoleto: emitBoleto,
           boletoDueDate: emitBoleto && boletoDueDate ? boletoDueDate : undefined,
@@ -1161,9 +1136,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       const saleId = saleData_resp?.id;
       const printContent = saleData_resp?.printContent;
       const printType = saleData_resp?.printType || 'nfce';
-      const billetsPdfBase64 = saleData_resp?.billetsPdf;
-      const boletoPdfBase64 = saleData_resp?.boletoPdf;
-      
+
       if (!saleId) {
         console.error('[Checkout] Venda criada mas ID não foi retornado:', response);
         toast.error('Venda criada, mas não foi possível obter o ID da venda');
@@ -1172,35 +1145,24 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       
       logger.log('[Checkout] Venda criada com sucesso:', saleId);
       toast.success('Venda realizada com sucesso!');
-      
+
       setCreatedSaleId(saleId);
 
-      // Resposta em modo NFe: não abrir fluxo de impressão NFC-e; opção de download do boleto
+      if (saleData_resp?.warning) {
+        toast(saleData_resp.warning, { icon: '⚠️', duration: 5000 });
+      }
+
+      // Resposta em modo NFe: não abrir fluxo de impressão NFC-e; boleto disponível em /boletos
       if (printType === 'nfe') {
-        if (saleData_resp?.warning) {
-          toast(saleData_resp.warning, { icon: '⚠️', duration: 5000 });
-        }
-        if (boletoPdfBase64) {
-          setBilletsPdf(boletoPdfBase64);
-          setShowBilletPrintConfirmation(true);
-        } else {
-          handlePrintComplete();
-        }
+        toast.success('Venda registrada! O boleto está disponível em Boletos.');
+        handlePrintComplete();
         return;
       }
 
       // Se houver saldo restante de crédito, mostrar modal de confirmação PRIMEIRO
       if (creditUsed > 0 && remainingCreditBalance > 0.01 && storeCreditCustomerId) {
         // Armazenar dados de impressão para depois do modal de crédito
-        if (billetsPdfBase64) {
-          setBilletsPdf(billetsPdfBase64);
-          if (printContent) {
-            setPendingPrintContent({
-              content: printContent,
-              type: printType,
-            });
-          }
-        } else if (printContent) {
+        if (printContent) {
           setPendingPrintContent({
             content: printContent,
             type: printType,
@@ -1225,22 +1187,8 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         cachePrintPayload(contentToCache, printType);
       }
 
-      // Se houver boletos PDF, mostrar modal de confirmação primeiro
-      if (billetsPdfBase64) {
-        setBilletsPdf(billetsPdfBase64);
-        
-        // Se também houver printContent, armazenar para depois dos boletos
-        if (printContent) {
-          setPendingPrintContent({
-            content: printContent,
-            type: printType,
-          });
-        }
-        
-        // Mostrar modal de confirmação de boletos
-        setShowBilletPrintConfirmation(true);
-      } else if (printContent) {
-        // Se não houver boletos mas houver printContent, mostrar modal de confirmação de NFCe/cupom
+      // Boletos: sempre disponíveis na página /boletos. Mostrar modal de confirmação de NFCe/cupom se houver printContent.
+      if (printContent) {
         setCachedPrintContent({
           content: printContent,
           type: printType,
@@ -1280,11 +1228,62 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
                       Configuração Fiscal Incompleta
                     </h4>
                     <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                      A empresa não possui configuração fiscal completa para emissão de NFCe. 
-                      Será impresso um <strong>cupom não fiscal</strong> ao invés de uma NFCe válida. 
+                      A empresa não possui configuração fiscal completa para emissão de NFCe.
+                      Será impresso um <strong>cupom não fiscal</strong> ao invés de uma NFCe válida.
                       Configure os dados fiscais nas Configurações para emitir NFCe válida.
                     </p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ATO DIAT 38/2020 — Art. 14: alerta proativo de CSC faltando */}
+            {isCompany && hasValidFiscalConfig !== false && (!fiscalConfig?.csc || !fiscalConfig?.idTokenCsc) && (
+              <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold text-red-800 dark:text-red-200 mb-1">
+                      CSC não configurado — NFC-e pode falhar
+                    </h4>
+                    <p className="text-sm text-red-700 dark:text-red-300">
+                      O Código de Segurança do Contribuinte (CSC) e/ou ID do Token CSC não estão
+                      cadastrados. Sem eles, o QR Code da NFC-e não é gerado pela SEFAZ.
+                      Configure em <strong>Configurações → Dados Fiscais</strong> antes de emitir.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ATO DIAT 38/2020 — Art. 13 §único: seleção de série/PDV */}
+            {isCompany && !emitOnlyNfe && fiscalConfig?.pdvSeries && Object.keys(fiscalConfig.pdvSeries).length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="pdvCode">PDV (Caixa)</Label>
+                  <Select value={pdvCode} onValueChange={(v) => {
+                    setPdvCode(v);
+                    const serie = fiscalConfig.pdvSeries?.[v];
+                    if (serie) setNfceSeries(String(serie));
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o PDV" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(fiscalConfig.pdvSeries).map((p) => (
+                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nfceSeries">Série da NFC-e</Label>
+                  <Input
+                    id="nfceSeries"
+                    value={nfceSeries}
+                    onChange={(e) => setNfceSeries(e.target.value)}
+                    readOnly
+                  />
                 </div>
               </div>
             )}
@@ -1751,15 +1750,12 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setForceNonFiscal(true);
-                  const formData = { clientName: watch('clientName'), clientCpfCnpj: watch('clientCpfCnpj') };
-                  handleSubmit(onSubmit)(formData as any).catch(() => {});
-                  setForceNonFiscal(false);
+                  handleSubmit((data) => onSubmit(data, { forceMockNfce: true }))().catch(() => {});
                 }}
                 disabled={loading || paymentDetails.length === 0}
-                title="Finalizar sem emitir NFC-e (F7)"
+                title="Finalizar com NFC-e mock, sem envio à SEFAZ (F7)"
               >
-                {loading ? 'Processando...' : 'Sem Nota (F7)'}
+                {loading ? 'Processando...' : 'NFC-e Mock (F7)'}
               </Button>
               <Button type="submit" disabled={loading || paymentDetails.length === 0}>
                 {loading ? 'Processando...' : 'Confirmar Venda'}
@@ -1794,23 +1790,6 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de Confirmação de Impressão de Boletos */}
-      <BilletPrintConfirmationDialog
-        open={showBilletPrintConfirmation}
-        onConfirm={handleBilletPrintConfirm}
-        onCancel={handleBilletPrintCancel}
-        loading={loading}
-      />
-
-      {/* Visualizador de Boletos */}
-      {createdSaleId && (
-        <InstallmentBilletViewer
-          open={showBillets}
-          onClose={handleBilletsClose}
-          saleId={createdSaleId}
-          billetsPdfBase64={billetsPdf || undefined}
-        />
-      )}
       
       <PrintConfirmationDialog
         open={showPrintConfirmation}

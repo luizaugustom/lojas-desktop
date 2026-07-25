@@ -325,7 +325,7 @@ export const updateSellerSchema = z.object({
 // Report Schemas
 export const reportSchema = z
   .object({
-    reportType: z.enum(['sales', 'products', 'invoices', 'inbound_invoices', 'complete', 'cancelled_sales']),
+    reportType: z.enum(['sales', 'products', 'invoices', 'inbound_invoices', 'complete', 'cancelled_sales', 'time_clock']),
     format: z.enum(['json', 'xml', 'excel']),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
@@ -362,4 +362,83 @@ export const updateSellerProfileSchema = z.object({
     .optional()
     .or(z.literal('')),
 });
+
+// ============================================================================
+// Time Clock Schemas
+// ============================================================================
+
+const timeClockTypeEnum = z.enum(['ENTRY', 'LUNCH_OUT', 'LUNCH_IN', 'EXIT']);
+const timeClockStatusEnum = z.enum(['VALID', 'PENDING_REVIEW', 'REJECTED', 'ADJUSTED']);
+
+export const registerTimeClockSchema = z.object({
+  type: timeClockTypeEnum.optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  accuracyMeters: z.number().nonnegative().optional(),
+  qrToken: z.string().optional(),
+  deviceInfo: z.record(z.any()).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const timeClockConfigSchema = z.object({
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  radiusMeters: z.number().int().min(10).max(5000).optional(),
+  requireQrCode: z.boolean().optional(),
+  requireLocation: z.boolean().optional(),
+  notifyOnEntryTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido (use HH:mm)')
+    .nullable()
+    .optional(),
+  notifyOnLunchOutTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido (use HH:mm)')
+    .nullable()
+    .optional(),
+  notifyOnLunchInTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido (use HH:mm)')
+    .nullable()
+    .optional(),
+  notifyOnExitTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido (use HH:mm)')
+    .nullable()
+    .optional(),
+  notificationsEnabled: z.boolean().optional(),
+  lateToleranceMinutes: z.number().int().min(0).max(120).optional(),
+});
+
+export const adjustTimeClockSchema = z.object({
+  type: timeClockTypeEnum.optional(),
+  timestamp: z.string().optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  reason: z
+    .string()
+    .min(3, 'Informe o motivo (mínimo 3 caracteres)')
+    .max(500),
+});
+
+export const rejectTimeClockSchema = z.object({
+  reason: z.string().min(3, 'Informe o motivo da rejeição (mínimo 3 caracteres)').max(500),
+});
+
+export const timeClockFilterSchema = z.object({
+  sellerId: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  type: timeClockTypeEnum.optional(),
+  status: timeClockStatusEnum.optional(),
+  page: z.number().int().positive().optional(),
+  limit: z.number().int().positive().max(200).optional(),
+  companyId: z.string().optional(),
+});
+
+export type RegisterTimeClockFormData = z.infer<typeof registerTimeClockSchema>;
+export type TimeClockConfigFormData = z.infer<typeof timeClockConfigSchema>;
+export type AdjustTimeClockFormData = z.infer<typeof adjustTimeClockSchema>;
+export type RejectTimeClockFormData = z.infer<typeof rejectTimeClockSchema>;
+export type TimeClockFilterFormData = z.infer<typeof timeClockFilterSchema>;
 

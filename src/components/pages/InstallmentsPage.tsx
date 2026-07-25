@@ -337,7 +337,7 @@ export default function InstallmentsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Clientes com Dívidas</h1>
             <p className="text-muted-foreground">Lista de clientes com pagamentos pendentes</p>
           </div>
-          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <Button variant="ghost" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
             <HelpCircle className="h-5 w-5" />
           </Button>
         </div>
@@ -381,7 +381,7 @@ export default function InstallmentsPage() {
             <h1 className="text-3xl font-bold tracking-tight">Pagamentos a Prazo</h1>
             <p className="text-muted-foreground">Gerencie parcelas e pagamentos dos clientes</p>
           </div>
-          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <Button variant="ghost" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
             <HelpCircle className="h-5 w-5" />
           </Button>
         </div>

@@ -75,9 +75,9 @@ export function useKeyboardShortcuts({
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignorar se estiver digitando em input (exceto inputs permitidos)
       if (isInputElement(e.target)) {
-        // Apenas Ctrl/Alt/Escape em inputs - Enter NÃO é mais especial aqui
-        // pois interfere com modais de quantidade
-        const isSpecialShortcut = e.ctrlKey || e.altKey || e.key === 'Escape';
+        // Ctrl/Alt/Escape e teclas de função (F1–F12) continuam ativos em inputs
+        const isSpecialShortcut =
+          e.ctrlKey || e.altKey || e.key === 'Escape' || /^F\d{1,2}$/.test(e.key);
         if (!isSpecialShortcut) {
           return;
         }

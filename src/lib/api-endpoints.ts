@@ -1,5 +1,16 @@
 import { api } from './apiClient';
-import type { DataPeriodFilter } from '../types';
+import type {
+  DataPeriodFilter,
+  NfceEmitida,
+  RegisterTimeClockDto,
+  UpdateTimeClockConfigDto,
+  AdjustTimeClockDto,
+  RejectTimeClockDto,
+  TimeClockFilterDto,
+  UpdateSellerScheduleDto,
+  MyScheduleResponse,
+  SellerSchedule,
+} from '../types';
 
 /** Auth - alterar senha de login de empresa (admin ou gestor) */
 export const authApi = {
@@ -121,9 +132,13 @@ export const companyApi = {
    * para as rotas /admin/focus-nfe-config. O `id` é ignorado e mantido apenas
    * por compatibilidade de assinatura com o modal.
    */
-  getFocusNfeConfigForAdmin: (_id?: string) => api.get('/admin/focus-nfe-config'),
+  getFocusNfeConfigForAdmin: (_id?: string) => api.get('/admin/nfeio-config'),
   updateFocusNfeConfigForAdmin: (_id: string, data: any) =>
-    api.patch('/admin/focus-nfe-config', data),
+    api.patch('/admin/nfeio-config', {
+      ...(data.focusNfeApiKey !== undefined && { nfeioApiKey: data.focusNfeApiKey }),
+      ...(data.focusNfeEnvironment !== undefined && { nfeioEnvironment: data.focusNfeEnvironment }),
+      ...(data.ibptToken !== undefined && { ibptToken: data.ibptToken }),
+    }),
   acceptTerms: (data: { accepted: boolean }) => api.post('/company/terms', data),
 };
 
@@ -135,18 +150,86 @@ export const billetApi = {
   cancel: (id: string) => api.post(`/billet/${id}/cancel`),
   markAsPaid: (id: string) => api.post(`/billet/${id}/mark-paid`),
   sendWhatsApp: (id: string) => api.post(`/billet/${id}/send-whatsapp`),
-  processCnabReturn: (file: File) => {
-    const form = new FormData();
-    form.append('arquivo', file);
-    return api.post<{ processed: boolean; markedAsPaid: number; titlesInFile: number; message: string }>(
-      '/billet/cnab/process-return',
-      form,
-    );
-  },
 };
+
+export interface UnimakeCompanyConfig {
+  appId: string;
+  configurationId: string;
+  sandbox: boolean;
+  configured: boolean;
+}
+
+export interface UnimakeCompanyOverviewRow {
+  id: string;
+  name: string;
+  cnpj?: string | null;
+  unimakeConfigured: boolean;
+  unimakeSandbox: boolean;
+  hasCertificateA1: boolean;
+  boletoAllowed: boolean;
+  boletoEnabled: boolean;
+}
 
 export const fiscalApi = {
   generateNFe: (data: any) => api.post('/fiscal/nfe', data),
+
+  /**
+   * POST /fiscal/nfce
+   * Roles: COMPANY - Emitir NFC-e dedicada (modelo 65).
+   * Retorna dados estruturados (chave, protocolo, QR Code) — Art. 8º.
+   */
+  emitirNfce: (data: {
+    saleId: string;
+    sellerName: string;
+    clientCpfCnpj?: string;
+    clientName?: string;
+    clientEmail?: string;
+    clientIndIEDest?: 1 | 2 | 9;
+    clientIe?: string;
+    clientAddress?: {
+      zipCode?: string;
+      street?: string;
+      number?: string;
+      district?: string;
+      city?: string;
+      state?: string;
+      complement?: string;
+      phone?: string;
+    };
+    items: Array<{
+      productId: string;
+      productName: string;
+      barcode: string;
+      quantity: number;
+      unitPrice: number;
+      totalPrice: number;
+      discount?: number;
+    }>;
+    totalValue: number;
+    valorDesconto?: number;
+    troco?: number;
+    payments: Array<{
+      method: string;
+      amount: number;
+      cardIntegrationType?: string;
+      acquirerCnpj?: string;
+      cardBrand?: string;
+      cardOperationType?: string;
+      installmentCount?: number;
+      installmentNumber?: number;
+      authorizationCode?: string;
+      terminalId?: string;
+    }>;
+    additionalInfo?: string;
+    operationNature?: string;
+    emissionPurpose?: number;
+    referenceAccessKey?: string;
+    pdvCode?: string;
+    establishmentId?: string;
+    indFinal?: 0 | 1;
+    indicadorPresenca?: 1 | 2 | 3 | 4 | 9;
+    intermediador?: { cnpj: string; idCadIntTran: string };
+  }) => api.post<NfceEmitida>('/fiscal/nfce', data),
   generateReturnNFe: (inboundDocumentId: string) =>
     api.post('/fiscal/nfe-devolucao', { inboundDocumentId }),
   getInboundReturnPreview: (inboundDocumentId: string) =>
@@ -174,6 +257,12 @@ export const fiscalApi = {
   downloadInfo: (id: string) => api.get(`/fiscal/${id}/download-info`),
   download: (id: string, format: 'xml' | 'pdf') =>
     api.get(`/fiscal/${id}/download`, { params: { format }, responseType: 'blob' }),
+  linkFocusRef: (id: string, focusRef: string) =>
+    api.post(`/fiscal/${id}/link-focus-ref`, { focusRef }),
+  sendEmail: (
+    id: string,
+    data: { email: string; format?: 'pdf' | 'xml' | 'both'; recipientName?: string },
+  ) => api.post(`/fiscal/${id}/send-email`, data),
   cancel: (id: string, data: { reason: string }) => api.post(`/fiscal/${id}/cancel`, data),
   inutilizarNumeracao: (data: {
     serie: string;
@@ -184,11 +273,50 @@ export const fiscalApi = {
   }) => api.post('/fiscal/inutilizacao', data),
   enviarCartaCorrecao: (id: string, data: { correcao: string }) =>
     api.post(`/fiscal/${id}/carta-correcao`, data),
-  ativarContingencia: (data?: { motivo?: string }) =>
+  ativarContingencia: (data?: { motivo?: string; ttdType?: 'TTD_706' | 'TTD_707' | 'TTD_710' }) =>
     api.post('/fiscal/contingencia/ativar', data ?? {}),
   desativarContingencia: () => api.post('/fiscal/contingencia/desativar'),
   getContingenciaStatus: () => api.get('/fiscal/contingencia/status'),
   listarContingenciaPendentes: () => api.get('/fiscal/contingencia/pendentes'),
+  changeTtdType: (data: { ttdType: 'TTD_706' | 'TTD_707' | 'TTD_710' }) =>
+    api.post('/fiscal/contingencia/change-type', data),
+  registrarDtecCredential: (data: { protocol: string; expiresAt: string }) =>
+    api.post('/fiscal/contingencia/dtec/credential', data),
+  getDtecStatus: () => api.get('/fiscal/contingencia/dtec/status'),
+  getTermoCompromissoPdf: (type: 'TTD_706' | 'TTD_707' | 'TTD_710' | 'ALL' = 'ALL') =>
+    api.get('/fiscal/contingencia/termo-compromisso/pdf', {
+      params: { type },
+      responseType: 'blob',
+    }),
+  aceitarTermoCompromisso: (data: { type: 'TTD_706' | 'TTD_707' | 'TTD_710' | 'ALL' }) =>
+    api.post('/fiscal/contingencia/aceitar-termo', data),
+  listarTermosCompromisso: () => api.get('/fiscal/contingencia/termo-compromisso/historico'),
+  sincronizarContingencia: (id: string) =>
+    api.post(`/fiscal/contingencia/sincronizar/${id}`),
+  sincronizarTodasContingencias: () =>
+    api.post('/fiscal/contingencia/sincronizar-todos'),
+  gerarBlocoX: (inicio: string, fim: string) =>
+    api.get('/fiscal/contingencia/bloco-x', { params: { inicio, fim } }),
+  setFuelRetailer: (data: { isFuelRetailer: boolean; companyId?: string }) =>
+    api.patch('/fiscal/contingencia/fuel-retailer', data),
+  listarNumeracao: () => api.get('/fiscal/contingencia/numeracao'),
+};
+
+// ============================================================================
+// ESTABLISHMENTS (Multi-estabelecimento — Art. 4º §2º)
+// ============================================================================
+
+export const establishmentApi = {
+  list: () => api.get('/establishments'),
+  listAll: () => api.get('/establishments/all'),
+  get: (id: string) => api.get(`/establishments/${id}`),
+  create: (data: any) => api.post('/establishments', data),
+  update: (id: string, data: any) => api.patch(`/establishments/${id}`, data),
+  deactivate: (id: string) => api.delete(`/establishments/${id}`),
+  hardDelete: (id: string) => api.delete(`/establishments/${id}/hard`),
+  credentialDtec: (id: string, data: { protocol: string; expiresAt: string }) =>
+    api.post(`/establishments/${id}/dtec/credential`, data),
+  listNfces: (id: string) => api.get(`/establishments/${id}/nfces`),
 };
 
 export const cashClosureApi = {
@@ -400,28 +528,44 @@ export const adminApi = {
   }) => api.post('/admin/broadcast-notification', data),
 
   /**
-   * PATCH /admin/focus-nfe-config
+   * PATCH /admin/nfeio-config
    * Roles: ADMIN - Token IBPT global (rota legada; use principalmente { ibptToken })
    */
-  updateFocusNfeConfig: (data: any) => api.patch('/admin/focus-nfe-config', data),
+  updateFocusNfeConfig: (data: any) =>
+    api.patch('/admin/nfeio-config', {
+      ...(data.focusNfeApiKey !== undefined && { nfeioApiKey: data.focusNfeApiKey }),
+      ...(data.focusNfeEnvironment !== undefined && { nfeioEnvironment: data.focusNfeEnvironment }),
+      ...(data.ibptToken !== undefined && { ibptToken: data.ibptToken }),
+    }),
 
   /**
-   * GET /admin/focus-nfe-config
+   * GET /admin/nfeio-config
    * Roles: ADMIN - Metadados IBPT global (e campos legados Focus, se existirem)
    */
-  getFocusNfeConfig: () => api.get('/admin/focus-nfe-config'),
+  getFocusNfeConfig: () => api.get('/admin/nfeio-config'),
 
   /**
-   * PATCH /admin/boleto-cloud-config
-   * Roles: ADMIN - Atualizar configuração global do Boleto Cloud
+   * GET /admin/companies/unimake-overview
+   * Roles: ADMIN - Visão geral das empresas × Unimake (e-Boleto)
    */
-  updateBoletoCloudConfig: (data: any) => api.patch('/admin/boleto-cloud-config', data),
+  listCompaniesForUnimake: () =>
+    api.get<UnimakeCompanyOverviewRow[]>('/admin/companies/unimake-overview'),
 
   /**
-   * GET /admin/boleto-cloud-config
-   * Roles: ADMIN - Obter configuração global do Boleto Cloud
+   * GET /admin/companies/:companyId/unimake
+   * Roles: ADMIN - Configuração Unimake de uma empresa (sem appKey)
    */
-  getBoletoCloudConfig: () => api.get('/admin/boleto-cloud-config'),
+  getCompanyUnimake: (companyId: string) =>
+    api.get<UnimakeCompanyConfig>(`/admin/companies/${companyId}/unimake`),
+
+  /**
+   * PATCH /admin/companies/:companyId/unimake
+   * Roles: ADMIN - Configurar credenciais Unimake de uma empresa
+   */
+  updateCompanyUnimake: (
+    companyId: string,
+    data: { appId?: string; appKey?: string; configurationId?: string; sandbox?: boolean },
+  ) => api.patch<UnimakeCompanyConfig>(`/admin/companies/${companyId}/unimake`, data),
 };
 
 export const whatsappApi = {
@@ -505,5 +649,46 @@ export const cardAcquirerRateApi = {
     isActive?: boolean;
   }) => api.patch(`/card-acquirer-rates/${id}`, data),
   delete: (id: string) => api.delete(`/card-acquirer-rates/${id}`),
+};
+
+// ============================================================================
+// TIME CLOCK (Ponto Eletrônico)
+// ============================================================================
+
+export const timeClockApi = {
+  register: (data: RegisterTimeClockDto) => api.post('/time-clock/register', data),
+  myToday: () => api.get('/time-clock/my-today'),
+  myHistory: (params?: TimeClockFilterDto) => api.get('/time-clock/my-history', { params }),
+  myStats: (params?: { month?: string }) =>
+    api.get('/time-clock/my-stats', { params }),
+  /** GET /time-clock/my-schedule — jornada esperada do vendedor logado (com fallback da empresa). */
+  mySchedule: () => api.get<MyScheduleResponse>('/time-clock/my-schedule'),
+  getConfig: (params?: { companyId?: string }) =>
+    api.get('/time-clock/config', { params }),
+  updateConfig: (data: UpdateTimeClockConfigDto) => api.put('/time-clock/config', data),
+  regenerateQr: () => api.post('/time-clock/config/regenerate-qr'),
+  getQrCode: () => api.get('/time-clock/qr-code'),
+  list: (params?: TimeClockFilterDto) => api.get('/time-clock', { params }),
+  pending: () => api.get('/time-clock/pending'),
+  bySeller: (sellerId: string, params?: TimeClockFilterDto) =>
+    api.get(`/time-clock/seller/${sellerId}`, { params }),
+  approve: (id: string) => api.post(`/time-clock/${id}/approve`),
+  reject: (id: string, data: RejectTimeClockDto) =>
+    api.post(`/time-clock/${id}/reject`, data),
+  adjust: (id: string, data: AdjustTimeClockDto) => api.post(`/time-clock/${id}/adjust`, data),
+  stats: (params?: { month?: string }) =>
+    api.get('/time-clock/stats', { params }),
+  reportPdf: (params?: TimeClockFilterDto) =>
+    api.get('/time-clock/report/pdf', { params, responseType: 'blob' }),
+  reportCsv: (params?: TimeClockFilterDto) =>
+    api.get('/time-clock/report/csv', { params, responseType: 'blob' }),
+};
+
+/** Jornada individual por vendedor (admin/gestor). */
+export const sellerScheduleApi = {
+  get: (sellerId: string) => api.get<{ schedule: SellerSchedule | null }>(`/seller/${sellerId}/schedule`),
+  upsert: (sellerId: string, data: UpdateSellerScheduleDto) =>
+    api.put<{ schedule: SellerSchedule }>(`/seller/${sellerId}/schedule`, data),
+  remove: (sellerId: string) => api.delete<{ removed: boolean }>(`/seller/${sellerId}/schedule`),
 };
 

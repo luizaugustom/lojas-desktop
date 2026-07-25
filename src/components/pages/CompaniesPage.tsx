@@ -8,6 +8,7 @@ import { CompaniesTable } from '../companies/companies-table';
 import { CompanyDialog } from '../companies/company-dialog';
 import { CompanyStatusModal } from '../companies/company-status-modal';
 import { FocusNfeConfigModal } from '../companies/focus-nfe-config-modal';
+import { UnimakeConfigModal } from '../companies/unimake-config-modal';
 import { Company, CreateCompanyDto } from '../../types';
 import { companyApi } from '../../lib/api-endpoints';
 import { toast } from 'react-hot-toast';
@@ -29,6 +30,8 @@ export default function CompaniesPage() {
   const [isFiscalModalOpen, setIsFiscalModalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [companyForFiscalModal, setCompanyForFiscalModal] = useState<Company | null>(null);
+  const [isBoletoModalOpen, setIsBoletoModalOpen] = useState(false);
+  const [companyForBoletoModal, setCompanyForBoletoModal] = useState<Company | null>(null);
 
   // Verificar se o usuário é admin
   if (user?.role !== 'admin') {
@@ -198,7 +201,7 @@ export default function CompaniesPage() {
             <Plus className="h-4 w-4" />
             Nova Empresa
           </Button>
-          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <Button variant="ghost" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
             <HelpCircle className="h-5 w-5" />
           </Button>
         </div>
@@ -230,6 +233,10 @@ export default function CompaniesPage() {
           onConfigureCompanyFiscal={(company) => {
             setCompanyForFiscalModal(company);
             setIsFiscalModalOpen(true);
+          }}
+          onConfigureCompanyBoleto={(company) => {
+            setCompanyForBoletoModal(company);
+            setIsBoletoModalOpen(true);
           }}
         />
       </Card>
@@ -271,6 +278,20 @@ export default function CompaniesPage() {
           }
         }}
         company={companyForFiscalModal}
+        onSuccess={() => {
+          fetchCompanies();
+        }}
+      />
+
+      <UnimakeConfigModal
+        open={isBoletoModalOpen}
+        onOpenChange={(open) => {
+          setIsBoletoModalOpen(open);
+          if (!open) {
+            setCompanyForBoletoModal(null);
+          }
+        }}
+        company={companyForBoletoModal}
         onSuccess={() => {
           fetchCompanies();
         }}

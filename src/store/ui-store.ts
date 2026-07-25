@@ -4,12 +4,15 @@ import { applyCompanyColor } from '@/lib/colorUtils';
 interface UIState {
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
+  sidebarHidden: boolean;
   theme: 'light' | 'dark';
   companyColor: string | null;
   toggleSidebar: () => void;
   toggleSidebarCollapsed: () => void;
+  toggleSidebarHidden: () => void;
   setSidebarOpen: (open: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  setSidebarHidden: (hidden: boolean) => void;
   toggleTheme: () => void;
   setTheme: (theme: 'light' | 'dark') => void;
   setCompanyColor: (color: string | null) => void;
@@ -19,6 +22,7 @@ interface UIState {
 export const useUIStore = create<UIState>((set, get) => ({
   sidebarOpen: false,
   sidebarCollapsed: true,
+  sidebarHidden: false,
   theme: 'light',
   companyColor: null,
   
@@ -29,6 +33,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleSidebarCollapsed: () => {
     set({ sidebarCollapsed: !get().sidebarCollapsed });
   },
+
+  toggleSidebarHidden: () => {
+    set({ sidebarHidden: !get().sidebarHidden });
+  },
   
   setSidebarOpen: (open) => {
     set({ sidebarOpen: open });
@@ -36,6 +44,10 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setSidebarCollapsed: (collapsed) => {
     set({ sidebarCollapsed: collapsed });
+  },
+
+  setSidebarHidden: (hidden) => {
+    set({ sidebarHidden: hidden });
   },
   
   toggleTheme: () => {

@@ -46,6 +46,8 @@ export function KeyboardShortcutsHelpDialog({
     {
       category: 'Ações gerais',
       items: [
+        { keys: ['F4'], description: 'Ir para Clientes com Dívidas' },
+        { keys: ['F8'], description: 'Ir para Fechamento de Caixa' },
         { keys: ['F6'], description: 'Abrir checkout / Finalizar venda' },
         { keys: ['Ctrl', '+', 'Enter'], description: 'Abrir checkout (alternativa)' },
         { keys: ['Ctrl', '+', 'L'], description: 'Limpar carrinho' },

@@ -73,7 +73,7 @@ export const sanitizeRoutePath = (raw: unknown): string | null => {
 /**
  * Verifica se a rota (top-level ou settings/<slug>) é válida.
  * Para settings/<slug>, exige papel 'admin', 'empresa' ou 'gestor' e que o slug
- * seja uma das 11 categorias conhecidas. Use `isSettingsCategoryVisible` no
+ * seja uma das 12 categorias conhecidas. Use `isSettingsCategoryVisible` no
  * renderer para checagem fina baseada em plano/entitlement.
  */
 export interface RoleCheck {

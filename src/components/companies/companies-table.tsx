@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { Badge } from '../ui/badge';
-import { MoreHorizontal, Edit, Trash2, Building2, Settings } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Building2, Settings, Banknote } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -27,6 +27,7 @@ interface CompaniesTableProps {
   onDelete: (id: string) => void;
   onToggleStatus: (company: Company) => void;
   onConfigureCompanyFiscal?: (company: Company) => void;
+  onConfigureCompanyBoleto?: (company: Company) => void;
 }
 
 export function CompaniesTable({
@@ -36,6 +37,7 @@ export function CompaniesTable({
   onDelete,
   onToggleStatus,
   onConfigureCompanyFiscal,
+  onConfigureCompanyBoleto,
 }: CompaniesTableProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -132,6 +134,12 @@ export function CompaniesTable({
                       <DropdownMenuItem onClick={() => onConfigureCompanyFiscal(company)}>
                         <Settings className="h-4 w-4 mr-2" />
                         Configuração fiscal (SEFAZ)
+                      </DropdownMenuItem>
+                    )}
+                    {onConfigureCompanyBoleto && (
+                      <DropdownMenuItem onClick={() => onConfigureCompanyBoleto(company)}>
+                        <Banknote className="h-4 w-4 mr-2" />
+                        Configurar Boletos (Unimake)
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem

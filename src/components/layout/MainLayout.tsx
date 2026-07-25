@@ -16,7 +16,7 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ currentRoute, onNavigate, children }: MainLayoutProps) {
-  const { sidebarCollapsed } = useUIStore();
+  const { sidebarCollapsed, sidebarHidden } = useUIStore();
   const { logout, user, isAuthenticated } = useAuth();
   const [showTrialModal, setShowTrialModal] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -58,17 +58,17 @@ export function MainLayout({ currentRoute, onNavigate, children }: MainLayoutPro
 
   return (
     <div className="flex h-full overflow-hidden bg-background">
-      <Sidebar currentRoute={currentRoute} onNavigate={onNavigate} />
+      {!sidebarHidden && <Sidebar currentRoute={currentRoute} onNavigate={onNavigate} />}
       <div
         className="flex flex-1 flex-col overflow-hidden lg:ml-0"
         style={{
           marginLeft: '0',
-          paddingLeft: sidebarCollapsed ? '4rem' : '16rem',
+          paddingLeft: sidebarHidden ? '0' : sidebarCollapsed ? '4rem' : '16rem',
           transition: 'padding-left 0.3s ease-in-out',
         }}
       >
-        <Header onLogout={logout} />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        {!sidebarHidden && <Header onLogout={logout} />}
+        <main className={sidebarHidden ? 'flex-1 overflow-auto p-4' : 'flex-1 overflow-auto p-6'}>{children}</main>
       </div>
       
       {/* Modal de Aceitação de Termos de Uso */}
@@ -92,6 +92,7 @@ export function MainLayout({ currentRoute, onNavigate, children }: MainLayoutPro
           plan={(user as any).plan}
         />
       )}
+
     </div>
   );
 }

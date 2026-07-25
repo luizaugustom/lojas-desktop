@@ -189,7 +189,7 @@ export default function BillsPage() {
             <Plus className="mr-2 h-4 w-4" />
             Nova Conta
           </Button>
-          <Button variant="outline" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
+          <Button variant="ghost" size="icon" onClick={() => setHelpOpen(true)} aria-label="Ajuda" className="shrink-0 hover:scale-105 transition-transform">
             <HelpCircle className="h-5 w-5" />
           </Button>
         </div>

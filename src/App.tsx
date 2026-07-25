@@ -8,6 +8,7 @@ import TitleBar from './components/layout/TitleBar';
 import AppRouter from './components/routing/AppRouter';
 import { CompanyColorProvider } from './components/CompanyColorProvider';
 import UpdateNotification from './components/UpdateNotification';
+import { initNativeNotifications } from './services/notifications';
 import './App.css';
 
 const queryClient = new QueryClient({
@@ -69,10 +70,13 @@ function App() {
     };
 
     initTheme();
-    
+
     // Inicializa a cor primária (azul padrão se não houver cor da empresa)
     // Isso garante que os botões e scrollbar tenham cor desde o início
     updatePrimaryColor();
+
+    // Inicializa listener de notificações nativas (Ponto Eletrônico, etc.)
+    initNativeNotifications();
   }, [setTheme, updatePrimaryColor]);
 
   return (
