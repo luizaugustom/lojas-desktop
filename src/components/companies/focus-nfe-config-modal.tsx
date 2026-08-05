@@ -18,7 +18,7 @@ interface FocusNfeConfigModalProps {
 
 /**
  * Modal de configuração FocusNFE por empresa.
- * Substitui o antigo `SefazFiscalConfigModal` (que ainda misturava NFe.io + SEFAZ).
+ * Persiste token e ambiente em /company/:id/nfeio-config.
  * Mostra:
  *  - Token FocusNFE (apiKey) e ambiente (sandbox/production)
  *  - Token IBPT (opcional)

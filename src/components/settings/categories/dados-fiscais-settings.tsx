@@ -34,6 +34,7 @@ export function DadosFiscaisSettings({ locked, lockReason }: DadosFiscaisSetting
     municipioIbge: '',
     nfceSerie: '1',
     nfeSerie: '1',
+    focusNfeEnvironment: 'sandbox' as 'sandbox' | 'production',
     csc: '',
     idTokenCsc: '000001',
     aliquotaCbsDefault: '0.9',
@@ -64,6 +65,7 @@ export function DadosFiscaisSettings({ locked, lockReason }: DadosFiscaisSetting
         municipioIbge: data.municipioIbge || '',
         nfceSerie: data.nfceSerie || '1',
         nfeSerie: data.nfeSerie || '1',
+        focusNfeEnvironment: (data.focusNfeEnvironment || 'sandbox') as 'sandbox' | 'production',
         csc: data.csc || '',
         idTokenCsc: data.idTokenCsc || '000001',
         aliquotaCbsDefault: data.aliquotaCbsDefault?.toString() || '0.9',
@@ -92,14 +94,23 @@ export function DadosFiscaisSettings({ locked, lockReason }: DadosFiscaisSetting
 
     try {
       setSaving(true);
-      await companyApi.updateFiscalConfig({
+      const response = await companyApi.updateFiscalConfig({
         ...form,
         aliquotaCbsDefault:
           form.aliquotaCbsDefault === '' ? undefined : Number(form.aliquotaCbsDefault),
         aliquotaIbsDefault:
           form.aliquotaIbsDefault === '' ? undefined : Number(form.aliquotaIbsDefault),
       });
-      toast.success('Dados fiscais salvos com sucesso!');
+      const data = response.data ?? {};
+      if (data.cscSyncWarning) {
+        toast.error(
+          data.message ||
+            'CSC salvo localmente, mas não sincronizado com a FocusNFE. Verifique o token e o painel Focus.',
+          { duration: 8000 },
+        );
+      } else {
+        toast.success('Dados fiscais salvos com sucesso!');
+      }
       await load();
     } catch (error: any) {
       console.error('Erro ao salvar dados fiscais:', error);
@@ -265,6 +276,31 @@ export function DadosFiscaisSettings({ locked, lockReason }: DadosFiscaisSetting
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="focusNfeEnvironment">Ambiente FocusNFE</Label>
+            <Select
+              value={form.focusNfeEnvironment}
+              onValueChange={(value) =>
+                setForm({
+                  ...form,
+                  focusNfeEnvironment: value as 'sandbox' | 'production',
+                })
+              }
+            >
+              <SelectTrigger id="focusNfeEnvironment">
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sandbox">Homologação (testes)</SelectItem>
+                <SelectItem value="production">Produção</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Define em qual ambiente da FocusNFE as NF-e/NFC-e serão emitidas. O CSC abaixo deve
+              ser o do mesmo ambiente.
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="csc">CSC — Código de Segurança do Contribuinte (NFC-e)</Label>
             <Input
               id="csc"
@@ -274,7 +310,9 @@ export function DadosFiscaisSettings({ locked, lockReason }: DadosFiscaisSetting
               autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
-              Obrigatório para QR Code da NFC-e. Será sincronizado com a FocusNFE ao salvar.
+              Use o CSC e o ID Token do mesmo ambiente selecionado (homologação ≠ produção na SEFAZ).
+              Copie exatamente como no portal, incluindo hífens. Ao salvar, sincronizamos com a
+              FocusNFE (evita rejeição 464 — Hash do QR-Code).
             </p>
           </div>
 
@@ -292,6 +330,9 @@ export function DadosFiscaisSettings({ locked, lockReason }: DadosFiscaisSetting
               placeholder="000001"
               maxLength={6}
             />
+            <p className="text-xs text-muted-foreground">
+              Até 6 dígitos, com zeros à esquerda se a SEFAZ informar (ex.: 000001).
+            </p>
           </div>
 
           <div className="space-y-2">

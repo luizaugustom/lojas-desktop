@@ -1,6 +1,6 @@
 {
   "name": "montshop",
-  "version": "1.2.23",
+  "version": "1.2.24",
   "description": "Sistema Montshop - Sistema de gerenciamento de lojas",
   "main": "dist-electron/main.js",
   "author": {
@@ -43,6 +43,7 @@
     "@radix-ui/react-toast": "^1.1.5",
     "@radix-ui/react-tooltip": "^1.0.7",
     "@tanstack/react-query": "^5.8.4",
+    "@types/qrcode": "^1.5.6",
     "axios": "^1.6.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
@@ -50,9 +51,12 @@
     "electron-log": "^5.0.0",
     "electron-updater": "^6.1.7",
     "iconv-lite": "^0.7.0",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.294.0",
     "node-machine-id": "^1.1.12",
     "node-thermal-printer": "^4.4.0",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-day-picker": "^9.11.1",
     "react-dom": "^18.3.1",
@@ -62,8 +66,6 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.1.0",
     "tailwindcss-animate": "^1.0.7",
-    "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2",
     "xlsx": "^0.18.5",
     "zod": "^3.22.4",
     "zustand": "^4.4.7"

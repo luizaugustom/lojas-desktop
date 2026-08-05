@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import iconv from 'iconv-lite';
+import QRCode from 'qrcode';
 
 const execAsync = promisify(exec);
 
@@ -72,10 +73,12 @@ type EscPosSegmentPart =
 
 function buildNativeQrEscPos(url: string, moduleSize = 3): Buffer {
   const data = Buffer.from(url, 'ascii');
+  // Módulo 3 — QR compacto alinhado à fonte menor do cupom
+  const size = Math.min(8, Math.max(3, moduleSize));
   const commands: Buffer[] = [
     Buffer.from([0x1b, 0x61, 0x01]),
     Buffer.from([0x1d, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]),
-    Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, moduleSize]),
+    Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, size]),
     Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x31]),
   ];
 
@@ -227,7 +230,13 @@ function encodeForEscPos(text: string): Buffer {
 }
 
 function buildInitializationBuffer(): Buffer {
-  return Buffer.from([ESC, 0x40, ESC, 0x74, DEFAULT_CODE_PAGE]);
+  // ESC @ (reset) + ESC t 19 (CP858) + ESC M 1 (Fonte B — menor) + GS ! 0 (sem magnificação)
+  return Buffer.from([
+    ESC, 0x40,
+    ESC, 0x74, DEFAULT_CODE_PAGE,
+    ESC, 0x4d, 0x01,
+    GS, 0x21, 0x00,
+  ]);
 }
 
 function isSerialPort(port: string | null | undefined): boolean {
@@ -235,11 +244,12 @@ function isSerialPort(port: string | null | undefined): boolean {
     return false;
   }
   const normalized = port.trim().toLowerCase().replace(/:$/, '');
+  // Windows USB001/USB002 são portas do spooler, NÃO serial — SerialPort.Open falha.
+  // Serial real: COMx (Windows), /dev/tty* (Linux/mac), LPT (paralela).
   return (
-    normalized.startsWith('com') ||
+    /^com\d+$/i.test(normalized) ||
     normalized.startsWith('/dev/tty') ||
-    normalized.startsWith('lpt') ||
-    normalized.startsWith('usb')
+    normalized.startsWith('lpt')
   );
 }
 
@@ -415,13 +425,15 @@ function getHtmlPaperStyle(paperSize: PaperSizeOption = '80mm', customPaperWidth
   }
 }
 
-function buildHtmlDocument(content: string, options?: PrintJobOptions): string {
+async function buildHtmlDocument(content: string, options?: PrintJobOptions): Promise<string> {
   const paperStyle = getHtmlPaperStyle(options?.paperSize, options?.customPaperWidth);
-  const copies = splitReceiptCopies(stripPrintMarkersForDisplay(content));
+  const copies = splitReceiptCopies(content);
+  const parts = copies.length > 0 ? copies : [content];
 
-  const htmlCopies = copies
-    .map((copy) => `<pre class="copy">${escapeHtml(copy)}</pre>`)
-    .join('');
+  const htmlCopies: string[] = [];
+  for (const copy of parts) {
+    htmlCopies.push(`<div class="copy">${await enrichHtmlWithQrMarkers(copy)}</div>`);
+  }
 
   return `
     <!DOCTYPE html>
@@ -439,17 +451,17 @@ function buildHtmlDocument(content: string, options?: PrintJobOptions): string {
               margin: 0;
               padding: ${paperStyle.padding};
               font-family: 'Courier New', monospace;
-              font-size: 12px;
-              line-height: 1.2;
-              width: ${paperStyle.width};
+            font-size: 9px;
+            line-height: 1.15;
+            width: ${paperStyle.width};
             }
           }
           body {
             margin: 0;
             padding: ${paperStyle.padding};
             font-family: 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.2;
+            font-size: 9px;
+            line-height: 1.15;
             width: ${paperStyle.width};
             background: white;
           }
@@ -462,17 +474,76 @@ function buildHtmlDocument(content: string, options?: PrintJobOptions): string {
             white-space: pre-wrap;
             word-break: break-word;
             margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 9px;
+            line-height: 1.15;
           }
           .copy:not(:last-child) {
             page-break-after: always;
           }
+          .qr-wrap {
+            text-align: center;
+            margin: 8px 0;
+          }
+          .qr-wrap img {
+            width: 140px;
+            height: 140px;
+            image-rendering: pixelated;
+          }
         </style>
       </head>
       <body>
-        <div class="container">${htmlCopies}</div>
+        <div class="container">${htmlCopies.join('')}</div>
       </body>
     </html>
   `;
+}
+
+/**
+ * Converte <<NFC_E_QR:url>> em <img> PNG para fallback HTML no Windows
+ * (quando o driver USB/GDI não aceita ESC/POS raw).
+ */
+async function enrichHtmlWithQrMarkers(content: string): Promise<string> {
+  const markerRegex = new RegExp(PRINT_MARKER_REGEX.source, 'g');
+  const chunks: string[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  const escapeText = (text: string) =>
+    escapeHtml(text).replace(/ /g, '&nbsp;').replace(/\n/g, '<br/>');
+
+  while ((match = markerRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      chunks.push(escapeText(content.substring(lastIndex, match.index)));
+    }
+
+    const qrUrl = match[2]?.trim();
+    if (qrUrl) {
+      try {
+        const dataUrl = await QRCode.toDataURL(qrUrl, {
+          errorCorrectionLevel: 'M',
+          margin: 1,
+          width: 140,
+          type: 'image/png',
+        });
+        chunks.push(
+          `<div class="qr-wrap"><img src="${dataUrl}" alt="QR Code NFC-e" width="140" height="140" /></div>`,
+        );
+      } catch (error) {
+        console.warn('Falha ao gerar QR Code HTML:', error);
+        chunks.push(escapeText(qrUrl));
+      }
+    }
+    // ESC_POS_BINARY: omitir no HTML (sem decodificador visual)
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < content.length) {
+    chunks.push(escapeText(content.substring(lastIndex)));
+  }
+
+  return chunks.join('');
 }
 
 async function printWithHtmlRenderer(content: string, options?: PrintJobOptions): Promise<{ success: boolean; error?: string }> {
@@ -490,73 +561,64 @@ async function printWithHtmlRenderer(content: string, options?: PrintJobOptions)
       }
     };
 
-    try {
-      const html = buildHtmlDocument(content, options);
-      const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+    void (async () => {
+      try {
+        const html = await buildHtmlDocument(content, options);
+        const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 
-      window = new BrowserWindow({
-        width: 480,
-        height: 720,
-        show: false,
-        webPreferences: {
-          sandbox: false,
-          nodeIntegration: false,
-          contextIsolation: true,
-        },
-        backgroundColor: '#ffffff',
-      });
-
-      window.setMenu(null);
-      window.once('closed', () => {
-        window = null;
-      });
-
-      window.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
-        finish({
-          success: false,
-          error: `Falha ao carregar conteúdo (${errorCode}): ${errorDescription}`,
+        window = new BrowserWindow({
+          width: 480,
+          height: 720,
+          show: false,
+          webPreferences: {
+            sandbox: true,
+            nodeIntegration: false,
+            contextIsolation: true,
+          },
         });
-      });
 
-      window.webContents.once('did-finish-load', () => {
-        const printOptions: Electron.WebContentsPrintOptions = {
-          silent: true,
-          printBackground: true,
-        };
+        const printerName = options?.printerName || undefined;
 
-        if (options?.printerName) {
-          printOptions.deviceName = options.printerName;
-        }
+        window.webContents.on('did-finish-load', () => {
+          setTimeout(() => {
+            if (!window || window.isDestroyed()) {
+              finish({ success: false, error: 'Janela de impressão fechada prematuramente' });
+              return;
+            }
 
-        window?.webContents.print(printOptions, (printed, failureReason) => {
-          if (!printed) {
-            finish({
-              success: false,
-              error: failureReason || 'Falha ao imprimir conteúdo HTML',
-            });
-            return;
-          }
-
-          finish({ success: true });
+            window.webContents
+              .print(
+                {
+                  silent: true,
+                  printBackground: true,
+                  deviceName: printerName,
+                },
+                (success, failureReason) => {
+                  if (success) {
+                    finish({ success: true });
+                  } else {
+                    finish({
+                      success: false,
+                      error: failureReason || 'Falha na impressão HTML',
+                    });
+                  }
+                },
+              );
+          }, 400);
         });
-      });
 
-      window
-        .loadURL(dataUrl)
-        .catch((error: any) => {
-          finish({
-            success: false,
-            error: error?.message || 'Erro ao carregar conteúdo para impressão',
-          });
+        window.webContents.on('did-fail-load', (_e, _code, desc) => {
+          finish({ success: false, error: desc || 'Falha ao carregar HTML de impressão' });
         });
-    } catch (error: any) {
-      finish({
-        success: false,
-        error: error?.message || 'Erro ao preparar impressão HTML',
-      });
-    }
+
+        await window.loadURL(dataUrl);
+      } catch (error: any) {
+        finish({ success: false, error: error?.message || 'Erro no renderer HTML' });
+      }
+    })();
   });
 }
+
 /**
  * Lista impressoras disponíveis no sistema
  */
@@ -725,10 +787,10 @@ function resolveThermalInterface(printerName: string, options?: PrintJobOptions)
     return port;
   }
 
+  // COM/tty/LPT: interface direta. USB001 no Windows é spooler — usar nome da impressora.
   if (
-    portLower.startsWith('usb') ||
-    portLower.startsWith('com') ||
-    portLower.startsWith('/dev/') ||
+    /^com\d+$/i.test(portLower.replace(/:$/, '')) ||
+    portLower.startsWith('/dev/tty') ||
     portLower.startsWith('lpt')
   ) {
     return port;
@@ -863,6 +925,33 @@ async function printWithThermalPrinter(
 }
 
 /**
+ * Envia arquivo RAW para impressora Windows via cópia binária no share local.
+ * Preserva comandos ESC/POS (QR Code) melhor que Out-Printer/GDI.
+ */
+async function printRawFileWindows(tempFile: string, printerName: string): Promise<boolean> {
+  const filePathPs = tempFile.replace(/'/g, "''");
+  const printerPs = printerName.replace(/'/g, "''");
+  const ps = [
+    `$ErrorActionPreference='Stop'`,
+    `$src='${filePathPs}'`,
+    `$printer='${printerPs}'`,
+    // Tenta share UNC localhost; se a impressora não estiver compartilhada, falha e retorna false
+    `$dest=('\\\\localhost\\' + $printer)`,
+    `cmd /c copy /b `"$src`" `"$dest`"`,
+  ].join('; ');
+
+  try {
+    await execAsync(`powershell.exe -NoProfile -NonInteractive -Command "${ps}"`);
+    return true;
+  } catch (error: any) {
+    console.warn(
+      `RAW copy Windows falhou (${printerName}): ${error?.message || error}. Tentando fallback.`,
+    );
+    return false;
+  }
+}
+
+/**
  * Imprime usando comandos do sistema operacional (fallback universal)
  */
 async function printWithSystemPrinter(
@@ -904,16 +993,20 @@ async function printWithSystemPrinter(
       const combinedBuffer = Buffer.concat(buffers);
       fs.writeFileSync(tempFile, combinedBuffer);
 
-      const target = options?.port?.trim() || printerName;
+      // Sempre o nome da impressora no spooler Windows — USB001/COM não funciona com Out-Printer.
+      const target = printerName;
 
       try {
         if (platform === 'win32') {
-          const ps = `
-            $filePath = '${tempFile.replace(/\\/g, '/').replace(/'/g, "''")}';
-            $printerName = "${target.replace(/"/g, '`"')}";
-            Get-Content -Path $filePath -Raw -Encoding Byte | Out-Printer -Name $printerName;
-          `;
-          await execAsync(`powershell.exe -NoProfile -NonInteractive -Command "${ps.replace(/\n/g, ' ')}"`);
+          // Preferência: RAW via share (preserva ESC/POS/QR). Se falhar, propaga erro
+          // para o performPrintJob cair no fallback HTML (que renderiza o QR em PNG).
+          const shareOk = await printRawFileWindows(tempFile, printerName);
+          if (!shareOk) {
+            throw new Error(
+              'Não foi possível enviar RAW à impressora no Windows. ' +
+                'Compartilhe a impressora ou use driver ESC/POS / porta COM.',
+            );
+          }
         } else if (platform === 'darwin') {
           const command = `lp -d "${target}" -o raw "${tempFile}"`;
           await execAsync(command);
@@ -1011,8 +1104,8 @@ async function performPrintJob(content: string, options?: PrintJobOptions): Prom
       }
     }
 
-    console.warn('Impressão ESC/POS indisponível, utilizando fallback HTML.');
-    const htmlResult = await printWithHtmlRenderer(stripPrintMarkersForDisplay(normalized.text), jobOptions);
+    console.warn('Impressão ESC/POS indisponível, utilizando fallback HTML com QR Code.');
+    const htmlResult = await printWithHtmlRenderer(normalized.text, jobOptions);
     if (htmlResult.success) {
       return htmlResult;
     }

@@ -1,6 +1,8 @@
 import { loadPrintSettings, DEFAULT_PRINT_SETTINGS, type PaperSizeOption } from './print-settings';
+import QRCode from 'qrcode';
 
 const RECEIPT_CUT_MARKER = '<<CUT_RECEIPT>>';
+const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\n]+))>>/g;
 
 /**
  * Serviço de impressão universal que funciona tanto no desktop (Electron) quanto na web
@@ -65,27 +67,70 @@ function splitReceiptCopies(content: string): string[] {
     .filter((section) => section.trim().length > 0);
 }
 
-function formatContentForWeb(
+async function enrichCopyHtmlWithQr(copy: string): Promise<string> {
+  const markerRegex = new RegExp(PRINT_MARKER_REGEX.source, 'g');
+  const parts: string[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = markerRegex.exec(copy)) !== null) {
+    if (match.index > lastIndex) {
+      const text = copy.substring(lastIndex, match.index);
+      parts.push(
+        text
+          .split('\n')
+          .map((line) => `<div class="line">${line.replace(/ /g, '&nbsp;')}</div>`)
+          .join(''),
+      );
+    }
+
+    const qrUrl = match[2]?.trim();
+    if (qrUrl) {
+      try {
+        const dataUrl = await QRCode.toDataURL(qrUrl, {
+          errorCorrectionLevel: 'M',
+          margin: 1,
+          width: 140,
+          type: 'image/png',
+        });
+        parts.push(
+          `<div class="qr-wrap"><img src="${dataUrl}" alt="QR Code NFC-e" width="140" height="140" /></div>`,
+        );
+      } catch (error) {
+        console.warn('Falha ao gerar QR Code na impressão web:', error);
+        parts.push(`<div class="line">${qrUrl}</div>`);
+      }
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < copy.length) {
+    const text = copy.substring(lastIndex);
+    parts.push(
+      text
+        .split('\n')
+        .map((line) => `<div class="line">${line.replace(/ /g, '&nbsp;')}</div>`)
+        .join(''),
+    );
+  }
+
+  return parts.join('');
+}
+
+async function formatContentForWeb(
   content: string,
   paperSize: PaperSizeOption = '80mm',
   customPaperWidth?: number | null
-): string {
+): Promise<string> {
   const copiesList = splitReceiptCopies(content);
   const copies = copiesList.length > 0 ? copiesList : [content];
 
-  const htmlCopies = copies
-    .map((copy) => {
-      const lines = copy.split('\n').map((line) => line.replace(/ /g, '&nbsp;'));
-      const copyHtml = lines
-        .map(
-          (line) =>
-            `<div class="line">${line}</div>`,
-        )
-        .join('');
-
-      return `<div class="copy">${copyHtml}</div>`;
-    })
-    .join('');
+  const htmlCopiesParts: string[] = [];
+  for (const copy of copies) {
+    htmlCopiesParts.push(`<div class="copy">${await enrichCopyHtmlWithQr(copy)}</div>`);
+  }
+  const htmlCopies = htmlCopiesParts.join('');
 
   const paperStyle = getWebPaperStyle(paperSize, customPaperWidth);
 
@@ -105,8 +150,8 @@ function formatContentForWeb(
             margin: 0;
             padding: ${paperStyle.padding};
             font-family: 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.2;
+            font-size: 9px;
+            line-height: 1.15;
             width: ${paperStyle.width};
           }
         }
@@ -114,8 +159,8 @@ function formatContentForWeb(
           margin: 0;
           padding: ${paperStyle.padding};
           font-family: 'Courier New', monospace;
-          font-size: 12px;
-          line-height: 1.2;
+          font-size: 9px;
+          line-height: 1.15;
           width: ${paperStyle.width};
           background: white;
         }
@@ -133,8 +178,17 @@ function formatContentForWeb(
         }
         .line {
           font-family: 'Courier New', monospace;
-          font-size: 12px;
-          line-height: 1.2;
+          font-size: 9px;
+          line-height: 1.15;
+        }
+        .qr-wrap {
+          text-align: center;
+          margin: 6px 0;
+        }
+        .qr-wrap img {
+          width: 140px;
+          height: 140px;
+          image-rendering: pixelated;
         }
       </style>
     </head>
@@ -159,8 +213,8 @@ async function printInBrowser(
       return { success: false, error: 'Não foi possível abrir janela de impressão. Verifique se os pop-ups estão bloqueados.' };
     }
 
-    // Formatar conteúdo para HTML
-    const htmlContent = formatContentForWeb(
+    // Formatar conteúdo para HTML (inclui QR Code da NFC-e)
+    const htmlContent = await formatContentForWeb(
       content,
       options?.paperSize,
       options?.customPaperWidth
