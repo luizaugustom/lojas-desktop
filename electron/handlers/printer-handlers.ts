@@ -937,7 +937,7 @@ async function printRawFileWindows(tempFile: string, printerName: string): Promi
     `$printer='${printerPs}'`,
     // Tenta share UNC localhost; se a impressora não estiver compartilhada, falha e retorna false
     `$dest=('\\\\localhost\\' + $printer)`,
-    `cmd /c copy /b `"$src`" `"$dest`"`,
+    'cmd /c copy /b `"$src`" `"$dest`"',
   ].join('; ');
 
   try {
