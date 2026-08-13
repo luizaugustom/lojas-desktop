@@ -52,8 +52,8 @@ export function PunchClockCard({
 
   const punches = today?.punches ?? [];
   const nextExpected = today?.nextExpected;
-  const completed = punches.length >= 4;
-  const progress = (punches.length / 4) * 100;
+  const completed = !!today && punches.length >= 4;
+  const progress = (Math.min(punches.length, 4) / 4) * 100;
 
   const handlePunch = async (token?: string) => {
     if (!nextExpected) return;

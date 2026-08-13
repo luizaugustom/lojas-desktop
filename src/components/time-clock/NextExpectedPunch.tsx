@@ -1,19 +1,47 @@
 'use client';
 
-import { Clock, ArrowRight } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Clock, ArrowRight, Loader2 } from 'lucide-react';
+import { Card, CardContent } from '../ui/card';
 import { PunchTypeIcon, PUNCH_TYPE_LABELS } from './PunchTypeIcon';
-import type { TimeClockType } from '@/types';
+import { resolveNextExpectedPunchState } from './next-expected-punch-state';
+import type { TimeClockType } from '../../types';
 
 interface Props {
   nextType: TimeClockType | null;
   scheduledTime?: string | null;
   /** Todos os 4 tipos do dia, na ordem */
   order?: TimeClockType[];
+  /** Buscando my-today */
+  loading?: boolean;
+  /** my-today já retornou (evita tratar ausência de dados como jornada completa) */
+  ready?: boolean;
 }
 
-export function NextExpectedPunch({ nextType, scheduledTime, order }: Props) {
-  if (!nextType) {
+export function NextExpectedPunch({
+  nextType,
+  scheduledTime,
+  order,
+  loading = false,
+  ready = false,
+}: Props) {
+  const state = resolveNextExpectedPunchState({ loading, ready, nextType });
+
+  if (state.kind === 'loading') {
+    return (
+      <Card>
+        <CardContent className="p-4 flex items-center gap-3 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Carregando jornada...
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (state.kind === 'idle') {
+    return null;
+  }
+
+  if (state.kind === 'complete') {
     return (
       <Card className="border-emerald-200 bg-emerald-50/60">
         <CardContent className="p-4 flex items-center gap-3">
@@ -31,13 +59,15 @@ export function NextExpectedPunch({ nextType, scheduledTime, order }: Props) {
     );
   }
 
+  const activeType = state.nextType;
+
   return (
     <Card className="border-blue-200 bg-blue-50/60">
       <CardContent className="p-4 flex items-center gap-3">
-        <PunchTypeIcon type={nextType} size="md" />
+        <PunchTypeIcon type={activeType} size="md" />
         <div className="flex-1">
           <p className="text-sm font-medium text-blue-900">
-            Próxima: {PUNCH_TYPE_LABELS[nextType]}
+            Próxima: {PUNCH_TYPE_LABELS[activeType]}
           </p>
           {scheduledTime && (
             <p className="text-xs text-blue-700">Previsto para {scheduledTime}</p>
@@ -49,7 +79,7 @@ export function NextExpectedPunch({ nextType, scheduledTime, order }: Props) {
               <span
                 key={t}
                 className={`px-1.5 py-0.5 rounded ${
-                  t === nextType
+                  t === activeType
                     ? 'bg-blue-600 text-white font-bold'
                     : 'bg-blue-100 text-blue-500'
                 }`}

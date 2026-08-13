@@ -11,6 +11,8 @@ interface Props {
   today?: TodaySchedule | null;
   nextExpected: TimeClockType | null;
   loading?: boolean;
+  /** true quando my-today já retornou (evita marcar tudo como feito sem dados) */
+  punchesReady?: boolean;
   className?: string;
 }
 
@@ -32,7 +34,7 @@ const KEY_BY_TYPE: Record<keyof TodaySchedule, TimeClockType | null> = {
   source: null,
 } as unknown as Record<keyof TodaySchedule, TimeClockType | null>;
 
-export function VendorScheduleCard({ today, nextExpected, loading, className }: Props) {
+export function VendorScheduleCard({ today, nextExpected, loading, punchesReady = false, className }: Props) {
   if (loading && !today) {
     return (
       <Card className={className}>
@@ -85,10 +87,11 @@ export function VendorScheduleCard({ today, nextExpected, loading, className }: 
             const meta = ROW_META[type];
             const Icon = meta.Icon;
             const isNext = nextExpected === type;
+            const journeyComplete = punchesReady && nextExpected === null;
             const isDone =
-              !isNext && nextExpected !== null
-                ? ORDER.indexOf(type) < ORDER.indexOf(nextExpected)
-                : !isNext && nextExpected === null;
+              journeyComplete ||
+              (nextExpected !== null &&
+                ORDER.indexOf(type) < ORDER.indexOf(nextExpected));
 
             return (
               <div
