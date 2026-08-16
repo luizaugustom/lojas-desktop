@@ -1745,17 +1745,6 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
               <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
                 Cancelar
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  handleSubmit((data) => onSubmit(data, { forceMockNfce: true }))().catch(() => {});
-                }}
-                disabled={loading || paymentDetails.length === 0}
-                title="Finalizar com NFC-e mock, sem envio à SEFAZ (F7)"
-              >
-                {loading ? 'Processando...' : 'NFC-e Mock (F7)'}
-              </Button>
               <Button type="submit" disabled={loading || paymentDetails.length === 0}>
                 {loading ? 'Processando...' : 'Confirmar Venda'}
               </Button>

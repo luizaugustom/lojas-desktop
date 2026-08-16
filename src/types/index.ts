@@ -490,7 +490,7 @@ export interface CashClosure {
   updatedAt: string;
 }
 
-export type ReportType = 'sales' | 'products' | 'invoices' | 'inbound_invoices' | 'complete' | 'cancelled_sales' | 'time_clock';
+export type ReportType = 'sales' | 'products' | 'invoices' | 'inbound_invoices' | 'complete' | 'cancelled_sales' | 'sales_with_fiscal' | 'sales_without_fiscal' | 'time_clock';
 export type ReportFormat = 'json' | 'xml' | 'excel';
 
 export interface GenerateReportDto {
@@ -832,13 +832,15 @@ export interface TimeClockTodayResponse {
 
 export interface TimeClockStats {
   month: string;
-  totalDays: number;
-  workedDays: number;
-  missedDays: number;
+  totalDays?: number;
+  workedDays?: number;
+  missedDays?: number;
+  completedDays?: number;
+  incompleteDays?: number;
   totalWorkedMinutes: number;
   totalLateMinutes: number;
   totalOvertimeMinutes: number;
-  averageDailyMinutes: number;
+  averageDailyMinutes?: number;
 }
 
 export interface RegisterTimeClockDto {

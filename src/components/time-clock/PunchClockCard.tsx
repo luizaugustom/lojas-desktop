@@ -93,8 +93,10 @@ export function PunchClockCard({
           language: typeof navigator !== 'undefined' ? navigator.language : '',
         },
       });
-      const pending = result?.status === 'PENDING_REVIEW';
-      const type = (result?.type as TimeClockType) ?? nextExpected;
+      const pending =
+        (result?.timeClock?.status ?? result?.status) === 'PENDING_REVIEW';
+      const type =
+        (result?.timeClock?.type as TimeClockType) ?? nextExpected;
       setLastResult({
         ok: !pending,
         message: pending

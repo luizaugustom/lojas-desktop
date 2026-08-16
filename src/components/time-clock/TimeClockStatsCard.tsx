@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Clock, TrendingUp, AlertTriangle, CalendarCheck } from 'lucide-react';
-import { formatMinutesLong } from './format';
+import { formatMinutesLong, formatWorkedDays } from './format';
 import type { TimeClockStats } from '@/types';
 
 interface Props {
@@ -46,7 +46,7 @@ export function TimeClockStatsCard({ stats, loading, title = 'Estatísticas do M
           <StatItem
             Icon={CalendarCheck}
             label="Dias trabalhados"
-            value={`${stats.workedDays}/${stats.totalDays}`}
+            value={formatWorkedDays(stats)}
             tone="text-emerald-700"
           />
           <StatItem

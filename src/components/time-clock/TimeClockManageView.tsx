@@ -30,6 +30,7 @@ import { TimeClockReportForm } from './TimeClockReportForm';
 import { PendingApprovalsList } from './PendingApprovalsList';
 import { AdjustPunchDialog } from './AdjustPunchDialog';
 import { formatDistance } from './format';
+import { parseTimeClockListResponse } from './parse-time-clock-list';
 import { useTimeClockList, useTimeClockStats } from '../../hooks/useTimeClock';
 import { sellerApi } from '../../lib/api-endpoints';
 import { useAuth } from '../../contexts/AuthContext';
@@ -78,8 +79,9 @@ export function TimeClockManageView() {
   const { data, isLoading } = useTimeClockList(filter);
   const { data: stats, isLoading: loadingStats } = useTimeClockStats();
 
-  const items: TimeClock[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
-  const total: number = (data as any)?.total ?? items.length;
+  const parsed = parseTimeClockListResponse(data);
+  const items = parsed.items as TimeClock[];
+  const total = parsed.total;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (

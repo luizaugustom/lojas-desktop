@@ -30,7 +30,7 @@ function getWebPaperStyle(paperSize: PaperSizeOption = '80mm', customPaperWidth?
       return {
         pageSize: '58mm auto',
         padding: '4mm',
-        width: '52mm',
+        width: '50mm',
       };
     case 'a4':
       return {
@@ -44,15 +44,15 @@ function getWebPaperStyle(paperSize: PaperSizeOption = '80mm', customPaperWidth?
       return {
         pageSize: `${widthMm}mm auto`,
         padding: '4mm',
-        width: `${Math.max(widthMm - 6, 40)}mm`,
+        width: `${Math.max(widthMm - 8, 40)}mm`,
       };
     }
     case '80mm':
     default:
       return {
         pageSize: '80mm auto',
-        padding: '5mm',
-        width: '70mm',
+        padding: '4mm',
+        width: '72mm',
       };
   }
 }
@@ -90,11 +90,11 @@ async function enrichCopyHtmlWithQr(copy: string): Promise<string> {
         const dataUrl = await QRCode.toDataURL(qrUrl, {
           errorCorrectionLevel: 'M',
           margin: 1,
-          width: 140,
+          width: 80,
           type: 'image/png',
         });
         parts.push(
-          `<div class="qr-wrap"><img src="${dataUrl}" alt="QR Code NFC-e" width="140" height="140" /></div>`,
+          `<div class="qr-wrap"><img src="${dataUrl}" alt="QR Code NFC-e" width="80" height="80" /></div>`,
         );
       } catch (error) {
         console.warn('Falha ao gerar QR Code na impressão web:', error);
@@ -150,8 +150,8 @@ async function formatContentForWeb(
             margin: 0;
             padding: ${paperStyle.padding};
             font-family: 'Courier New', monospace;
-            font-size: 9px;
-            line-height: 1.15;
+            font-size: 7px;
+            line-height: 1.0;
             width: ${paperStyle.width};
           }
         }
@@ -159,8 +159,8 @@ async function formatContentForWeb(
           margin: 0;
           padding: ${paperStyle.padding};
           font-family: 'Courier New', monospace;
-          font-size: 9px;
-          line-height: 1.15;
+          font-size: 7px;
+          line-height: 1.0;
           width: ${paperStyle.width};
           background: white;
         }
@@ -178,16 +178,19 @@ async function formatContentForWeb(
         }
         .line {
           font-family: 'Courier New', monospace;
-          font-size: 9px;
-          line-height: 1.15;
+          font-size: 7px;
+          line-height: 1.0;
         }
         .qr-wrap {
           text-align: center;
           margin: 6px 0;
+          width: 100%;
         }
         .qr-wrap img {
-          width: 140px;
-          height: 140px;
+          display: block;
+          margin: 0 auto;
+          width: 80px;
+          height: 80px;
           image-rendering: pixelated;
         }
       </style>

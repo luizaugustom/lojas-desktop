@@ -1,6 +1,6 @@
 {
   "name": "montshop",
-  "version": "1.2.24",
+  "version": "1.2.25",
   "description": "Sistema Montshop - Sistema de gerenciamento de lojas",
   "main": "dist-electron/main.js",
   "author": {

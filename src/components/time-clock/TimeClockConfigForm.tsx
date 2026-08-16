@@ -135,7 +135,7 @@ export function TimeClockConfigForm({ companyId, onSaved }: Props) {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 pt-2">
+          <div className="flex flex-col gap-3 pt-2">
             <Controller
               control={form.control}
               name="requireLocation"
@@ -153,13 +153,19 @@ export function TimeClockConfigForm({ companyId, onSaved }: Props) {
               control={form.control}
               name="requireQrCode"
               render={({ field }) => (
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Exigir leitura do QR Code</p>
+                    <p className="text-xs text-muted-foreground">
+                      Se ativo, o vendedor precisa ler o QR da loja para bater o ponto.
+                    </p>
+                  </div>
                   <Switch
                     checked={!!field.value}
                     onCheckedChange={field.onChange}
+                    aria-label="Exigir leitura do QR Code para bater ponto"
                   />
-                  Exigir leitura do QR Code
-                </label>
+                </div>
               )}
             />
           </div>

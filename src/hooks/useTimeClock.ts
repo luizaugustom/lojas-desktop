@@ -65,9 +65,17 @@ export function useRegisterTimeClock() {
   return useMutation({
     mutationFn: async (data: RegisterTimeClockDto) =>
       (await timeClockApi.register(data)).data,
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['time-clock'] });
-      toast.success('Ponto registrado com sucesso!');
+      const pending =
+        (result?.timeClock?.status ?? result?.status) === 'PENDING_REVIEW';
+      if (pending) {
+        toast('Ponto registrado, mas está fora do raio. Aguardando aprovação.', {
+          icon: '⚠️',
+        });
+      } else {
+        toast.success('Ponto registrado com sucesso!');
+      }
     },
     onError: (err) => toast.error(handleApiError(err).message),
   });

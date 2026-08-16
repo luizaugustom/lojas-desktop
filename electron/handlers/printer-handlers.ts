@@ -71,10 +71,10 @@ type EscPosSegmentPart =
   | { kind: 'text'; value: string }
   | { kind: 'binary'; value: Buffer };
 
-function buildNativeQrEscPos(url: string, moduleSize = 3): Buffer {
+function buildNativeQrEscPos(url: string, moduleSize = 2): Buffer {
   const data = Buffer.from(url, 'ascii');
-  // Módulo 3 — QR compacto alinhado à fonte menor do cupom
-  const size = Math.min(8, Math.max(3, moduleSize));
+  // Módulo 2 — QR compacto alinhado à fonte menor do cupom
+  const size = Math.min(8, Math.max(2, moduleSize));
   const commands: Buffer[] = [
     Buffer.from([0x1b, 0x61, 0x01]),
     Buffer.from([0x1d, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]),
@@ -398,7 +398,7 @@ function getHtmlPaperStyle(paperSize: PaperSizeOption = '80mm', customPaperWidth
       return {
         pageSize: '58mm auto',
         padding: '4mm',
-        width: '52mm',
+        width: '50mm',
       };
     case 'a4':
       return {
@@ -412,15 +412,15 @@ function getHtmlPaperStyle(paperSize: PaperSizeOption = '80mm', customPaperWidth
       return {
         pageSize: `${widthMm}mm auto`,
         padding: '4mm',
-        width: `${Math.max(widthMm - 6, 40)}mm`,
+        width: `${Math.max(widthMm - 8, 40)}mm`,
       };
     }
     case '80mm':
     default:
       return {
         pageSize: '80mm auto',
-        padding: '5mm',
-        width: '70mm',
+        padding: '4mm',
+        width: '72mm',
       };
   }
 }
@@ -451,8 +451,8 @@ async function buildHtmlDocument(content: string, options?: PrintJobOptions): Pr
               margin: 0;
               padding: ${paperStyle.padding};
               font-family: 'Courier New', monospace;
-            font-size: 9px;
-            line-height: 1.15;
+            font-size: 7px;
+            line-height: 1.0;
             width: ${paperStyle.width};
             }
           }
@@ -460,8 +460,8 @@ async function buildHtmlDocument(content: string, options?: PrintJobOptions): Pr
             margin: 0;
             padding: ${paperStyle.padding};
             font-family: 'Courier New', monospace;
-            font-size: 9px;
-            line-height: 1.15;
+            font-size: 7px;
+            line-height: 1.0;
             width: ${paperStyle.width};
             background: white;
           }
@@ -475,8 +475,8 @@ async function buildHtmlDocument(content: string, options?: PrintJobOptions): Pr
             word-break: break-word;
             margin: 0;
             font-family: 'Courier New', monospace;
-            font-size: 9px;
-            line-height: 1.15;
+            font-size: 7px;
+            line-height: 1.0;
           }
           .copy:not(:last-child) {
             page-break-after: always;
@@ -484,10 +484,13 @@ async function buildHtmlDocument(content: string, options?: PrintJobOptions): Pr
           .qr-wrap {
             text-align: center;
             margin: 8px 0;
+            width: 100%;
           }
           .qr-wrap img {
-            width: 140px;
-            height: 140px;
+            display: block;
+            margin: 0 auto;
+            width: 80px;
+            height: 80px;
             image-rendering: pixelated;
           }
         </style>
@@ -523,11 +526,11 @@ async function enrichHtmlWithQrMarkers(content: string): Promise<string> {
         const dataUrl = await QRCode.toDataURL(qrUrl, {
           errorCorrectionLevel: 'M',
           margin: 1,
-          width: 140,
+          width: 80,
           type: 'image/png',
         });
         chunks.push(
-          `<div class="qr-wrap"><img src="${dataUrl}" alt="QR Code NFC-e" width="140" height="140" /></div>`,
+          `<div class="qr-wrap"><img src="${dataUrl}" alt="QR Code NFC-e" width="80" height="80" /></div>`,
         );
       } catch (error) {
         console.warn('Falha ao gerar QR Code HTML:', error);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
@@ -26,13 +26,12 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { useAuth } from '../../hooks/useAuth';
 import { formatCurrency, formatDate } from '../../lib/utils';
-import { Loader2, Square, CheckSquare, Eye } from 'lucide-react';
+import { Loader2, Square, CheckSquare, ChevronDown, ChevronRight } from 'lucide-react';
 import { PaymentReceiptConfirmDialog } from './payment-receipt-confirm-dialog';
 import { printContent } from '../../lib/print-service';
 import { getFriendlyPrintErrorMessage } from '../../lib/print-error-message';
 import { handleApiError } from '../../lib/handleApiError';
 import { generateBulkPaymentReceiptContent } from '../../lib/payment-receipt-content';
-import { InstallmentProductsDialog } from './installment-products-dialog';
 
 interface CustomerDebtPaymentDialogProps {
   open: boolean;
@@ -43,6 +42,17 @@ interface CustomerDebtPaymentDialogProps {
     cpfCnpj?: string;
   } | null;
   onPaid?: () => void;
+}
+
+interface SaleItemSummary {
+  id: string;
+  quantity: number | string;
+  unitPrice: number | string;
+  totalPrice: number | string;
+  product?: {
+    id: string;
+    name?: string;
+  } | null;
 }
 
 interface CustomerDebtSummary {
@@ -58,6 +68,12 @@ interface CustomerDebtSummary {
     installmentNumber: number;
     totalInstallments: number;
     saleId?: string;
+    sale?: {
+      id: string;
+      total?: number | string;
+      saleDate?: string;
+      items?: SaleItemSummary[];
+    } | null;
   }>;
 }
 
@@ -125,7 +141,7 @@ export function CustomerDebtPaymentDialog({
   const [showReceiptConfirm, setShowReceiptConfirm] = useState(false);
   const [paymentData, setPaymentData] = useState<any>(null);
   const [printing, setPrinting] = useState(false);
-  const [selectedInstallmentId, setSelectedInstallmentId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [company, setCompany] = useState<any>(null);
   const [remainingDebts, setRemainingDebts] = useState<Array<{
     id: string;
@@ -197,7 +213,7 @@ export function CustomerDebtPaymentDialog({
       setPaymentData(null);
       setRemainingDebts([]);
       setTotalRemainingDebt(null);
-      setSelectedInstallmentId(null);
+      setExpandedIds({});
       setDebtFilter('all');
     }
   }, [open]);
@@ -273,6 +289,13 @@ export function CustomerDebtPaymentDialog({
         },
       };
     });
+  };
+
+  const toggleExpanded = (installmentId: string) => {
+    setExpandedIds((prev) => ({
+      ...prev,
+      [installmentId]: !prev[installmentId],
+    }));
   };
 
   const updateAmount = (installmentId: string, rawValue: string) => {
@@ -644,91 +667,148 @@ export function CustomerDebtPaymentDialog({
                       const remaining = selection[inst.id]?.remaining ?? toNumber(inst.remainingAmount);
                       const isSelected = selection[inst.id]?.selected ?? false;
                       const inputValue = selection[inst.id]?.inputValue ?? '';
-                      const amount = selection[inst.id]?.amount ?? 0;
+                      const isExpanded = !!expandedIds[inst.id];
+                      const saleItems = inst.sale?.items ?? [];
 
                       if (remaining <= 0) {
                         return null;
                       }
 
                       return (
-                        <TableRow key={inst.id} className={!isSelected ? 'opacity-60' : ''}>
-                          <TableCell>
-                            <button
-                              type="button"
-                              onClick={() => toggleSelection(inst.id)}
-                              className="text-muted-foreground transition hover:text-primary"
-                              aria-label={isSelected ? 'Desmarcar parcela' : 'Selecionar parcela'}
-                            >
-                              {isSelected ? (
-                                <CheckSquare className="h-5 w-5" />
-                              ) : (
-                                <Square className="h-5 w-5" />
-                              )}
-                            </button>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium">
-                                Parcela {inst.installmentNumber}/{inst.totalInstallments}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{formatDate(inst.dueDate)}</TableCell>
-                          <TableCell>{formatCurrency(remaining)}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={inputValue}
-                              onChange={(event) => updateAmount(inst.id, event.target.value)}
-                              disabled={!isSelected}
-                              inputMode="decimal"
-                              className="appearance-none"
-                              onFocus={(event) => {
-                                if (event.target.value === '0') {
-                                  updateAmount(inst.id, '');
-                                }
-                              }}
-                              onBlur={(event) => {
-                                const current = selection[inst.id];
-                                if (!current) return;
-                                if (event.target.value === '') {
-                                  return;
-                                }
+                        <Fragment key={inst.id}>
+                          <TableRow className={!isSelected ? 'opacity-60' : ''}>
+                            <TableCell>
+                              <button
+                                type="button"
+                                onClick={() => toggleSelection(inst.id)}
+                                className="text-muted-foreground transition hover:text-primary"
+                                aria-label={isSelected ? 'Desmarcar parcela' : 'Selecionar parcela'}
+                              >
+                                {isSelected ? (
+                                  <CheckSquare className="h-5 w-5" />
+                                ) : (
+                                  <Square className="h-5 w-5" />
+                                )}
+                              </button>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium">
+                                  Parcela {inst.installmentNumber}/{inst.totalInstallments}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatDate(inst.dueDate)}</TableCell>
+                            <TableCell>{formatCurrency(remaining)}</TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={inputValue}
+                                onChange={(event) => updateAmount(inst.id, event.target.value)}
+                                disabled={!isSelected}
+                                inputMode="decimal"
+                                className="appearance-none"
+                                onFocus={(event) => {
+                                  if (event.target.value === '0') {
+                                    updateAmount(inst.id, '');
+                                  }
+                                }}
+                                onBlur={(event) => {
+                                  const current = selection[inst.id];
+                                  if (!current) return;
+                                  if (event.target.value === '') {
+                                    return;
+                                  }
 
-                                const normalized = normalizeDecimalInput(event.target.value);
-                                const numericValue = Number(normalized);
+                                  const normalized = normalizeDecimalInput(event.target.value);
+                                  const numericValue = Number(normalized);
 
-                                if (Number.isNaN(numericValue)) {
-                                  updateAmount(inst.id, formatInputValue(current.amount));
-                                  return;
-                                }
+                                  if (Number.isNaN(numericValue)) {
+                                    updateAmount(inst.id, formatInputValue(current.amount));
+                                    return;
+                                  }
 
-                                const clampedValue = Math.max(
-                                  0,
-                                  Math.min(current.remaining, Math.round(numericValue * 100) / 100),
-                                );
-                                const formatted = formatInputValue(clampedValue);
-                                if (formatted !== event.target.value) {
-                                  updateAmount(inst.id, formatted);
-                                }
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setSelectedInstallmentId(inst.id)}
-                              className="h-8 w-8 p-0"
-                              title="Ver detalhes dos produtos"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                                  const clampedValue = Math.max(
+                                    0,
+                                    Math.min(current.remaining, Math.round(numericValue * 100) / 100),
+                                  );
+                                  const formatted = formatInputValue(clampedValue);
+                                  if (formatted !== event.target.value) {
+                                    updateAmount(inst.id, formatted);
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleExpanded(inst.id)}
+                                className="h-8 w-8 p-0"
+                                title="Ver produtos da venda"
+                                aria-expanded={isExpanded}
+                                aria-label="Ver produtos da venda"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                          {isExpanded && (
+                            <TableRow>
+                              <TableCell colSpan={6} className="bg-muted/30 p-3">
+                                {saleItems.length === 0 ? (
+                                  <p className="py-2 text-center text-sm text-muted-foreground">
+                                    Nenhum produto encontrado nesta venda.
+                                  </p>
+                                ) : (
+                                  <table className="w-full text-sm">
+                                    <thead>
+                                      <tr className="text-muted-foreground">
+                                        <th className="pb-2 text-left font-medium">Produto</th>
+                                        <th className="pb-2 text-center font-medium">Qtd</th>
+                                        <th className="pb-2 text-right font-medium">Preço unit.</th>
+                                        <th className="pb-2 text-right font-medium">Subtotal</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                      {saleItems.map((item) => (
+                                        <tr key={item.id}>
+                                          <td className="py-1.5 font-medium">
+                                            {item.product?.name || 'Produto'}
+                                          </td>
+                                          <td className="py-1.5 text-center">{item.quantity}</td>
+                                          <td className="py-1.5 text-right">
+                                            {formatCurrency(toNumber(item.unitPrice))}
+                                          </td>
+                                          <td className="py-1.5 text-right font-medium">
+                                            {formatCurrency(toNumber(item.totalPrice))}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr>
+                                        <td colSpan={3} className="pt-2 text-right font-semibold">
+                                          Total da venda:
+                                        </td>
+                                        <td className="pt-2 text-right font-bold">
+                                          {formatCurrency(toNumber(inst.sale?.total ?? 0))}
+                                        </td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </TableBody>
@@ -801,15 +881,6 @@ export function CustomerDebtPaymentDialog({
         onConfirm={handlePrintReceipt}
         onCancel={handleSkipReceipt}
       />
-
-      {/* Modal de detalhes dos produtos */}
-      {selectedInstallmentId && (
-        <InstallmentProductsDialog
-          open={!!selectedInstallmentId}
-          onClose={() => setSelectedInstallmentId(null)}
-          installmentId={selectedInstallmentId}
-        />
-      )}
     </Dialog>
   );
 }

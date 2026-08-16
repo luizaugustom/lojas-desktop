@@ -4,7 +4,7 @@ import { MapPin, AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Skeleton } from '../ui/skeleton';
-import { formatDistance } from './format';
+import { formatDistance, haversineDistanceMeters, isWithinRadius } from './format';
 import type { TimeClockConfig } from '../../types';
 import type {
   GeolocationCoords,
@@ -25,13 +25,29 @@ interface Props {
 export function LocationPrompt({ config, coords, status, error, loading, onRefresh }: Props) {
   const distanceM =
     coords && config
-      ? haversineDistance(
+      ? haversineDistanceMeters(
           coords.latitude,
           coords.longitude,
           Number(config.latitude),
           Number(config.longitude),
         )
       : null;
+
+  const withinRadius =
+    distanceM !== null &&
+    isWithinRadius(
+      distanceM,
+      Number(config?.radiusMeters),
+      coords?.accuracyMeters ?? 0,
+    );
+
+  const locationLabel = (() => {
+    if (status !== 'granted' || !coords) return null;
+    if (config && distanceM !== null) {
+      return withinRadius ? 'Dentro do raio' : 'Fora do raio';
+    }
+    return 'GPS ok';
+  })();
 
   return (
     <Card>
@@ -40,6 +56,22 @@ export function LocationPrompt({ config, coords, status, error, loading, onRefre
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Localização</span>
+            {locationLabel && (
+              <span
+                className={`inline-flex items-center gap-1 text-xs ${
+                  locationLabel === 'Fora do raio'
+                    ? 'text-amber-700 dark:text-amber-400'
+                    : 'text-emerald-700 dark:text-emerald-400'
+                }`}
+              >
+                {locationLabel === 'Fora do raio' ? (
+                  <AlertTriangle className="h-3 w-3" />
+                ) : (
+                  <CheckCircle2 className="h-3 w-3" />
+                )}
+                {locationLabel}
+              </span>
+            )}
           </div>
           <Button
             size="sm"
@@ -132,12 +164,12 @@ export function LocationPrompt({ config, coords, status, error, loading, onRefre
                 <span className="text-muted-foreground">Distância da loja</span>
                 <span
                   className={`font-medium flex items-center gap-1 ${
-                    distanceM <= config.radiusMeters
+                    withinRadius
                       ? 'text-emerald-700 dark:text-emerald-400'
                       : 'text-amber-700 dark:text-amber-400'
                   }`}
                 >
-                  {distanceM <= config.radiusMeters && <CheckCircle2 className="h-3 w-3" />}
+                  {withinRadius && <CheckCircle2 className="h-3 w-3" />}
                   {formatDistance(distanceM)}
                 </span>
               </div>
@@ -147,17 +179,4 @@ export function LocationPrompt({ config, coords, status, error, loading, onRefre
       </CardContent>
     </Card>
   );
-}
-
-// Haversine local (cópia leve do util do backend para evitar acoplamento)
-function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6_371_000; // metros
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }
