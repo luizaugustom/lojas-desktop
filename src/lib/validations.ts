@@ -274,6 +274,7 @@ export const createSellerSchema = z.object({
 });
 
 export const updateSellerSchema = z.object({
+  login: z.string().email('Login deve ser um email válido'),
   name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres').max(255).optional(),
   cpf: z.string()
     .refine((val) => val === '' || /^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(val), {

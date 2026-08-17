@@ -56,6 +56,7 @@ export function SellerDialog({ isOpen, onClose, onSuccess, seller }: SellerDialo
   useEffect(() => {
     if (seller && isOpen) {
       reset({
+        login: seller.login,
         name: seller.name,
         cpf: seller.cpf || '',
         birthDate: seller.birthDate || '',
@@ -156,24 +157,27 @@ export function SellerDialog({ isOpen, onClose, onSuccess, seller }: SellerDialo
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {!isEditing && (
-              <div className="md:col-span-2">
-                <Label htmlFor="login" className="flex items-center gap-2 text-foreground">
-                  <Mail className="h-4 w-4" />
-                  Login (Email) *
-                </Label>
-                <Input
-                  id="login"
-                  type="email"
-                  placeholder="vendedor@empresa.com"
-                  {...register('login')}
-                  className={`text-foreground ${(errors as any).login ? 'border-destructive' : ''}`}
-                />
-                {(errors as any).login && (
-                  <p className="text-sm text-destructive mt-1">{(errors as any).login.message}</p>
-                )}
-              </div>
-            )}
+            <div className="md:col-span-2">
+              <Label htmlFor="login" className="flex items-center gap-2 text-foreground">
+                <Mail className="h-4 w-4" />
+                Login (Email) *
+              </Label>
+              <Input
+                id="login"
+                type="email"
+                placeholder="vendedor@empresa.com"
+                {...register('login')}
+                className={`text-foreground ${(errors as any).login ? 'border-destructive' : ''}`}
+              />
+              {(errors as any).login && (
+                <p className="text-sm text-destructive mt-1">{(errors as any).login.message}</p>
+              )}
+              {isEditing && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Ao alterar o login, o vendedor deverá usar o novo valor no próximo acesso.
+                </p>
+              )}
+            </div>
 
             {!isEditing && (
               <div className="md:col-span-2">

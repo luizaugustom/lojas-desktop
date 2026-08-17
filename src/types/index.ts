@@ -663,6 +663,7 @@ export interface CreateSellerDto {
 }
 
 export interface UpdateSellerDto {
+  login?: string;
   name?: string;
   cpf?: string;
   birthDate?: string;
