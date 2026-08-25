@@ -375,3 +375,31 @@ input[type="number"]::-webkit-inner-spin-button {
   transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 
+/* Isola o catálogo público no tema claro, mesmo com ancestral .dark */
+.catalog-root {
+  color-scheme: light;
+  --background: 0 0% 97%;
+  --foreground: 0 0% 9%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 9%;
+  --secondary: 0 0% 93%;
+  --secondary-foreground: 0 0% 9%;
+  --muted: 0 0% 93%;
+  --muted-foreground: 0 0% 45.1%;
+  --accent: 0 0% 93%;
+  --accent-foreground: 0 0% 9%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 89%;
+  --input: 0 0% 89%;
+  --ring: 0 0% 9%;
+  --catalog-bg: #F8FAFC;
+  --catalog-header-bg: #FFFFFF;
+  --catalog-header-text: #0F172A;
+  --catalog-footer-bg: #F8FAFC;
+  --catalog-footer-text: #475569;
+  --catalog-text: #0F172A;
+}
+

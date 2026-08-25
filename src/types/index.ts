@@ -147,6 +147,14 @@ export interface Company {
     zipCode: string;
   };
   brandColor?: string;
+  catalogColors?: {
+    backgroundColor?: string;
+    headerBackgroundColor?: string;
+    headerTextColor?: string;
+    footerBackgroundColor?: string;
+    footerTextColor?: string;
+    textColor?: string;
+  } | null;
   logoUrl?: string;
   isActive: boolean;
   createdAt: string;

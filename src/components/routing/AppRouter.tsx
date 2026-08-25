@@ -33,6 +33,7 @@ import TimeClockManagePage from '../pages/TimeClockManagePage';
 import TimeClockPendingPage from '../pages/TimeClockPendingPage';
 import TimeClockConfigPage from '../pages/TimeClockConfigPage';
 import TimeClockQrPage from '../pages/TimeClockQrPage';
+import PublicCatalogPage from '../pages/PublicCatalogPage';
 
 export default function AppRouter() {
   const { isAuthenticated, loading, user } = useAuth();
@@ -178,6 +179,8 @@ export default function AppRouter() {
         return <TimeClockConfigPage />;
       case 'time-clock-qr':
         return <TimeClockQrPage />;
+      case 'public-catalog':
+        return <PublicCatalogPage />;
       default:
         return <DashboardPage />;
     }

@@ -39,6 +39,7 @@ export const ALLOWED_ROUTES = [
   'time-clock-pending',
   'time-clock-config',
   'time-clock-qr',
+  'public-catalog',
 ] as const;
 
 export type AllowedRoute = (typeof ALLOWED_ROUTES)[number];

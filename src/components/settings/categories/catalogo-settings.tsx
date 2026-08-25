@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Lock, Save, Store, ExternalLink, Layout } from 'lucide-react';
+import { Lock, Save, Store, ExternalLink, Eye } from 'lucide-react';
 import { Alert, AlertDescription } from '../../ui/alert';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
@@ -8,6 +8,12 @@ import { Label } from '../../ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { handleApiError } from '@/lib/handleApiError';
 import { toast } from 'react-hot-toast';
+import {
+  DEFAULT_CATALOG_COLORS,
+  HEX_COLOR_PATTERN,
+  mergeCatalogColors,
+  type CatalogColors,
+} from '@/lib/catalog-colors';
 
 export interface CatalogoSettingsProps {
   locked?: boolean;
@@ -26,12 +32,25 @@ const withPublicSiteUrl = (path?: string | null) => {
   return `${PUBLIC_SITE_URL}${normalizedPath}`;
 };
 
-export function CatalogoSettings({ locked, lockReason }: CatalogoSettingsProps) {
+const COLOR_FIELDS: { key: keyof CatalogColors; label: string }[] = [
+  { key: 'backgroundColor', label: 'Fundo da página' },
+  { key: 'headerBackgroundColor', label: 'Fundo do cabeçalho' },
+  { key: 'headerTextColor', label: 'Texto do cabeçalho' },
+  { key: 'footerBackgroundColor', label: 'Fundo do rodapé' },
+  { key: 'footerTextColor', label: 'Texto do rodapé' },
+  { key: 'textColor', label: 'Texto do conteúdo' },
+];
+
+export function CatalogoSettings({ locked, lockReason, onNavigate }: CatalogoSettingsProps) {
   const { api } = useAuth();
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [config, setConfig] = useState<any>(null);
-  const [form, setForm] = useState({ url: '', enabled: false });
+  const [form, setForm] = useState({
+    url: '',
+    enabled: false,
+    colors: DEFAULT_CATALOG_COLORS,
+  });
 
   if (locked) {
     return (
@@ -52,6 +71,7 @@ export function CatalogoSettings({ locked, lockReason }: CatalogoSettingsProps) 
       setForm({
         url: response.data.catalogPageUrl || '',
         enabled: response.data.catalogPageEnabled || false,
+        colors: mergeCatalogColors(response.data.catalogColors),
       });
       if (response.data.catalogPageAllowed === false) {
         setForm((prev) => ({ ...prev, enabled: false }));
@@ -76,7 +96,13 @@ export function CatalogoSettings({ locked, lockReason }: CatalogoSettingsProps) 
         toast.error('Informe uma URL para a página de catálogo');
         return;
       }
-      const updates: any = {};
+      if (!Object.values(form.colors).every((value) => HEX_COLOR_PATTERN.test(value))) {
+        toast.error('Informe cores no formato #RRGGBB');
+        return;
+      }
+      const updates: Record<string, unknown> = {
+        catalogColors: form.colors,
+      };
       if (form.url) updates.catalogPageUrl = form.url;
       if (form.enabled !== config?.catalogPageEnabled) {
         updates.catalogPageEnabled = form.enabled;
@@ -127,7 +153,7 @@ export function CatalogoSettings({ locked, lockReason }: CatalogoSettingsProps) 
           Página de Catálogo Pública
         </CardTitle>
         <CardDescription>
-          Crie uma página pública de catálogo para exibir seus produtos na web
+          Crie uma página pública de catálogo e personalize as cores do tema claro
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -207,6 +233,84 @@ export function CatalogoSettings({ locked, lockReason }: CatalogoSettingsProps) 
             </label>
           </div>
 
+          <div className="space-y-4 rounded-lg border border-border p-4">
+            <div>
+              <p className="font-medium">Aparência</p>
+              <p className="text-sm text-muted-foreground">
+                O catálogo público usa apenas o tema claro. Os botões continuam com a
+                cor da marca.
+              </p>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-border" aria-hidden>
+              <div
+                className="px-3 py-2 text-sm font-medium"
+                style={{
+                  backgroundColor: form.colors.headerBackgroundColor,
+                  color: form.colors.headerTextColor,
+                }}
+              >
+                Cabeçalho
+              </div>
+              <div
+                className="px-3 py-5 text-sm"
+                style={{
+                  backgroundColor: form.colors.backgroundColor,
+                  color: form.colors.textColor,
+                }}
+              >
+                Conteúdo do catálogo
+              </div>
+              <div
+                className="px-3 py-2 text-xs"
+                style={{
+                  backgroundColor: form.colors.footerBackgroundColor,
+                  color: form.colors.footerTextColor,
+                }}
+              >
+                Rodapé
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {COLOR_FIELDS.map(({ key, label }) => (
+                <div key={key} className="space-y-1.5">
+                  <Label htmlFor={`catalog-color-${key}`}>{label}</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id={`catalog-color-${key}`}
+                      type="color"
+                      value={
+                        HEX_COLOR_PATTERN.test(form.colors[key])
+                          ? form.colors[key]
+                          : DEFAULT_CATALOG_COLORS[key]
+                      }
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          colors: { ...prev.colors, [key]: e.target.value },
+                        }))
+                      }
+                      className="h-10 w-12 cursor-pointer rounded border"
+                      disabled={updating}
+                      aria-label={label}
+                    />
+                    <Input
+                      value={form.colors[key]}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          colors: { ...prev.colors, [key]: e.target.value },
+                        }))
+                      }
+                      className="font-mono"
+                      placeholder={DEFAULT_CATALOG_COLORS[key]}
+                      disabled={updating}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <Button onClick={handleUpdate} disabled={updating} className="w-full">
             {updating ? (
               <>
@@ -220,73 +324,64 @@ export function CatalogoSettings({ locked, lockReason }: CatalogoSettingsProps) 
               </>
             )}
           </Button>
-        </div>
 
-        <div className="bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950 dark:to-violet-950 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-white dark:bg-indigo-900 rounded-md shadow-sm">
-              <Layout className="h-5 w-5 text-indigo-600 dark:text-indigo-300" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-indigo-900 dark:text-indigo-100">
-                Editor visual do catálogo
-              </p>
-              <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-0.5">
-                Monte sua página pública arrastando blocos (banner, produtos, promoções,
-                depoimentos, etc.), escolha cores e fontes, e publique em segundos.
-              </p>
+          {form.enabled && form.url ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Button
                 type="button"
-                variant="default"
-                size="sm"
-                className="mt-3"
-                onClick={handleOpenEditor}
+                variant="outline"
+                className="w-full"
+                onClick={() => onNavigate?.('public-catalog')}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                Visualizar no app
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={async () => {
+                  const target = withPublicSiteUrl(`/catalog/${form.url}`);
+                  if (!target) return;
+                  if (
+                    typeof window !== 'undefined' &&
+                    window.electronAPI?.external?.openWindow
+                  ) {
+                    try {
+                      const res = await window.electronAPI.external.openWindow(target);
+                      if (!res?.success) {
+                        toast.error(res?.error || 'Falha ao abrir a página pública');
+                      }
+                      return;
+                    } catch (err) {
+                      console.error('IPC open-external-window falhou:', err);
+                    }
+                  }
+                  window.open(target, '_blank', 'noopener,noreferrer');
+                }}
               >
                 <ExternalLink className="mr-2 h-4 w-4" />
-                Abrir editor visual
+                Abrir em nova janela
               </Button>
             </div>
-          </div>
+          ) : null}
         </div>
 
         <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
           <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
             ℹ️ Sobre a Página de Catálogo
           </p>
-          <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
-            <li>• Personalize visualmente com o editor de arrastar-e-soltar</li>
-            <li>• Lista todos os seus produtos com estoque disponível</li>
-            <li>• Exibe fotos, preços e informações dos produtos</li>
-            <li>• Mostra suas informações de contato (telefone, email, endereço)</li>
-            <li>• Acesso público - não requer login</li>
-            <li>• Compartilhe o link com seus clientes!</li>
-          </ul>
+          <p className="text-xs text-blue-800 dark:text-blue-200">
+            Esta página lista seus produtos com estoque disponível, com busca por
+            nome/categoria/descrição, filtros (categoria, faixa de preço) e ordenação.
+            Os clientes adicionam produtos a um carrinho e finalizam o pedido via
+            WhatsApp. O catálogo permanece no tema claro, com as cores configuradas
+            acima.
+          </p>
         </div>
       </CardContent>
     </Card>
   );
-}
-
-async function handleOpenEditor() {
-  const editorUrl = `${PUBLIC_SITE_URL}/settings/catalogo/editor`;
-
-  // Preferência: abrir em uma nova janela do próprio desktop (via IPC)
-  // para manter a experiência unificada. Fallback: se electronAPI não
-  // estiver disponível (ex: rodando só no browser), abre nova aba.
-  if (typeof window !== 'undefined' && window.electronAPI?.external?.openWindow) {
-    try {
-      const res = await window.electronAPI.external.openWindow(editorUrl);
-      if (!res?.success) {
-        toast.error(res?.error || 'Falha ao abrir o editor');
-      }
-      return;
-    } catch (err) {
-      console.error('IPC open-external-window falhou:', err);
-      // cai no fallback abaixo
-    }
-  }
-
-  window.open(editorUrl, '_blank', 'noopener,noreferrer');
 }
 
 export default CatalogoSettings;
