@@ -45,17 +45,19 @@ const NEW_LINE = Buffer.from('\n', 'ascii');
 const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\n]+))>>/g;
 
 // Configuração padrão do cupom NFC-e renderizado em HTML (preview e impressoras USB/GDI).
-// O cupom é gerado em texto puro com centerText(width=32) — 32 chars centrados por linha.
-// Em Courier New (ratio ≈ 0.6), 13px × 32 chars = ~67mm; encaixa em 76mm com folga mesmo
-// em monospace mais largo (Liberation Mono/Consolas). Margem 2mm (uniforme) nos quatro lados.
+// O cupom é gerado em texto puro com centerText(width=48) — 48 cols centradas por linha
+// (casando com Fonte B / ESC M 1 usado pelo buffer ESC/POS abaixo).
+// Em Courier New (ratio ≈ 0.6), 9px × 48 chars = ~68.5mm; encaixa em 76mm com folga
+// mesmo em monospace mais largo (Liberation Mono/Consolas até ratio 0.65).
+// Margem 2mm (uniforme) nos quatro lados.
 const NFCE_HTML_RENDER = {
   pageSize: '80mm auto',
   bodyPadding: '2mm',
   bodyWidth: '76mm',
-  bodyFontSize: '13px',
-  bodyLineHeight: 1.0,
-  qrImgPx: 180,
-  qrWrapMargin: '4px 0',
+  bodyFontSize: '9px',
+  bodyLineHeight: 1.05,
+  qrImgPx: 140,
+  qrWrapMargin: '6px 0',
 } as const;
 
 type ThermalPrinterModule = typeof import('node-thermal-printer');
