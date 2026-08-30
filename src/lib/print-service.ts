@@ -7,19 +7,18 @@ const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\
 // Configuração padrão do cupom NFC-e renderizado em HTML (preview e impressoras USB/GDI).
 // O cupom é gerado em texto puro com centerText(width=48) — 48 cols centradas por linha
 // (casando com Fonte B / ESC M 1 usado pelo buffer ESC/POS em printer-handlers.ts).
-// Em Courier New (ratio ≈ 0.6), 10px × 48 chars ≈ 76mm; preenche o corpo 76mm de borda
-// a borda em sistemas com Courier New nativo. Em fontes monospace mais largas
-// (Liberation Mono/Consolas até ratio 0.62), ainda cabe com folga <1mm.
-// Margem 2mm (uniforme) nos quatro lados. Layout vertical compacto: line-height
-// 0.95 (chars quase encostam), QR 130px e margem vertical mínima para gastar menos
-// bobina a cada emissão.
+// Em Courier New (ratio ≈ 0.6), 10px × 48 chars ≈ 76mm; preenche o corpo 78mm de borda
+// a borda (margens 1mm × 2 lados = 78mm de corpo em papel 80mm). Em fontes monospace
+// mais largas (Liberation Mono/Consolas até ratio 0.62), ainda cabe com folga <1mm.
+// Layout ultra-compacto: line-height 0.85 (chars quase se sobrepõem visualmente),
+// QR 120px e margem vertical mínima para economizar o máximo de bobina por emissão.
 const NFCE_HTML_RENDER = {
   pageSize: '80mm auto',
-  bodyPadding: '2mm',
-  bodyWidth: '76mm',
+  bodyPadding: '1mm',
+  bodyWidth: '78mm',
   bodyFontSize: '10px',
-  bodyLineHeight: 0.95,
-  qrImgPx: 130,
+  bodyLineHeight: 0.85,
+  qrImgPx: 120,
   qrWrapMargin: '2px 0',
 } as const;
 
@@ -92,19 +91,19 @@ async function enrichCopyHtmlWithQr(copy: string): Promise<string> {
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  // Espaços não são convertidos em &nbsp;: white-space: pre-wrap preserva múltiplos
-  // espaços (alinhamento centralizado) e permite quebra em word-boundary quando a
-  // linha excede a largura — essencial para 32-char text em fontes monospace com
-  // metric ligeiramente maior que Courier New.
+  // O cupom vem do server com leading spaces (do centerText) para a térmica ESC/POS.
+  // No HTML a centralização vem do CSS `text-align: center` na .copy — os espaços
+  // à esquerda precisam ser removidos para evitar dupla centralização (que deslocaria
+  // o texto para a direita). Linhas vazias ficam vazias (preservam espaçamento vertical).
+  const toLineDiv = (text: string) =>
+    text
+      .split('\n')
+      .map((line) => `<div class="line">${escapeHtmlInline(line.replace(/^\s+/, ''))}</div>`)
+      .join('');
+
   while ((match = markerRegex.exec(copy)) !== null) {
     if (match.index > lastIndex) {
-      const text = copy.substring(lastIndex, match.index);
-      parts.push(
-        text
-          .split('\n')
-          .map((line) => `<div class="line">${escapeHtmlInline(line)}</div>`)
-          .join(''),
-      );
+      parts.push(toLineDiv(copy.substring(lastIndex, match.index)));
     }
 
     const qrUrl = match[2]?.trim();
@@ -129,13 +128,7 @@ async function enrichCopyHtmlWithQr(copy: string): Promise<string> {
   }
 
   if (lastIndex < copy.length) {
-    const text = copy.substring(lastIndex);
-    parts.push(
-      text
-        .split('\n')
-        .map((line) => `<div class="line">${escapeHtmlInline(line)}</div>`)
-        .join(''),
-    );
+    parts.push(toLineDiv(copy.substring(lastIndex)));
   }
 
   return parts.join('');
@@ -203,6 +196,7 @@ async function formatContentForWeb(
         .copy {
           white-space: pre-wrap;
           word-wrap: break-word;
+          text-align: center;
         }
         .copy:not(:last-child) {
           page-break-after: always;
