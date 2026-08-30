@@ -497,6 +497,10 @@ async function buildHtmlDocument(content: string, options?: PrintJobOptions): Pr
             line-height: ${NFCE_HTML_RENDER.bodyLineHeight};
             text-align: center;
           }
+          .copy > * {
+            margin: 0 auto;
+            text-align: center;
+          }
           .copy:not(:last-child) {
             page-break-after: always;
           }
@@ -534,13 +538,13 @@ async function enrichHtmlWithQrMarkers(content: string): Promise<string> {
   const escapeText = (text: string) => escapeHtml(text);
 
   // O cupom vem do server com leading spaces (do centerText) para a térmica ESC/POS.
-  // No HTML a centralização vem do CSS `text-align: center` no .copy — os espaços
-  // à esquerda precisam ser removidos para evitar dupla centralização (que deslocaria
-  // o texto para a direita). Linhas vazias ficam vazias (preservam espaçamento vertical).
+  // No HTML a centralização vem do CSS (text-align + margin auto no .copy > *) — os
+  // espaços à esquerda e direita precisam ser removidos para que cada linha shrink-wrap
+  // ao seu conteúdo real e fique centralizada. Linhas vazias ficam vazias.
   const normalizeLines = (text: string) =>
     text
       .split('\n')
-      .map((line) => line.replace(/^\s+/, ''))
+      .map((line) => line.replace(/^\s+|\s+$/g, ''))
       .join('\n');
 
   while ((match = markerRegex.exec(content)) !== null) {

@@ -92,13 +92,14 @@ async function enrichCopyHtmlWithQr(copy: string): Promise<string> {
   let match: RegExpExecArray | null;
 
   // O cupom vem do server com leading spaces (do centerText) para a térmica ESC/POS.
-  // No HTML a centralização vem do CSS `text-align: center` na .copy — os espaços
-  // à esquerda precisam ser removidos para evitar dupla centralização (que deslocaria
-  // o texto para a direita). Linhas vazias ficam vazias (preservam espaçamento vertical).
+  // No HTML a centralização vem do CSS (text-align + margin auto nas .line) — os
+  // espaços à esquerda e direita precisam ser removidos para que cada linha shrink-wrap
+  // ao seu conteúdo real e fique centralizada via margin: 0 auto. Linhas vazias ficam
+  // vazias (preservam espaçamento vertical).
   const toLineDiv = (text: string) =>
     text
       .split('\n')
-      .map((line) => `<div class="line">${escapeHtmlInline(line.replace(/^\s+/, ''))}</div>`)
+      .map((line) => `<div class="line">${escapeHtmlInline(line.replace(/^\s+|\s+$/g, ''))}</div>`)
       .join('');
 
   while ((match = markerRegex.exec(copy)) !== null) {
@@ -205,6 +206,11 @@ async function formatContentForWeb(
           font-family: 'Courier New', monospace;
           font-size: ${NFCE_HTML_RENDER.bodyFontSize};
           line-height: ${NFCE_HTML_RENDER.bodyLineHeight};
+          text-align: center;
+          display: block;
+          width: fit-content;
+          max-width: 100%;
+          margin: 0 auto;
         }
         .qr-wrap {
           text-align: center;
