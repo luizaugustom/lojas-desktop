@@ -45,16 +45,16 @@ const NEW_LINE = Buffer.from('\n', 'ascii');
 const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\n]+))>>/g;
 
 // Configuração padrão do cupom NFC-e renderizado em HTML (preview e impressoras USB/GDI).
-// O cupom é gerado em texto puro com centerText(width=46) — 46 cols centradas por linha
-// (casando com o buffer ESC/POS em printer.service.ts que usa NFC_LINE_WIDTH = 46).
-// Em Courier New (ratio ≈ 0.6), 11px × 46 chars ≈ 80.3mm; ocupa toda a largura do papel
-// 80mm (margens 0mm). Chars 10% maiores que 10px para o conteúdo ter mais presença visual
-// e menos "fino". Layout ultra-compacto vertical: line-height 0.85, QR 120px.
+// O cupom é gerado em texto puro com centerText(width=48) — 48 cols centradas por linha
+// (casando com o buffer ESC/POS em printer.service.ts que usa NFC_LINE_WIDTH = 48).
+// Em Courier New (ratio ≈ 0.6), 10px × 48 chars ≈ 76.2mm; ocupa toda a largura do papel
+// 80mm (margens 0mm). 10px é o limite para 48 chars caberem em 80mm — 11px estoura
+// (11 × 0.6 × 48 = 316.8px = 83.8mm). Layout ultra-compacto vertical: line-height 0.85, QR 120px.
 const NFCE_HTML_RENDER = {
   pageSize: '80mm auto',
   bodyPadding: '0mm',
   bodyWidth: '80mm',
-  bodyFontSize: '11px',
+  bodyFontSize: '10px',
   bodyLineHeight: 0.85,
   qrImgPx: 120,
   qrWrapMargin: '2px 0',
@@ -246,11 +246,13 @@ function encodeForEscPos(text: string): Buffer {
 }
 
 function buildInitializationBuffer(): Buffer {
-  // ESC @ (reset) + ESC t 19 (CP858) + ESC M 1 (Fonte B — menor) + GS ! 0 (sem magnificação)
+  // ESC @ (reset) + ESC t 19 (CP858) + ESC M 0 (Fonte A — maior, 12 dots/char) + GS ! 0
+  // Fonte A (12 dots/char) preenche 48 cols × 12 = 576 dots = 80mm inteiro. Conteúdo
+  // do cupom fica visualmente ~33% mais largo que Fonte B (9 dots/char).
   return Buffer.from([
     ESC, 0x40,
     ESC, 0x74, DEFAULT_CODE_PAGE,
-    ESC, 0x4d, 0x01,
+    ESC, 0x4d, 0x00,
     GS, 0x21, 0x00,
   ]);
 }
