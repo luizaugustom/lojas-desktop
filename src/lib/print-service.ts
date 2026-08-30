@@ -5,18 +5,16 @@ const RECEIPT_CUT_MARKER = '<<CUT_RECEIPT>>';
 const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\n]+))>>/g;
 
 // Configuração padrão do cupom NFC-e renderizado em HTML (preview e impressoras USB/GDI).
-// O cupom é gerado em texto puro com centerText(width=48) — 48 cols centradas por linha
-// (casando com Fonte B / ESC M 1 usado pelo buffer ESC/POS em printer-handlers.ts).
-// Em Courier New (ratio ≈ 0.6), 10px × 48 chars ≈ 76mm; preenche o corpo 78mm de borda
-// a borda (margens 1mm × 2 lados = 78mm de corpo em papel 80mm). Em fontes monospace
-// mais largas (Liberation Mono/Consolas até ratio 0.62), ainda cabe com folga <1mm.
-// Layout ultra-compacto: line-height 0.85 (chars quase se sobrepõem visualmente),
-// QR 120px e margem vertical mínima para economizar o máximo de bobina por emissão.
+// O cupom é gerado em texto puro com centerText(width=46) — 46 cols centradas por linha
+// (casando com o buffer ESC/POS em printer.service.ts que usa NFC_LINE_WIDTH = 46).
+// Em Courier New (ratio ≈ 0.6), 11px × 46 chars ≈ 80.3mm; ocupa toda a largura do papel
+// 80mm (margens 0mm). Chars 10% maiores que 10px para o conteúdo ter mais presença visual
+// e menos "fino". Layout ultra-compacto vertical: line-height 0.85, QR 120px.
 const NFCE_HTML_RENDER = {
   pageSize: '80mm auto',
-  bodyPadding: '1mm',
-  bodyWidth: '78mm',
-  bodyFontSize: '10px',
+  bodyPadding: '0mm',
+  bodyWidth: '80mm',
+  bodyFontSize: '11px',
   bodyLineHeight: 0.85,
   qrImgPx: 120,
   qrWrapMargin: '2px 0',
