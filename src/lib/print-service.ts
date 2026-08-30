@@ -4,6 +4,19 @@ import QRCode from 'qrcode';
 const RECEIPT_CUT_MARKER = '<<CUT_RECEIPT>>';
 const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\n]+))>>/g;
 
+// Configuração padrão do cupom NFC-e renderizado em HTML (preview e impressoras USB/GDI).
+// Ajuste central: corpo de 76 mm (margem 2 mm em cada lado) para Bematech 80 mm,
+// fonte 11px (Courier New) com line-height 1.15 e QR Code de 180x180 px.
+const NFCE_HTML_RENDER = {
+  pageSize: '80mm auto',
+  bodyPadding: '2mm',
+  bodyWidth: '76mm',
+  bodyFontSize: '11px',
+  bodyLineHeight: 1.15,
+  qrImgPx: 180,
+  qrWrapMargin: '12px 0',
+} as const;
+
 /**
  * Serviço de impressão universal que funciona tanto no desktop (Electron) quanto na web
  * Versão para desktop (montshop-desktop)
@@ -50,9 +63,9 @@ function getWebPaperStyle(paperSize: PaperSizeOption = '80mm', customPaperWidth?
     case '80mm':
     default:
       return {
-        pageSize: '80mm auto',
-        padding: '4mm',
-        width: '72mm',
+        pageSize: NFCE_HTML_RENDER.pageSize,
+        padding: NFCE_HTML_RENDER.bodyPadding,
+        width: NFCE_HTML_RENDER.bodyWidth,
       };
   }
 }
@@ -90,11 +103,11 @@ async function enrichCopyHtmlWithQr(copy: string): Promise<string> {
         const dataUrl = await QRCode.toDataURL(qrUrl, {
           errorCorrectionLevel: 'M',
           margin: 1,
-          width: 80,
+          width: NFCE_HTML_RENDER.qrImgPx,
           type: 'image/png',
         });
         parts.push(
-          `<div class="qr-wrap"><img src="${dataUrl}" alt="QR Code NFC-e" width="80" height="80" /></div>`,
+          `<div class="qr-wrap"><img src="${dataUrl}" alt="QR Code NFC-e" width="${NFCE_HTML_RENDER.qrImgPx}" height="${NFCE_HTML_RENDER.qrImgPx}" /></div>`,
         );
       } catch (error) {
         console.warn('Falha ao gerar QR Code na impressão web:', error);
@@ -150,8 +163,8 @@ async function formatContentForWeb(
             margin: 0;
             padding: ${paperStyle.padding};
             font-family: 'Courier New', monospace;
-            font-size: 7px;
-            line-height: 1.0;
+            font-size: ${NFCE_HTML_RENDER.bodyFontSize};
+            line-height: ${NFCE_HTML_RENDER.bodyLineHeight};
             width: ${paperStyle.width};
           }
         }
@@ -159,8 +172,8 @@ async function formatContentForWeb(
           margin: 0;
           padding: ${paperStyle.padding};
           font-family: 'Courier New', monospace;
-          font-size: 7px;
-          line-height: 1.0;
+          font-size: ${NFCE_HTML_RENDER.bodyFontSize};
+          line-height: ${NFCE_HTML_RENDER.bodyLineHeight};
           width: ${paperStyle.width};
           background: white;
         }
@@ -178,19 +191,19 @@ async function formatContentForWeb(
         }
         .line {
           font-family: 'Courier New', monospace;
-          font-size: 7px;
-          line-height: 1.0;
+          font-size: ${NFCE_HTML_RENDER.bodyFontSize};
+          line-height: ${NFCE_HTML_RENDER.bodyLineHeight};
         }
         .qr-wrap {
           text-align: center;
-          margin: 6px 0;
+          margin: ${NFCE_HTML_RENDER.qrWrapMargin};
           width: 100%;
         }
         .qr-wrap img {
           display: block;
           margin: 0 auto;
-          width: 80px;
-          height: 80px;
+          width: ${NFCE_HTML_RENDER.qrImgPx}px;
+          height: ${NFCE_HTML_RENDER.qrImgPx}px;
           image-rendering: pixelated;
         }
       </style>
