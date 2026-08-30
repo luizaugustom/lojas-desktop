@@ -5,16 +5,17 @@ const RECEIPT_CUT_MARKER = '<<CUT_RECEIPT>>';
 const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\n]+))>>/g;
 
 // Configuração padrão do cupom NFC-e renderizado em HTML (preview e impressoras USB/GDI).
-// Ajuste central: corpo de 76 mm (margem 2 mm em cada lado) para Bematech 80 mm,
-// fonte 11px (Courier New) com line-height 1.15 e QR Code de 180x180 px.
+// Ajuste central: corpo de 76 mm (margem 2 mm laterais, 1 mm verticais) para Bematech 80 mm,
+// fonte 10px Courier New (≈ 6px por glifo × 48 cols = ~76mm, ocupando toda a largura),
+// line-height 1.0 e QR Code de 180x180 px.
 const NFCE_HTML_RENDER = {
   pageSize: '80mm auto',
-  bodyPadding: '2mm',
+  bodyPadding: '1mm 2mm',
   bodyWidth: '76mm',
-  bodyFontSize: '11px',
-  bodyLineHeight: 1.15,
+  bodyFontSize: '10px',
+  bodyLineHeight: 1.0,
   qrImgPx: 180,
-  qrWrapMargin: '12px 0',
+  qrWrapMargin: '6px 0',
 } as const;
 
 /**
