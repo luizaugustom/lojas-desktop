@@ -46,15 +46,16 @@ const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\
 
 // Configuração padrão do cupom NFC-e renderizado em HTML (preview e impressoras USB/GDI).
 // O cupom é gerado em texto puro com centerText(width=32) — 32 chars centrados por linha.
-// Para preencher ~93% de 76mm com Courier New (ratio ≈ 0.6): 76mm / 32 / 0.6 ≈ 14px.
+// Em Courier New (ratio ≈ 0.6), 13px × 32 chars = ~67mm; encaixa em 76mm com folga mesmo
+// em monospace mais largo (Liberation Mono/Consolas). Margem 2mm (uniforme) nos quatro lados.
 const NFCE_HTML_RENDER = {
   pageSize: '80mm auto',
-  bodyPadding: '1mm 2mm',
+  bodyPadding: '2mm',
   bodyWidth: '76mm',
-  bodyFontSize: '14px',
+  bodyFontSize: '13px',
   bodyLineHeight: 1.0,
   qrImgPx: 180,
-  qrWrapMargin: '6px 0',
+  qrWrapMargin: '4px 0',
 } as const;
 
 type ThermalPrinterModule = typeof import('node-thermal-printer');
@@ -525,8 +526,11 @@ async function enrichHtmlWithQrMarkers(content: string): Promise<string> {
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  const escapeText = (text: string) =>
-    escapeHtml(text).replace(/ /g, '&nbsp;').replace(/\n/g, '<br/>');
+  // Não convertemos espaços em &nbsp;: white-space: pre-wrap na .copy preserva
+  // múltiplos espaços (necessário para alinhamento centralizado) e permite quebra
+  // em word-boundary quando a linha excede a largura — essencial para 32-char text
+  // em fontes monospace com metric ligeiramente maior que Courier New.
+  const escapeText = (text: string) => escapeHtml(text);
 
   while ((match = markerRegex.exec(content)) !== null) {
     if (match.index > lastIndex) {

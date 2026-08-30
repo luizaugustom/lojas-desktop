@@ -6,15 +6,16 @@ const PRINT_MARKER_REGEX = /<<(?:ESC_POS_BINARY:([A-Za-z0-9+/=]+)|NFC_E_QR:([^>\
 
 // Configuração padrão do cupom NFC-e renderizado em HTML (preview e impressoras USB/GDI).
 // O cupom é gerado em texto puro com centerText(width=32) — 32 chars centrados por linha.
-// Para preencher ~93% de 76mm com Courier New (ratio ≈ 0.6): 76mm / 32 / 0.6 ≈ 14px.
+// Em Courier New (ratio ≈ 0.6), 13px × 32 chars = ~67mm; encaixa em 76mm com folga mesmo
+// em monospace mais largo (Liberation Mono/Consolas). Margem 2mm (uniforme) nos quatro lados.
 const NFCE_HTML_RENDER = {
   pageSize: '80mm auto',
-  bodyPadding: '1mm 2mm',
+  bodyPadding: '2mm',
   bodyWidth: '76mm',
-  bodyFontSize: '14px',
+  bodyFontSize: '13px',
   bodyLineHeight: 1.0,
   qrImgPx: 180,
-  qrWrapMargin: '6px 0',
+  qrWrapMargin: '4px 0',
 } as const;
 
 /**
@@ -86,13 +87,17 @@ async function enrichCopyHtmlWithQr(copy: string): Promise<string> {
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
+  // Espaços não são convertidos em &nbsp;: white-space: pre-wrap preserva múltiplos
+  // espaços (alinhamento centralizado) e permite quebra em word-boundary quando a
+  // linha excede a largura — essencial para 32-char text em fontes monospace com
+  // metric ligeiramente maior que Courier New.
   while ((match = markerRegex.exec(copy)) !== null) {
     if (match.index > lastIndex) {
       const text = copy.substring(lastIndex, match.index);
       parts.push(
         text
           .split('\n')
-          .map((line) => `<div class="line">${line.replace(/ /g, '&nbsp;')}</div>`)
+          .map((line) => `<div class="line">${escapeHtmlInline(line)}</div>`)
           .join(''),
       );
     }
@@ -111,7 +116,7 @@ async function enrichCopyHtmlWithQr(copy: string): Promise<string> {
         );
       } catch (error) {
         console.warn('Falha ao gerar QR Code na impressão web:', error);
-        parts.push(`<div class="line">${qrUrl}</div>`);
+        parts.push(`<div class="line">${escapeHtmlInline(qrUrl)}</div>`);
       }
     }
 
@@ -123,12 +128,20 @@ async function enrichCopyHtmlWithQr(copy: string): Promise<string> {
     parts.push(
       text
         .split('\n')
-        .map((line) => `<div class="line">${line.replace(/ /g, '&nbsp;')}</div>`)
+        .map((line) => `<div class="line">${escapeHtmlInline(line)}</div>`)
         .join(''),
     );
   }
 
   return parts.join('');
+}
+
+function escapeHtmlInline(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 async function formatContentForWeb(
