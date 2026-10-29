@@ -546,6 +546,19 @@ export const adminApi = {
   getFocusNfeConfig: () => api.get('/admin/nfeio-config'),
 
   /**
+   * GET /admin/email-config
+   * Roles: ADMIN — Configuração global Resend
+   */
+  getEmailConfig: () => api.get('/admin/email-config'),
+
+  /**
+   * PATCH /admin/email-config
+   * Roles: ADMIN — Atualizar Resend API key e remetente
+   */
+  updateEmailConfig: (data: { resendApiKey?: string; resendFromEmail?: string }) =>
+    api.patch('/admin/email-config', data),
+
+  /**
    * GET /admin/companies/unimake-overview
    * Roles: ADMIN - Visão geral das empresas × Unimake (e-Boleto)
    */
@@ -620,6 +633,23 @@ export const managerApi = {
   update: (id: string, data: { login?: string; password?: string; name?: string }) => api.patch(`/manager/${id}`, data),
   delete: (id: string) => api.delete(`/manager/${id}`),
   setCompanies: (id: string, companyIds: string[]) => api.put(`/manager/${id}/companies`, { companyIds }),
+};
+
+export const reportsApi = {
+  generate: (data: any) =>
+    api.post('/reports/generate', data, {
+      responseType: 'blob',
+    }),
+  sendEmail: (data: {
+    reportType: string;
+    format: string;
+    startDate: string;
+    endDate: string;
+    email: string;
+    recipientName?: string;
+    sellerId?: string;
+    companyId?: string;
+  }) => api.post('/reports/send-email', data),
 };
 
 export const stockTransferApi = {

@@ -167,9 +167,10 @@ export default function ProductsPage() {
 
   const fetchAllProductsForExport = async (): Promise<Product[]> => {
     const res = await api.get('/product', {
-      params: { page: 1, limit: 100000, search: '' },
+      params: { page: 1, limit: 100000, search: search.trim() },
     });
-    return res.data?.products ?? [];
+    const products = res.data?.products ?? [];
+    return applyProductFilters(products, filters);
   };
 
   const getCompanyForExport = async (): Promise<{ name: string; brandColor?: string }> => {

@@ -45,9 +45,146 @@ export function AdministracaoSettings({ locked, lockReason }: AdministracaoSetti
 
   return (
     <div className="space-y-6">
+      {isAdmin ? <AdminResendEmailCard /> : null}
       {isAdmin ? <AdminIbptTokenCard /> : null}
       {isGestor ? <GestorCompanyListCard /> : null}
     </div>
+  );
+}
+
+function AdminResendEmailCard() {
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [config, setConfig] = useState<{
+    hasResendApiKey?: boolean;
+    resendApiKey?: string | null;
+    resendFromEmail?: string | null;
+    configured?: boolean;
+  } | null>(null);
+  const [form, setForm] = useState({ resendApiKey: '', resendFromEmail: '' });
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      const response = await adminApi.getEmailConfig();
+      setConfig(response.data);
+      setForm({
+        resendApiKey: '',
+        resendFromEmail: response.data?.resendFromEmail || '',
+      });
+    } catch (error) {
+      console.error('Erro ao carregar config Resend:', error);
+      setConfig(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      const payload: { resendApiKey?: string; resendFromEmail?: string } = {
+        resendFromEmail: form.resendFromEmail.trim(),
+      };
+      if (form.resendApiKey.trim() && !form.resendApiKey.includes('*')) {
+        payload.resendApiKey = form.resendApiKey.trim();
+      }
+      await adminApi.updateEmailConfig(payload);
+      toast.success('Configuração Resend salva com sucesso!');
+      await load();
+    } catch (error: any) {
+      console.error('Erro ao salvar config Resend:', error);
+      handleApiError(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <SettingsIcon className="h-5 w-5" />
+          E-mail (Resend) — global
+        </CardTitle>
+        <CardDescription>
+          API Key e remetente únicos para todas as empresas (NFs, relatórios e demais e-mails).
+          O domínio do remetente precisa estar verificado na Resend.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+            <p className="mt-2 text-sm text-muted-foreground">Carregando...</p>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-resendApiKey">API Key Resend</Label>
+              <Input
+                id="admin-resendApiKey"
+                type="password"
+                value={form.resendApiKey}
+                onChange={(e) => setForm({ ...form, resendApiKey: e.target.value })}
+                placeholder={
+                  config?.hasResendApiKey
+                    ? 'Deixe em branco para manter a chave atual'
+                    : 're_xxxxxxxx'
+                }
+                autoComplete="off"
+              />
+              {config?.hasResendApiKey && (
+                <p className="text-xs text-green-600 dark:text-green-400">
+                  API Key configurada
+                  {config.resendApiKey ? ` (${config.resendApiKey})` : ''}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-resendFromEmail">Remetente (From)</Label>
+              <Input
+                id="admin-resendFromEmail"
+                type="text"
+                value={form.resendFromEmail}
+                onChange={(e) => setForm({ ...form, resendFromEmail: e.target.value })}
+                placeholder="MontShop <noreply@seu-dominio.com>"
+              />
+              <p className="text-xs text-muted-foreground">
+                Ex.: noreply@seu-dominio.com ou MontShop &lt;noreply@seu-dominio.com&gt;
+              </p>
+            </div>
+            {config?.configured ? (
+              <p className="text-xs text-green-600 dark:text-green-400">
+                Resend configurado e pronto para envio
+              </p>
+            ) : (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Informe API Key e remetente para habilitar o envio de e-mails.
+              </p>
+            )}
+            <Button onClick={handleSave} disabled={saving} className="w-full">
+              {saving ? (
+                <>
+                  <Save className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Salvar configuração Resend
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

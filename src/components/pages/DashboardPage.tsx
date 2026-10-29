@@ -54,7 +54,7 @@ function MetricCard({ title, value, change, icon: Icon, trend = 'neutral', infoT
             {trend === 'up' && <TrendingUp className="h-3 w-3 text-green-500" />}
             {trend === 'down' && <TrendingDown className="h-3 w-3 text-red-500" />}
             <span className={trend === 'up' ? 'text-green-500' : trend === 'down' ? 'text-red-500' : ''}>
-              {change > 0 ? '+' : ''}{change}%
+              {change > 0 ? '+' : ''}{Number(change).toLocaleString('pt-BR', { maximumFractionDigits: 1, minimumFractionDigits: 0 })}%
             </span>
             <span>vs. mês anterior</span>
           </p>
@@ -541,7 +541,7 @@ export default function DashboardPage() {
                   <dd className="tabular-nums">− {formatCurrency(m.financial?.totalCostOfSales ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
-                  <dt>(−) Contas a pagar este mês</dt>
+                  <dt>(−) Contas a pagar{hasDateFilter ? ' no período' : ' este mês'}</dt>
                   <dd className="tabular-nums">− {formatCurrency(m.financial?.billsToPayThisMonth ?? 0)}</dd>
                 </div>
                 <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
@@ -555,7 +555,7 @@ export default function DashboardPage() {
                 <div className="flex justify-between gap-4 text-red-600 dark:text-red-400">
                   <dt>(−) Juros de parcelamento</dt>
                   <dd className="tabular-nums">
-                    − {formatCurrency(Math.max(0, (m.financial?.totalSalesValue ?? 0) - (m.financial?.totalCostOfSales ?? 0) - (m.financial?.billsToPayThisMonth ?? 0) - (m.financial?.totalLossesValue ?? 0) - (m.financial?.totalCardFees ?? 0) - (m.financial?.netProfit ?? 0)))}
+                    − {formatCurrency(m.financial?.totalInstallmentInterest ?? 0)}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4 border-t pt-3 font-semibold">

@@ -51,6 +51,8 @@ export function EmpresaSettings({ locked, lockReason }: EmpresaSettingsProps) {
   const [savingBrandColor, setSavingBrandColor] = useState(false);
   const [companyNickname, setCompanyNickname] = useState('');
   const [savingNickname, setSavingNickname] = useState(false);
+  const [accountantEmail, setAccountantEmail] = useState('');
+  const [savingAccountantEmail, setSavingAccountantEmail] = useState(false);
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -128,6 +130,9 @@ export function EmpresaSettings({ locked, lockReason }: EmpresaSettingsProps) {
       }
       if (data?.fantasyName) {
         setCompanyNickname(data.fantasyName);
+      }
+      if (data?.accountantEmail !== undefined) {
+        setAccountantEmail(data.accountantEmail ?? '');
       }
       if (data?.logoUrl) {
         setCompanyLogo(data.logoUrl);
@@ -253,6 +258,21 @@ export function EmpresaSettings({ locked, lockReason }: EmpresaSettingsProps) {
       handleApiError(error);
     } finally {
       setSavingNickname(false);
+    }
+  };
+
+  const handleSaveAccountantEmail = async () => {
+    try {
+      setSavingAccountantEmail(true);
+      await companyApi.updateMyCompany({
+        accountantEmail: accountantEmail.trim() || null,
+      });
+      toast.success('E-mail do contador atualizado!');
+      await loadCompanyData();
+    } catch (error: any) {
+      handleApiError(error);
+    } finally {
+      setSavingAccountantEmail(false);
     }
   };
 
@@ -623,6 +643,36 @@ export function EmpresaSettings({ locked, lockReason }: EmpresaSettingsProps) {
               </div>
               <p className="text-xs text-muted-foreground">
                 Define um nome amigável para identificar a empresa no sistema.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="company-accountant-email">E-mail do contador</Label>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <Input
+                  id="company-accountant-email"
+                  type="email"
+                  value={accountantEmail}
+                  onChange={(e) => setAccountantEmail(e.target.value)}
+                  placeholder="contador@empresa.com"
+                  className="flex-1"
+                />
+                <Button onClick={handleSaveAccountantEmail} disabled={savingAccountantEmail}>
+                  {savingAccountantEmail ? (
+                    <>
+                      <Save className="mr-2 h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Salvar e-mail
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Usado para pré-preencher o destinatário ao enviar relatórios e XMLs por e-mail.
               </p>
             </div>
           </CardContent>
