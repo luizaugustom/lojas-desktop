@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'react-hot-toast';
@@ -117,6 +118,7 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const { items, discount, getTotal, getSubtotal, clearCart } = useCartStore();
   const { user, isAuthenticated, api } = useAuth();
+  const queryClient = useQueryClient();
 
   const baseTotal = getTotal();
   // Calcular crédito disponível para aplicar como desconto
@@ -1144,6 +1146,14 @@ export function CheckoutDialog({ open, onClose, initialClient, onSaleCreated }: 
       
       logger.log('[Checkout] Venda criada com sucesso:', saleId);
       toast.success('Venda realizada com sucesso!');
+
+      void queryClient.invalidateQueries({ queryKey: ['sales-history'] });
+      void queryClient.invalidateQueries({ queryKey: ['sales-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['net-profit'] });
+      void queryClient.invalidateQueries({ queryKey: ['current-cash-closure'] });
+      void queryClient.invalidateQueries({ queryKey: ['cash-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['cash-history'] });
+      void queryClient.invalidateQueries({ queryKey: ['sales'] });
 
       setCreatedSaleId(saleId);
 

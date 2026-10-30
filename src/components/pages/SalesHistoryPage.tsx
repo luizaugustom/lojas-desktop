@@ -175,6 +175,8 @@ export default function SalesHistoryPage() {
       return response.data;
     },
     enabled: !!user,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   // Buscar estatísticas - usar endpoint correto baseado no role (com TODOS os filtros)
@@ -203,6 +205,8 @@ export default function SalesHistoryPage() {
       return response.data;
     },
     enabled: !!user,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   // Buscar lucro líquido (SOMENTE com filtros de data)
@@ -217,6 +221,8 @@ export default function SalesHistoryPage() {
       return response.data;
     },
     enabled: !!user && !isSeller, // Apenas para empresas
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const sales = salesData?.sales || salesData?.data || [];

@@ -250,21 +250,19 @@ export default function CashClosurePage() {
         throw error;
       }
     },
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
-  const hasDateFilter = !!(queryParams.startDate && queryParams.endDate);
-
-  // Buscar estatísticas do caixa (caixa atual ou do período quando filtro do header ativo)
+  // Caixa aberto: sem filtro de período. Com datas, a API soma só fechamentos
+  // já encerrados e a venda recém-feita não aparece neste caixa.
   const { data: stats, refetch: refetchStats } = useQuery<CashStats>({
-    queryKey: ['cash-stats', user?.id, queryKeyPart],
-    queryFn: async () => {
-      const params: Record<string, string> = {};
-      if (queryParams.startDate) params.startDate = queryParams.startDate;
-      if (queryParams.endDate) params.endDate = queryParams.endDate;
-      return (await cashClosureApi.stats(Object.keys(params).length ? params : undefined)).data;
-    },
-    enabled: !!currentClosure || hasDateFilter,
-    refetchInterval: 30000, // Atualiza a cada 30 segundos
+    queryKey: ['cash-stats', user?.id, 'open'],
+    queryFn: async () => (await cashClosureApi.stats()).data,
+    enabled: !!currentClosure,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000,
   });
 
   // Buscar histórico
@@ -277,6 +275,8 @@ export default function CashClosurePage() {
       return (await api.get('/cash-closure/history', { params })).data as CashClosureHistoryResponse;
     },
     enabled: showHistory,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const handleOpenCashClosure = async () => {

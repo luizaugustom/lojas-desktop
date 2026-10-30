@@ -91,6 +91,15 @@ const instance: AxiosInstance = axios.create({
 // Request interceptor
 instance.interceptors.request.use(
   async (config) => {
+    // O Chromium do Electron guarda GET na memória da sessão. Sem isso, histórico
+    // e fechamento de caixa repetem a lista vazia até o app ser fechado.
+    if ((config.method || 'get').toLowerCase() === 'get') {
+      config.headers = config.headers ?? {};
+      const headers = config.headers as Record<string, string>;
+      headers['Cache-Control'] = 'no-cache';
+      headers['Pragma'] = 'no-cache';
+    }
+
     const token = getAccessToken();
     if (token) {
       config.headers = config.headers ?? {};
